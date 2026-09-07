@@ -15,6 +15,14 @@ import {
     capitalizar
 } from "../utils/capitalize.js";
 
+import {
+    headerUsuario
+} from "../services/auth.service.js";
+
+import {
+    confirmDialog
+} from "../services/confirmDialog.js";
+
 
 const ESTADOS_ACTIVOS = [
     "pendiente",
@@ -214,7 +222,9 @@ export function initCommitmentsView() {
                         headers: {
 
                             "Content-Type":
-                                "application/json"
+                                "application/json",
+
+                            ...headerUsuario()
 
                         },
 
@@ -263,6 +273,77 @@ export function initCommitmentsView() {
 
 
     /* =====================================================
+       ELIMINAR COMPROMISO
+       ===================================================== */
+
+    async function eliminarCompromiso(
+        id
+    ) {
+
+        const confirmado =
+            await confirmDialog(
+                "¿Eliminar este compromiso? Esta acción no se puede deshacer.",
+                { danger: true }
+            );
+
+        if (!confirmado) {
+
+            return;
+
+        }
+
+
+        try {
+
+            const response =
+                await fetch(
+                    `${API_URL}/compromisos/${id}`,
+                    {
+                        method:
+                            "DELETE",
+
+                        headers:
+                            headerUsuario()
+                    }
+                );
+
+
+            const data =
+                await response.json();
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.mensaje ||
+                    data.error ||
+                    "No fue posible eliminar el compromiso."
+                );
+
+            }
+
+
+            await render();
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR ELIMINANDO COMPROMISO:",
+                error
+            );
+
+            alert(
+                error.message ||
+                "No fue posible eliminar el compromiso."
+            );
+
+        }
+
+    }
+
+
+    /* =====================================================
        CARGAR COMPROMISOS DESDE LA API
        ===================================================== */
 
@@ -272,7 +353,11 @@ export function initCommitmentsView() {
 
             const response =
                 await fetch(
-                    `${API_URL}/compromisos`
+                    `${API_URL}/compromisos`,
+                    {
+                        headers:
+                            headerUsuario()
+                    }
                 );
 
 
@@ -448,9 +533,47 @@ export function initCommitmentsView() {
             data.estado;
 
 
+        const actions =
+            document.createElement("div");
+
+        actions.classList.add(
+            "commitment-card__actions"
+        );
+
+        actions.append(
+            badge
+        );
+
+
+        const deleteBtn =
+            document.createElement("button");
+
+        deleteBtn.type =
+            "button";
+
+        deleteBtn.classList.add(
+            "commitment-card__delete"
+        );
+
+        deleteBtn.textContent =
+            "✕";
+
+        deleteBtn.setAttribute(
+            "aria-label",
+            "Eliminar compromiso"
+        );
+
+        deleteBtn.dataset.id =
+            data.id;
+
+        actions.append(
+            deleteBtn
+        );
+
+
         header.append(
             title,
-            badge
+            actions
         );
 
 
@@ -752,6 +875,34 @@ export function initCommitmentsView() {
                             : aValorInputFecha(item.fechaLimite)
 
                 }
+            );
+
+        }
+    );
+
+
+    /* =====================================================
+       ELIMINAR COMPROMISO (CLIC)
+       ===================================================== */
+
+    list.addEventListener(
+        "click",
+        (event) => {
+
+            const boton =
+                event.target.closest(
+                    ".commitment-card__delete"
+                );
+
+            if (!boton) {
+
+                return;
+
+            }
+
+
+            eliminarCompromiso(
+                boton.dataset.id
             );
 
         }

@@ -7,6 +7,17 @@ import {
     API_URL
 } from "./config.js";
 
+import {
+    headerUsuario,
+    getUsuarioActual
+} from "../services/auth.service.js";
+
+const ROL_LABEL = {
+    administrador: "Administrador",
+    lider: "Líder",
+    operador: "Operador"
+};
+
 /* =========================================================
    CONTROL DE USUARIOS
    ========================================================= */
@@ -612,6 +623,14 @@ function abrirEdicionUsuario(usuario) {
                     ) === 1;
 
 
+                const usuarioActual =
+                    getUsuarioActual();
+
+                const esPropio =
+                    usuarioActual &&
+                    Number(usuarioActual.id) === Number(usuario.id);
+
+
 tr.innerHTML = `
 
     <!-- NOMBRE -->
@@ -635,6 +654,26 @@ tr.innerHTML = `
     <!-- CORREO -->
     <td>
         ${escaparHTML(usuario.correo_electronico)}
+    </td>
+
+
+    <!-- ROL -->
+    <td>
+
+        <select
+            class="user-rol-select"
+            data-user-id="${usuario.id}"
+            ${esPropio ? `disabled title="No puedes cambiar tu propio rol desde aquí."` : ""}
+        >
+
+            ${Object.entries(ROL_LABEL).map(([valor, etiqueta]) => `
+                <option value="${valor}" ${usuario.rol === valor ? "selected" : ""}>
+                    ${etiqueta}
+                </option>
+            `).join("")}
+
+        </select>
+
     </td>
 
 
@@ -932,7 +971,9 @@ if (btnEditar) {
 
                         headers: {
                             "Content-Type":
-                                "application/json"
+                                "application/json",
+
+                            ...headerUsuario()
                         },
 
                         body:
@@ -975,6 +1016,80 @@ if (btnEditar) {
                 error.message ||
                 "No fue posible cambiar el estado del usuario."
             );
+
+        }
+
+    }
+
+
+    async function cambiarRolUsuario(
+        id,
+        rol,
+        select
+    ) {
+
+        try {
+
+            const response =
+                await fetch(
+                    `${API_URL}/usuarios/${id}/rol`,
+                    {
+                        method: "PATCH",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+
+                            ...headerUsuario()
+                        },
+
+                        body:
+                            JSON.stringify({
+                                rol
+                            })
+
+                    }
+                );
+
+
+            const data =
+                await response.json();
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.mensaje ||
+                    data.error ||
+                    "No fue posible actualizar el rol."
+                );
+
+            }
+
+
+            const usuario =
+                usuarios.find(
+                    u => Number(u.id) === Number(id)
+                );
+
+            if (usuario) {
+                usuario.rol = rol;
+            }
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL ACTUALIZAR ROL:",
+                error
+            );
+
+            alert(
+                error.message ||
+                "No fue posible cambiar el rol del usuario."
+            );
+
+            await cargarUsuarios();
 
         }
 
@@ -1093,6 +1208,51 @@ if (btnEditar) {
         cambiarEstadoUsuario(
             id,
             estadoActual
+        );
+
+    }
+);
+
+
+tbody.addEventListener(
+    "change",
+    function (event) {
+
+        const select =
+            event.target.closest(
+                ".user-rol-select"
+            );
+
+        if (!select) {
+            return;
+        }
+
+        const id =
+            Number(
+                select.dataset.userId
+            );
+
+        if (!id) {
+
+            console.error(
+                "ID de usuario no válido:",
+                select.dataset.userId
+            );
+
+            return;
+        }
+
+        select.disabled =
+            true;
+
+        cambiarRolUsuario(
+            id,
+            select.value,
+            select
+        ).finally(
+            () => {
+                select.disabled = false;
+            }
         );
 
     }

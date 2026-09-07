@@ -37,6 +37,14 @@ export function createDevelopmentTable({ container, storageKey }) {
   let focusBlockId = null;
   let isEditing = false;
 
+  /*
+   * Qué objetivos están colapsados (solo se ve el título, sin
+   * su contenido). Es un estado de UI, no se guarda: vive
+   * aparte de "contenidos" para que sobreviva a un render()
+   * completo (por ejemplo al agregar un bloque en otro objetivo).
+   */
+  const objetivosColapsados = new Set();
+
   function normalize(data) {//*Blindaje en caso de que alguien pegue contenido de otra fuente
     const result = {};
 
@@ -270,18 +278,25 @@ export function createDevelopmentTable({ container, storageKey }) {
     progress.append(slider, track, value, completeBtn, priorityBtn);
     wrapper.appendChild(progress);
 
-    if (block.fechaCreacion) {
-      const fecha = document.createElement("span");
-      fecha.classList.add("development-block__fecha");
-      fecha.textContent = formatearFechaCreacion(block.fechaCreacion);
-      wrapper.appendChild(fecha);
-    }
+    if (block.fechaCreacion || block.compromisoCreado) {
+      const meta = document.createElement("div");
+      meta.classList.add("development-block__meta");
 
-    if (block.compromisoCreado) {
-      const badge = document.createElement("span");
-      badge.classList.add("development-block__compromiso-badge");
-      badge.textContent = "Compromiso";
-      wrapper.appendChild(badge);
+      if (block.fechaCreacion) {
+        const fecha = document.createElement("span");
+        fecha.classList.add("development-block__fecha");
+        fecha.textContent = formatearFechaCreacion(block.fechaCreacion);
+        meta.appendChild(fecha);
+      }
+
+      if (block.compromisoCreado) {
+        const badge = document.createElement("span");
+        badge.classList.add("development-block__compromiso-badge");
+        badge.textContent = "Compromiso";
+        meta.appendChild(badge);
+      }
+
+      wrapper.appendChild(meta);
     }
   }
 
@@ -337,9 +352,26 @@ export function createDevelopmentTable({ container, storageKey }) {
     row.classList.add("development__row");
     row.dataset.id = objetivo.id;
 
+    const colapsado = objetivosColapsados.has(objetivo.id);
+    row.classList.toggle("development__row--colapsado", colapsado);
+
     const left = document.createElement("div");
     left.classList.add("development__objective");
-    left.textContent = objetivo.texto;
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.classList.add("development__row-toggle");
+    toggleBtn.setAttribute("aria-expanded", String(!colapsado));
+    toggleBtn.setAttribute(
+      "aria-label",
+      colapsado ? "Mostrar contenido del desarrollo" : "Ocultar contenido del desarrollo"
+    );
+    toggleBtn.textContent = colapsado ? "▸" : "▾";
+
+    const textoObjetivo = document.createElement("span");
+    textoObjetivo.textContent = objetivo.texto;
+
+    left.append(toggleBtn, textoObjetivo);
 
     const right = document.createElement("div");
     right.classList.add("development__blocks");
@@ -456,6 +488,16 @@ function createInsertButton(tipo, label, index) {
     if (!row) return;
 
     const objetivoId = row.dataset.id;
+
+    if (event.target.matches(".development__row-toggle")) {
+      if (objetivosColapsados.has(objetivoId)) {
+        objetivosColapsados.delete(objetivoId);
+      } else {
+        objetivosColapsados.add(objetivoId);
+      }
+      render();
+      return;
+    }
 
       if(event.target.matches(".insert-zone__btn")){
       const index = Number(event.target.dataset.index);

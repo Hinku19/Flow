@@ -27,6 +27,10 @@ import {
 } from "./services/viewManager.js";
 
 import {
+    initMeetingViewMode
+} from "./services/meetingViewMode.js";
+
+import {
     initMeetingLifecycle
 } from "./services/meetingLifecycle.js";
 
@@ -85,7 +89,8 @@ import {
 
 import {
     cerrarSesion,
-    usuarioAutenticado
+    usuarioAutenticado,
+    esAdmin
 } from "./services/auth.service.js";
 
 
@@ -905,6 +910,8 @@ initMeetingLifecycle({
 
         montarReunion();
 
+        meetingViewMode.reiniciar();
+
 
         /* =====================================================
            ENCABEZADO
@@ -1074,6 +1081,14 @@ const commitmentsView =
 
 
 /* =========================================================
+   MODO HORIZONTAL DE LA REUNIÓN
+   ========================================================= */
+
+const meetingViewMode =
+    initMeetingViewMode();
+
+
+/* =========================================================
    FORMULARIO DE INNOVACIONES
    ========================================================= */
 
@@ -1085,6 +1100,31 @@ initInnovationForm();
    ========================================================= */
 
 initSettingsMenu();
+
+
+/*
+ * "Control de Usuarios" (con el rol de cada quien incluido)
+ * es solo para administrador. El backend también rechaza
+ * estas acciones si alguien las alcanza sin serlo (ver
+ * server.js), esto solo evita mostrarlas de entrada.
+ */
+
+if (!esAdmin()) {
+
+    document
+        .querySelectorAll(
+            '.settings-menu__item[data-view="usuarios"]'
+        )
+        .forEach(
+            (boton) => {
+
+                boton.hidden =
+                    true;
+
+            }
+        );
+
+}
 
 
 /* =========================================================

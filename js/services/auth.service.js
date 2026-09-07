@@ -51,6 +51,38 @@ export function usuarioAutenticado() {
 
 
 /* =========================================================
+   ROL DEL USUARIO ACTUAL
+   ========================================================= */
+
+export function esAdmin() {
+
+    return getUsuarioActual()?.rol === "administrador";
+
+}
+
+
+/* =========================================================
+   ENCABEZADO PARA IDENTIFICARSE ANTE EL SERVIDOR
+   ---------------------------------------------------------
+   No hay tokens de sesión: las rutas que necesitan saber
+   quién pregunta (permisos, compromisos por rol) leen este
+   encabezado en vez de un Authorization real. Ver
+   obtenerUsuarioSolicitante() en server.js.
+   ========================================================= */
+
+export function headerUsuario() {
+
+    const usuario =
+        getUsuarioActual();
+
+    return usuario
+        ? { "X-Usuario-Id": String(usuario.id) }
+        : {};
+
+}
+
+
+/* =========================================================
    CERRAR SESIÓN
    ========================================================= */
 

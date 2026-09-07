@@ -1,4 +1,5 @@
 import { API_URL } from "./config.js";
+import { headerUsuario } from "../services/auth.service.js";
 
 
 export function initUserEdit() {
@@ -510,7 +511,9 @@ export function initUserEdit() {
 
                             headers: {
                                 "Content-Type":
-                                    "application/json"
+                                    "application/json",
+
+                                ...headerUsuario()
                             },
 
                             body:

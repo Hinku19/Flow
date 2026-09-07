@@ -123,14 +123,6 @@
                         Control de Usuarios
                     </button>
 
-                    <button
-                        type="button"
-                        class="settings-menu__item"
-                        data-view="permisos"
-                    >
-                        Permisos
-                    </button>
-
                 </div>
 
             </div>
@@ -633,6 +625,10 @@
 
                             <th>
                                 Correo electrónico
+                            </th>
+
+                            <th>
+                                Rol
                             </th>
 
                             <th>
@@ -1158,61 +1154,74 @@
 
             <header class="meeting__header">
 
-                <h1 class="meeting__title">
-                    Reunión Semanal
-                </h1>
+                <div class="meeting__header-info">
+
+                    <h1 class="meeting__title">
+                        Reunión Semanal
+                    </h1>
 
 
-                <dl class="meeting__meta">
+                    <dl class="meeting__meta">
 
-                    <div class="meeting__meta-row">
+                        <div class="meeting__meta-row">
 
-                        <dt class="meeting__meta-label">
-                            Fecha
-                        </dt>
+                            <dt class="meeting__meta-label">
+                                Fecha
+                            </dt>
 
-                        <dd
-                            class="meeting__meta-value"
-                            data-campo="fecha"
-                        >
-                            -
-                        </dd>
+                            <dd
+                                class="meeting__meta-value"
+                                data-campo="fecha"
+                            >
+                                -
+                            </dd>
 
-                    </div>
-
-
-                    <div class="meeting__meta-row">
-
-                        <dt class="meeting__meta-label">
-                            Estado
-                        </dt>
-
-                        <dd
-                            class="meeting__meta-value"
-                            data-campo="estado"
-                        >
-                            -
-                        </dd>
-
-                    </div>
+                        </div>
 
 
-                    <div class="meeting__meta-row">
+                        <div class="meeting__meta-row">
 
-                        <dt class="meeting__meta-label">
-                            Miembros
-                        </dt>
+                            <dt class="meeting__meta-label">
+                                Estado
+                            </dt>
 
-                        <dd
-                            class="meeting__meta-value"
-                            data-campo="miembros"
-                        >
-                            -
-                        </dd>
+                            <dd
+                                class="meeting__meta-value"
+                                data-campo="estado"
+                            >
+                                -
+                            </dd>
 
-                    </div>
+                        </div>
 
-                </dl>
+
+                        <div class="meeting__meta-row">
+
+                            <dt class="meeting__meta-label">
+                                Miembros
+                            </dt>
+
+                            <dd
+                                class="meeting__meta-value"
+                                data-campo="miembros"
+                            >
+                                -
+                            </dd>
+
+                        </div>
+
+                    </dl>
+
+                </div>
+
+
+                <button
+                    type="button"
+                    id="btn-vista-horizontal"
+                    class="meeting__view-toggle"
+                >
+                    Vista horizontal
+                </button>
 
             </header>
 
@@ -1230,6 +1239,41 @@
                     <span class="pause-overlay__text">
                         Reunión en pausa
                     </span>
+
+                </div>
+
+
+                <!-- =============================================
+                     BARRA DE NAVEGACIÓN (MODO HORIZONTAL)
+                     ============================================= -->
+
+                <div
+                    class="meeting-pager"
+                    id="meeting-pager"
+                    hidden
+                >
+
+                    <button
+                        type="button"
+                        id="meeting-pager-anterior"
+                        class="meeting-pager__btn"
+                    >
+                        ← Anterior
+                    </button>
+
+                    <span
+                        class="meeting-pager__label"
+                        id="meeting-pager-label"
+                    >
+                    </span>
+
+                    <button
+                        type="button"
+                        id="meeting-pager-siguiente"
+                        class="meeting-pager__btn"
+                    >
+                        Siguiente →
+                    </button>
 
                 </div>
 
@@ -2714,38 +2758,6 @@
 
         </section>
 
-
-        <!-- =====================================================
-             VISTA DE PERMISOS
-             ===================================================== -->
-
-        <section
-            id="vista-permisos"
-            class="view view--hidden"
-        >
-
-            <div class="view__navigation">
-
-                <button
-                    type="button"
-                    class="view__back"
-                    data-view="dashboard"
-                >
-                    ← Volver al inicio
-                </button>
-
-            </div>
-
-
-            <h1 class="view__title">
-                Permisos
-            </h1>
-
-            <p class="commitments-view__subtitle">
-                Esta sección estará disponible cuando el catálogo de permisos esté listo en la base de datos.
-            </p>
-
-        </section>
 
     </main>
 

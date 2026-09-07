@@ -118,6 +118,79 @@ const uploadEnlaceArchivo =
 
 
 /* =========================================================
+   IDENTIFICAR AL USUARIO QUE HACE LA PETICIÓN
+   ---------------------------------------------------------
+   No hay tokens de sesión: el frontend manda quién es en el
+   encabezado X-Usuario-Id (ver auth.service.js). Esto no es
+   a prueba de manipulación deliberada, pero ya evita que
+   cualquiera vea datos ajenos con solo abrir la vista —
+   antes ninguna ruta validaba nada.
+   ========================================================= */
+
+async function obtenerUsuarioSolicitante(req) {
+
+    const usuarioId =
+        Number(
+            req.get("X-Usuario-Id")
+        );
+
+    if (!usuarioId) {
+
+        return null;
+
+    }
+
+    const [filas] =
+        await db.execute(
+            `
+            SELECT id, nombre, area, rol, activo
+            FROM usuarios
+            WHERE id = ?
+            LIMIT 1
+            `,
+            [
+                usuarioId
+            ]
+        );
+
+    if (
+        filas.length === 0 ||
+        Number(filas[0].activo) !== 1
+    ) {
+
+        return null;
+
+    }
+
+    return filas[0];
+
+}
+
+
+function esAdmin(usuarioSolicitante) {
+
+    return usuarioSolicitante?.rol === "administrador";
+
+}
+
+
+function respuestaSinPermiso(res) {
+
+    return res
+        .status(403)
+        .json({
+
+            ok: false,
+
+            mensaje:
+                "No tienes permiso para realizar esta acción."
+
+        });
+
+}
+
+
+/* =========================================================
    PRUEBA DEL SERVIDOR
    ========================================================= */
 
@@ -146,6 +219,16 @@ app.post(
     async (req, res) => {
 
         try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!esAdmin(usuarioSolicitante)) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
 
             const {
                 nombre,
@@ -374,6 +457,7 @@ app.post(
                         nombre,
                         departamento,
                         area,
+                        rol,
                         correo_electronico,
                         password_hash,
                         activo
@@ -491,6 +575,9 @@ app.post(
                     area:
                         usuario.area,
 
+                    rol:
+                        usuario.rol,
+
                     correo_electronico:
                         usuario.correo_electronico,
 
@@ -552,6 +639,7 @@ app.get(
                         nombre,
                         departamento,
                         area,
+                        rol,
                         correo_electronico,
                         activo,
                         fecha_registro,
@@ -613,6 +701,16 @@ app.put(
     async (req, res) => {
 
         try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!esAdmin(usuarioSolicitante)) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
 
             const id =
                 Number(
@@ -980,6 +1078,16 @@ app.patch(
 
         try {
 
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!esAdmin(usuarioSolicitante)) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
             const id =
                 Number(req.params.id);
 
@@ -1110,6 +1218,139 @@ app.patch(
 
                     mensaje:
                         "No fue posible actualizar el estado del usuario.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   ASIGNAR ROL DE USUARIO
+   ========================================================= */
+
+const ROLES_VALIDOS = [
+    "administrador",
+    "lider",
+    "operador"
+];
+
+app.patch(
+    "/api/usuarios/:id/rol",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!esAdmin(usuarioSolicitante)) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            const id =
+                Number(req.params.id);
+
+            const rol =
+                req.body.rol;
+
+
+            if (!id) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "ID de usuario no válido."
+
+                    });
+
+            }
+
+
+            if (!ROLES_VALIDOS.includes(rol)) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "El rol debe ser administrador, lider u operador."
+
+                    });
+
+            }
+
+
+            const [resultado] =
+                await db.execute(
+                    `
+                    UPDATE usuarios
+                    SET
+                        rol = ?,
+                        fecha_actualizacion = NOW()
+                    WHERE id = ?
+                    `,
+                    [
+                        rol,
+                        id
+                    ]
+                );
+
+            if (resultado.affectedRows === 0) {
+
+                return res
+                    .status(404)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Usuario no encontrado."
+
+                    });
+
+            }
+
+
+            return res.json({
+
+                ok: true,
+
+                mensaje:
+                    "Rol actualizado correctamente."
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL ACTUALIZAR ROL DEL USUARIO:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible actualizar el rol del usuario.",
 
                     error:
                         error.message
@@ -1419,6 +1660,59 @@ app.get(
 
         try {
 
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
+            /*
+             * administrador ve todo. lider ve solo los
+             * compromisos de usuarios de su misma área.
+             * operador ve solo los suyos.
+             */
+
+            let filtroRol =
+                "";
+
+            const parametrosFiltro =
+                [];
+
+            if (usuarioSolicitante.rol === "lider") {
+
+                filtroRol =
+                    "AND u.area = ?";
+
+                parametrosFiltro.push(
+                    usuarioSolicitante.area
+                );
+
+            }
+            else if (usuarioSolicitante.rol === "operador") {
+
+                filtroRol =
+                    "AND c.UsuarioAsignadoId = ?";
+
+                parametrosFiltro.push(
+                    usuarioSolicitante.id
+                );
+
+            }
+
+
             const [rows] =
                 await db.execute(
                     `
@@ -1437,7 +1731,7 @@ app.get(
                         CASE
                             WHEN c.Status IN (1, 2)
                                 AND c.FechaFinEstimada IS NOT NULL
-                                AND c.FechaFinEstimada < NOW()
+                                AND DATE(c.FechaFinEstimada) < CURDATE()
                             THEN 4
                             ELSE c.Status
                         END AS StatusEfectivo
@@ -1448,9 +1742,11 @@ app.get(
                         ON u.id = c.UsuarioAsignadoId
                     WHERE
                         r.Estado <> 'Cancelada'
+                        ${filtroRol}
                     ORDER BY
                         c.FechaFinEstimada ASC
-                    `
+                    `,
+                    parametrosFiltro
                 );
 
 
@@ -1553,6 +1849,25 @@ app.patch(
 
         try {
 
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
             const compromisoId =
                 Number(
                     req.params.id
@@ -1571,6 +1886,59 @@ app.patch(
                             "ID de compromiso no válido."
 
                     });
+
+            }
+
+
+            /*
+             * lider solo puede editar compromisos de su misma
+             * área, operador solo los suyos.
+             */
+
+            const [compromisoActual] =
+                await db.execute(
+                    `
+                    SELECT c.UsuarioAsignadoId, u.area
+                    FROM compromisos c
+                    INNER JOIN usuarios u
+                        ON u.id = c.UsuarioAsignadoId
+                    WHERE c.CompromisoId = ?
+                    LIMIT 1
+                    `,
+                    [
+                        compromisoId
+                    ]
+                );
+
+            if (compromisoActual.length === 0) {
+
+                return res
+                    .status(404)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Compromiso no encontrado."
+
+                    });
+
+            }
+
+            const puedeEditar =
+                usuarioSolicitante.rol === "administrador" ||
+                (
+                    usuarioSolicitante.rol === "lider" &&
+                    usuarioSolicitante.area === compromisoActual[0].area
+                ) ||
+                (
+                    usuarioSolicitante.rol === "operador" &&
+                    usuarioSolicitante.id === compromisoActual[0].UsuarioAsignadoId
+                );
+
+            if (!puedeEditar) {
+
+                return respuestaSinPermiso(res);
 
             }
 
@@ -1667,6 +2035,157 @@ app.patch(
 
                     mensaje:
                         "No fue posible actualizar el compromiso.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   ELIMINAR COMPROMISO (VISTA GLOBAL)
+   ========================================================= */
+
+app.delete(
+    "/api/compromisos/:id",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
+            const compromisoId =
+                Number(
+                    req.params.id
+                );
+
+            if (!compromisoId) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "ID de compromiso no válido."
+
+                    });
+
+            }
+
+
+            /*
+             * Mismo criterio que al editar: lider solo puede
+             * borrar compromisos de su misma área, operador
+             * solo los suyos.
+             */
+
+            const [compromisoActual] =
+                await db.execute(
+                    `
+                    SELECT c.UsuarioAsignadoId, u.area
+                    FROM compromisos c
+                    INNER JOIN usuarios u
+                        ON u.id = c.UsuarioAsignadoId
+                    WHERE c.CompromisoId = ?
+                    LIMIT 1
+                    `,
+                    [
+                        compromisoId
+                    ]
+                );
+
+            if (compromisoActual.length === 0) {
+
+                return res
+                    .status(404)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Compromiso no encontrado."
+
+                    });
+
+            }
+
+            const puedeEliminar =
+                usuarioSolicitante.rol === "administrador" ||
+                (
+                    usuarioSolicitante.rol === "lider" &&
+                    usuarioSolicitante.area === compromisoActual[0].area
+                ) ||
+                (
+                    usuarioSolicitante.rol === "operador" &&
+                    usuarioSolicitante.id === compromisoActual[0].UsuarioAsignadoId
+                );
+
+            if (!puedeEliminar) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            await db.execute(
+                `
+                DELETE FROM compromisos
+                WHERE CompromisoId = ?
+                `,
+                [
+                    compromisoId
+                ]
+            );
+
+            return res.json({
+
+                ok: true,
+
+                mensaje:
+                    "Compromiso eliminado correctamente."
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL ELIMINAR COMPROMISO:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible eliminar el compromiso.",
 
                     error:
                         error.message
@@ -2917,6 +3436,30 @@ async function guardarSeccionReunion(
 
 
 /*
+ * Fecha de hoy en formato YYYY-MM-DD (hora local del servidor),
+ * usada para decidir si un compromiso está vencido. Comparar
+ * fechas como texto ISO (en vez de new Date(fechaLimite) < new
+ * Date()) evita que un compromiso con vencimiento "hoy" aparezca
+ * vencido desde la medianoche UTC: con esto sigue vigente hasta
+ * las 23:59 del día en curso.
+ */
+function hoyLocalISO() {
+
+    const d =
+        new Date();
+
+    const mes =
+        String(d.getMonth() + 1).padStart(2, "0");
+
+    const dia =
+        String(d.getDate()).padStart(2, "0");
+
+    return `${d.getFullYear()}-${mes}-${dia}`;
+
+}
+
+
+/*
  * Compatibilidad con compromisos guardados antes del cambio de
  * esquema, cuando se guardaba "colaboradores": [nombre] en vez
  * de usuarioAsignadoId. Solo existen en un puñado de reuniones
@@ -3174,7 +3717,7 @@ app.post(
 
                 const vencido =
                     compromiso.fechaLimite &&
-                    new Date(compromiso.fechaLimite) < new Date();
+                    compromiso.fechaLimite < hoyLocalISO();
 
 
                 let usuarioAsignadoId =

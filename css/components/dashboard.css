@@ -1168,6 +1168,49 @@
 }
 
 
+.user-rol-select {
+    height: 34px;
+
+    min-width: 140px;
+
+    padding: 0 10px;
+
+    border: 1px solid #d2dce5;
+    border-radius: 7px;
+
+    background-color: #ffffff;
+
+    color: #0b3553;
+
+    font-family: inherit;
+    font-size: 13px;
+
+    cursor: pointer;
+
+    outline: none;
+
+    box-sizing: border-box;
+
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+
+.user-rol-select:focus {
+    border-color: #4aa3df;
+
+    box-shadow:
+        0 0 0 3px rgba(74, 163, 223, 0.15);
+}
+
+
+.user-rol-select:disabled {
+    background-color: #eef2f5;
+    cursor: not-allowed;
+}
+
+
 /* =========================================================
    ESTADO VACÍO
    ========================================================= */
