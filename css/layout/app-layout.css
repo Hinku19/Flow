@@ -12,6 +12,15 @@
 .app-header__logo{
     height: 60px;
     width: auto;
+    display: block;
+}
+
+.app-header__logo-btn {
+    border: none;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    line-height: 0;
 }
 
 .app-header__brand{

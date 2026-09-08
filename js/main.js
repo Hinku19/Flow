@@ -23,8 +23,15 @@ import {
 } from "./components/linkList.js";
 
 import {
-    showView
+    showView,
+    getCurrentView,
+    initNavegacionHistorial,
+    aplicarVistaDesdeHistorial
 } from "./services/viewManager.js";
+
+import {
+    confirmDialog
+} from "./services/confirmDialog.js";
 
 import {
     initMeetingViewMode
@@ -36,7 +43,8 @@ import {
 
 import {
     sectionKey,
-    getReunionActivaId
+    getReunionActivaId,
+    hayReunionActiva
 } from "./services/session.js";
 
 import {
@@ -822,7 +830,8 @@ function ajustarCamposDesarrollo() {
    CICLO DE VIDA DE LA REUNIÓN
    ========================================================= */
 
-initMeetingLifecycle({
+const meetingLifecycle =
+    initMeetingLifecycle({
 
     /*
      * =====================================================
@@ -1125,6 +1134,144 @@ if (!esAdmin()) {
         );
 
 }
+
+
+/* =========================================================
+   LOGO -> VOLVER AL INICIO
+   ---------------------------------------------------------
+   Si la vista actual es la reunión, pregunta antes de salir
+   (la reunión se queda "en curso", visible desde Historial).
+   ========================================================= */
+
+const MENSAJE_ABANDONAR_REUNION =
+    "¿Deseas abandonar la reunión? Se quedará en curso, la puedes retomar desde el Historial.";
+
+/*
+ * Deja la reunión "en curso" en segundo plano (no la
+ * termina), pero oculta los controles que solo tienen
+ * sentido mientras la estás viendo (Pausar/Terminar, timer,
+ * datos del encabezado) y vuelve a mostrar la tuerca. Al
+ * retomarla desde Historial, initMeetingLifecycle ya se
+ * encarga de dejar todo esto fresco otra vez.
+ */
+function salirDeReunionSinTerminar() {
+
+    meetingLifecycle.setBotonesReunionActiva(false);
+
+    timer.reset();
+
+    limpiarEncabezado();
+
+}
+
+async function irAlInicioConfirmando(destino) {
+
+    if (getCurrentView() === "reunion") {
+
+        const confirmado =
+            await confirmDialog(
+                MENSAJE_ABANDONAR_REUNION,
+                { danger: true }
+            );
+
+        if (!confirmado) {
+
+            return false;
+
+        }
+
+        salirDeReunionSinTerminar();
+
+    }
+
+    showView(destino);
+
+    return true;
+
+}
+
+const btnLogoInicio =
+    document.querySelector("#btn-logo-inicio");
+
+if (btnLogoInicio) {
+
+    btnLogoInicio.addEventListener(
+        "click",
+        () => {
+
+            irAlInicioConfirmando("dashboard");
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   ATRÁS / ADELANTE DEL NAVEGADOR
+   ========================================================= */
+
+initNavegacionHistorial({
+
+    onPopState:
+        async (vista) => {
+
+            if (getCurrentView() === "reunion") {
+
+                /*
+                 * Reafirma la posición actual: "cancela"
+                 * visualmente el Atrás hasta que se confirme
+                 * si de verdad quiere abandonar la reunión.
+                 */
+
+                history.pushState(
+                    { flowView: "reunion" },
+                    ""
+                );
+
+                const confirmado =
+                    await confirmDialog(
+                        MENSAJE_ABANDONAR_REUNION,
+                        { danger: true }
+                    );
+
+                if (!confirmado) {
+
+                    return;
+
+                }
+
+                salirDeReunionSinTerminar();
+
+                const destinoConfirmado =
+                    vista || "dashboard";
+
+                aplicarVistaDesdeHistorial(
+                    destinoConfirmado
+                );
+
+                history.replaceState(
+                    { flowView: destinoConfirmado },
+                    ""
+                );
+
+                return;
+
+            }
+
+            if (!vista) {
+
+                cerrarSesion();
+
+                return;
+
+            }
+
+            aplicarVistaDesdeHistorial(vista);
+
+        }
+
+});
 
 
 /* =========================================================

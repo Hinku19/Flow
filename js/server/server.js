@@ -1723,6 +1723,7 @@ app.get(
                         c.Prioridad,
                         c.FechaInicioEstimada,
                         c.FechaFinEstimada,
+                        c.FechaFinReal,
                         c.Status,
                         c.ReunionId,
                         r.Titulo AS ReunionTitulo,
@@ -1769,6 +1770,9 @@ app.get(
 
                         fechaLimite:
                             row.FechaFinEstimada,
+
+                        fechaCompletado:
+                            row.FechaFinReal,
 
                         estado:
                             STATUS_A_ESTADO[row.StatusEfectivo] ||
@@ -1898,7 +1902,7 @@ app.patch(
             const [compromisoActual] =
                 await db.execute(
                     `
-                    SELECT c.UsuarioAsignadoId, u.area
+                    SELECT c.UsuarioAsignadoId, c.Status, c.FechaFinReal, u.area
                     FROM compromisos c
                     INNER JOIN usuarios u
                         ON u.id = c.UsuarioAsignadoId
@@ -1973,6 +1977,33 @@ app.patch(
             }
 
 
+            /*
+             * FechaFinReal registra cuándo se completó de
+             * verdad (a diferencia de FechaFinEstimada, que es
+             * la fecha límite). Se marca al pasar a completado
+             * y se limpia si deja de estarlo; si no cambia de
+             * completado, se conserva la que ya tenía.
+             */
+
+            const nuevoStatus =
+                ESTADO_A_STATUS[estado];
+
+            const pasaACompletado =
+                nuevoStatus === 3 &&
+                Number(compromisoActual[0].Status) !== 3;
+
+            const dejaDeCompletado =
+                nuevoStatus !== 3 &&
+                Number(compromisoActual[0].Status) === 3;
+
+            const fechaFinReal =
+                pasaACompletado
+                    ? new Date()
+                    : dejaDeCompletado
+                        ? null
+                        : compromisoActual[0].FechaFinReal;
+
+
             const [resultado] =
                 await db.execute(
                     `
@@ -1980,12 +2011,14 @@ app.patch(
                     SET
                         Status = ?,
                         FechaFinEstimada = ?,
+                        FechaFinReal = ?,
                         FechaActualizacion = NOW()
                     WHERE CompromisoId = ?
                     `,
                     [
-                        ESTADO_A_STATUS[estado],
+                        nuevoStatus,
                         fechaLimite,
+                        fechaFinReal,
                         compromisoId
                     ]
                 );
@@ -2953,11 +2986,12 @@ async function insertarCompromiso(
             Prioridad,
             FechaInicioEstimada,
             FechaFinEstimada,
-            Status
+            Status,
+            FechaFinReal
         )
         VALUES
         (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
         `,
         [
@@ -2970,7 +3004,10 @@ async function insertarCompromiso(
             compromiso.prioridad || "media",
             compromiso.fechaInicio || null,
             compromiso.fechaLimite || null,
-            status
+            status,
+            status === 3
+                ? (compromiso.fechaCompletado || null)
+                : null
         ]
     );
 
@@ -3014,6 +3051,25 @@ async function migrarCompromisosATabla(
     connection,
     reunionId
 ) {
+
+    /*
+     * Idempotente a propósito: si esta función llegara a
+     * correr más de una vez para la misma reunión (doble
+     * clic en "Terminar", reintento, etc.), sin este borrado
+     * cada corrida agregaría una copia extra de los mismos
+     * compromisos.
+     */
+
+    await connection.execute(
+        `
+        DELETE FROM compromisos
+        WHERE ReunionId = ?
+        `,
+        [
+            reunionId
+        ]
+    );
+
 
     const [seccionRows] =
         await connection.execute(
@@ -3523,7 +3579,7 @@ app.post(
             ] =
                 await connection.execute(
                     `
-                    SELECT HeredarCompromisos
+                    SELECT HeredarCompromisos, UsuarioCreadorId
                     FROM reuniones
                     WHERE ReunionId = ?
                     LIMIT 1
@@ -3557,9 +3613,19 @@ app.post(
                     destinoRows[0].HeredarCompromisos
                 ) === 1;
 
+            const usuarioCreadorId =
+                destinoRows[0].UsuarioCreadorId;
+
 
             /* =================================================
-               REUNIÓN ORIGEN: la última finalizada sin heredar
+               REUNIÓN ORIGEN: la última finalizada sin heredar,
+               DEL MISMO CREADOR.
+               ---------------------------------------------------
+               Antes esta búsqueda era global (cualquier reunión
+               finalizada sin consumir, de cualquier equipo), así
+               que la reunión nueva de un departamento le podía
+               "robar" los pendientes a la de otro completamente
+               ajeno, dejando a ambos con datos incorrectos.
                ================================================= */
 
             const [
@@ -3572,10 +3638,14 @@ app.post(
                     WHERE
                         Estado = 'Finalizada'
                         AND PendientesConsumidos = 0
+                        AND UsuarioCreadorId = ?
                     ORDER BY
                         FechaInicio DESC
                     LIMIT 1
-                    `
+                    `,
+                    [
+                        usuarioCreadorId
+                    ]
                 );
 
 

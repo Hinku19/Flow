@@ -1,5 +1,19 @@
 import {loadData, saveData} from "../services/storage.service.js"
 import { confirmDialog } from "../services/confirmDialog.js"
+import { capitalizar } from "../utils/capitalize.js"
+
+function formatearFechaCompletado(fechaISO){
+    if (!fechaISO) return "";
+
+    const d = new Date(fechaISO);
+    if (Number.isNaN(d.getTime())) return "";
+
+    const dia = String(d.getDate()).padStart(2, "0");
+    const mes = capitalizar(d.toLocaleDateString("es-MX", { month: "short" }));
+
+    return `${dia}/${mes}/${d.getFullYear()}`;
+}
+
 export function createEditableList({container, itemName, storageKey, onChange}){
     const list = container.querySelector(".editable-list__list")
     const input = container.querySelector(".editable-list__input")
@@ -38,9 +52,27 @@ export function createEditableList({container, itemName, storageKey, onChange}){
         check.checked = data.done;
         check.setAttribute("aria-label", `Marcar ${itemName} como completado`);
 
-        const content = data.id === editingId
-        ? createEditField(data)
-        : createLabel(data)
+        const contentWrapper = document.createElement("div");
+        contentWrapper.classList.add("editable-list__content");
+
+        if (data.id === editingId) {
+
+            contentWrapper.appendChild(createEditField(data));
+
+        } else {
+
+            contentWrapper.appendChild(createLabel(data));
+
+            if (data.done && data.fechaCompletado) {
+
+                const fecha = document.createElement("span");
+                fecha.classList.add("editable-list__fecha-completado");
+                fecha.textContent = `Completado: ${formatearFechaCompletado(data.fechaCompletado)}`;
+                contentWrapper.appendChild(fecha);
+
+            }
+
+        }
 
         const deleteBtn = document.createElement("button");
         deleteBtn.type = "button";
@@ -48,7 +80,7 @@ export function createEditableList({container, itemName, storageKey, onChange}){
         deleteBtn.textContent = "✕";
         deleteBtn.setAttribute("aria-label",`Eliminar ${itemName}`)
 
-        item.append(check, content, deleteBtn);
+        item.append(check, contentWrapper, deleteBtn);
         return item;
     }
 
@@ -100,7 +132,13 @@ export function createEditableList({container, itemName, storageKey, onChange}){
 
     function toggleItem(id){
         const data = items.find((item)=> item.id === id);
-        item.done = !item.done;
+        data.done = !data.done;
+
+        data.fechaCompletado =
+            data.done
+                ? new Date().toISOString()
+                : null;
+
         render()
     }
 //* FUNCIONES QUE VAN A EDITAR EL CONTENIDO

@@ -712,6 +712,28 @@ export function initCommitmentsView() {
         );
 
 
+        if (
+            data.estadoReal === "completado" &&
+            data.fechaCompletado
+        ) {
+
+            const completado =
+                document.createElement("div");
+
+            completado.classList.add(
+                "commitment-card__completado"
+            );
+
+            completado.textContent =
+                `Completado: ${formatearFecha(data.fechaCompletado)}`;
+
+            card.append(
+                completado
+            );
+
+        }
+
+
         return card;
 
     }

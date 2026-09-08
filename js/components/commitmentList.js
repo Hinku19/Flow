@@ -1,5 +1,6 @@
 import { loadData, saveData } from "../services/storage.service.js";
 import { API_URL } from "./config.js";
+import { capitalizar } from "../utils/capitalize.js";
 
 export const ESTADO_LABEL = {
   "pendiente": "Pendiente",
@@ -13,6 +14,18 @@ export const PRIORIDAD_LABEL = {
   "media": "Prioridad media",
   "baja": "Prioridad baja",
 };
+
+function formatearFechaCompletado(fechaISO) {
+  if (!fechaISO) return "";
+
+  const d = new Date(fechaISO);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const dia = String(d.getDate()).padStart(2, "0");
+  const mes = capitalizar(d.toLocaleDateString("es-MX", { month: "short" }));
+
+  return `${dia}/${mes}/${d.getFullYear()}`;
+}
 
 /*
  * "flow:punto-a-compromiso" es un evento global (document), y
@@ -120,6 +133,14 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     meta.textContent = `${data.usuarioAsignadoNombre || "?"} · ${data.fechaInicio || "?"} → ${data.fechaLimite || "?"} · ${data.vencidoInformativo ? "Vencido de la reunión anterior" : ESTADO_LABEL[data.estado]} · ${PRIORIDAD_LABEL[data.prioridad]}`;
 
     card.append(meta);
+
+    if (data.estado === "completado" && data.fechaCompletado) {
+      const completado = document.createElement("div");
+      completado.classList.add("commitment-card__completado");
+      completado.textContent = `Completado: ${formatearFechaCompletado(data.fechaCompletado)}`;
+      card.append(completado);
+    }
+
     return card;
   }
 
@@ -167,7 +188,22 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
   }
 
   function updateCommitment(id, data) {
-    items = items.map((item) => (item.id === id ? { ...item, ...data } : item));
+    items = items.map((item) => {
+      if (item.id !== id) return item;
+
+      const pasaACompletado = data.estado === "completado" && item.estado !== "completado";
+      const dejaDeCompletado = data.estado && data.estado !== "completado" && item.estado === "completado";
+
+      return {
+        ...item,
+        ...data,
+        fechaCompletado: pasaACompletado
+          ? new Date().toISOString()
+          : dejaDeCompletado
+            ? null
+            : item.fechaCompletado,
+      };
+    });
     render();
   }
 

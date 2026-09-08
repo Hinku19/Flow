@@ -349,6 +349,14 @@ export function initMeetingLifecycle({
     let pausada = false;
 
 
+    /*
+     * Evita que un doble clic (o una reunión que tarda en
+     * procesar) dispare terminar() dos veces y duplique los
+     * compromisos migrados a la tabla permanente.
+     */
+    let terminandoReunion = false;
+
+
     /* =========================================================
        CARGAR USUARIOS
        ========================================================= */
@@ -2394,6 +2402,9 @@ async function iniciarReunionProgramada(
         pausada =
             false;
 
+        terminandoReunion =
+            false;
+
 
         if (
             btnPausar
@@ -2662,6 +2673,15 @@ async function actualizarEstadoReunionBD(
 
     async function terminar() {
 
+        if (
+            terminandoReunion
+        ) {
+
+            return;
+
+        }
+
+
         const confirmado =
             await confirmDialog(
                 "¿Seguro que quieres terminar la reunión? Se guardará en el historial y no podrás editarla."
@@ -2677,6 +2697,18 @@ async function actualizarEstadoReunionBD(
         }
 
 
+        if (
+            terminandoReunion
+        ) {
+
+            return;
+
+        }
+
+        terminandoReunion =
+            true;
+
+
         const reunionId =
     Number(
         getReunionActivaId()
@@ -2688,6 +2720,9 @@ if (!reunionId) {
     console.error(
         "No existe una reunión activa."
     );
+
+    terminandoReunion =
+        false;
 
     return;
 
@@ -2715,6 +2750,9 @@ catch (error) {
         "No fue posible finalizar la reunión."
     );
 
+
+    terminandoReunion =
+        false;
 
     return;
 
