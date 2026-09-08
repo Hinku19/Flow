@@ -499,6 +499,74 @@ export function initMeetingLifecycle({
                 );
 
 
+            /*
+             * Preseleccionar el departamento (y área) del
+             * usuario en sesión, para no obligarlo a
+             * elegir el suyo propio cada vez que programa
+             * una reunión.
+             */
+
+            const usuarioSesion =
+                obtenerUsuarioSesion();
+
+
+            if (
+                usuarioSesion?.departamento
+            ) {
+
+                const opcionDepartamento =
+                    Array.from(
+                        departamentoReunion.options
+                    ).find(
+                        opcion =>
+                            opcion.textContent.trim() ===
+                            usuarioSesion.departamento.trim()
+                    );
+
+
+                if (opcionDepartamento) {
+
+                    departamentoReunion.value =
+                        opcionDepartamento.value;
+
+
+                    await cargarAreasReunion(
+                        departamentoReunion.value
+                    );
+
+
+                    if (
+                        usuarioSesion.area &&
+                        areaReunion
+                    ) {
+
+                        const opcionArea =
+                            Array.from(
+                                areaReunion.options
+                            ).find(
+                                opcion =>
+                                    opcion.textContent.trim() ===
+                                    usuarioSesion.area.trim()
+                            );
+
+
+                        if (opcionArea) {
+
+                            areaReunion.value =
+                                opcionArea.value;
+
+
+                            renderUsuariosDisponibles();
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+
         }
         catch (error) {
 

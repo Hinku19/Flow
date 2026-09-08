@@ -20,6 +20,10 @@ export function createLinkList({ container, storageKey, reunionId }) {
       : data.url;
   }
 
+  function esImagen(data) {
+    return data.tipo === "archivo" && (data.tipoMime || "").startsWith("image/");
+  }
+
   function createItem(data) {
     const item = document.createElement("li");
     item.classList.add("link-list__item");
@@ -28,9 +32,26 @@ export function createLinkList({ container, storageKey, reunionId }) {
     const link = document.createElement("a");
     link.classList.add("link-list__link");
     link.href = urlDelItem(data);
-    link.textContent = data.tipo === "archivo" ? `📎 ${data.titulo}` : data.titulo;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
+
+    if (esImagen(data)) {
+      item.classList.add("link-list__item--imagen");
+
+      const thumb = document.createElement("img");
+      thumb.classList.add("link-list__thumb");
+      thumb.src = urlDelItem(data);
+      thumb.alt = data.titulo;
+      thumb.loading = "lazy";
+
+      const caption = document.createElement("span");
+      caption.classList.add("link-list__caption");
+      caption.textContent = data.titulo;
+
+      link.append(thumb, caption);
+    } else {
+      link.textContent = data.tipo === "archivo" ? `📎 ${data.titulo}` : data.titulo;
+    }
 
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
@@ -53,9 +74,24 @@ export function createLinkList({ container, storageKey, reunionId }) {
     render();
   }
 
+  async function eliminarArchivo(archivoId) {
+    try {
+      await fetch(`${API_URL}/enlaces/archivos/${archivoId}`, {
+        method: "DELETE",
+      });
+    } catch (error) {
+      console.error("ERROR ELIMINANDO ARCHIVO DE ENLACE:", error);
+    }
+  }
+
   function removeItem(id) {
+    const item = items.find((item) => item.id === id);
     items = items.filter((item) => item.id !== id);
     render();
+
+    if (item?.tipo === "archivo") {
+      eliminarArchivo(item.archivoId);
+    }
   }
 
   /*

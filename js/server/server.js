@@ -5341,6 +5341,103 @@ app.get(
 
 
 /* =========================================================
+   ELIMINAR ARCHIVO DE ENLACE (COMPETITIVIDAD)
+   ---------------------------------------------------------
+   Borra el BLOB de reunion_enlace_archivos cuando el usuario
+   quita el enlace correspondiente desde la sección "enlaces".
+   ========================================================= */
+
+app.delete(
+    "/api/enlaces/archivos/:archivoId",
+    async (req, res) => {
+
+        try {
+
+            const archivoId =
+                Number(
+                    req.params.archivoId
+                );
+
+            if (!archivoId) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "ID de archivo no válido."
+
+                    });
+
+            }
+
+
+            const [resultado] =
+                await db.execute(
+                    `
+                    DELETE FROM reunion_enlace_archivos
+                    WHERE id = ?
+                    `,
+                    [
+                        archivoId
+                    ]
+                );
+
+            if (resultado.affectedRows === 0) {
+
+                return res
+                    .status(404)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Archivo no encontrado."
+
+                    });
+
+            }
+
+            return res.json({
+
+                ok: true,
+
+                mensaje:
+                    "Archivo eliminado correctamente."
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL ELIMINAR ARCHIVO DE ENLACE:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible eliminar el archivo.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
    RUTA NO ENCONTRADA
    ========================================================= */
 
