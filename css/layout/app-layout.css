@@ -110,6 +110,43 @@
     cursor: not-allowed;
 }
 
+/*
+ * En pantallas con margen suficiente a los lados del
+ * contenedor (max-width: 900px), los botones se anclan al
+ * viewport en vez de quedarse arriba del todo: así siguen
+ * disponibles aunque la sección visible (p. ej. desarrollo)
+ * sea muy larga y el usuario haya bajado con el scroll.
+ */
+@media (min-width: 1100px) {
+
+    .meeting__body--horizontal .meeting-pager__btn {
+        position: fixed;
+        top: 50%;
+        z-index: 55;
+        box-shadow: var(--shadow-md);
+    }
+
+    /*
+     * "left"/"right" se anclan justo al borde del contenedor
+     * (max-width: 900px, mitad = 450px desde el centro) y el
+     * "translateX" empuja el botón hacia afuera usando su
+     * propio ancho renderizado (-100%/0%), así el hueco entre
+     * el botón y el contenido es constante sin importar si el
+     * texto del botón es más largo ("Siguiente →" vs "←
+     * Anterior").
+     */
+    .meeting__body--horizontal .meeting-pager__btn:first-child {
+        left: calc(50% - 450px);
+        transform: translateY(-50%) translateX(calc(-100% - var(--space-xl)));
+    }
+
+    .meeting__body--horizontal .meeting-pager__btn:last-child {
+        left: calc(50% + 450px);
+        transform: translateY(-50%) translateX(var(--space-xl));
+    }
+
+}
+
 .meeting-section--oculta-horizontal {
     display: none;
 }
