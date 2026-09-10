@@ -753,6 +753,8 @@ export function createArchiveView() {
         });
 
 
+        return developmentTable;
+
     }
 
 
@@ -882,14 +884,33 @@ export function createArchiveView() {
                 }
 
 
-                await montarModoEditable(
-                    id
-                );
+                const developmentTable =
+                    await montarModoEditable(
+                        id
+                    );
 
 
                 showView(
                     "archivo"
                 );
+
+
+                /*
+                 * Los <textarea> del desarrollo calculan su
+                 * alto (autoGrow) al montarse, pero en ese
+                 * momento la vista todavía está oculta
+                 * (view--hidden) y scrollHeight mide 0 — el
+                 * texto queda ahí pero visualmente colapsado.
+                 * Se recalcula ya con la vista visible.
+                 */
+
+                if (
+                    developmentTable
+                ) {
+
+                    developmentTable.refreshTextAreas();
+
+                }
 
 
                 return;

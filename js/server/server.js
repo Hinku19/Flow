@@ -2869,6 +2869,42 @@ const ESTADO_A_STATUS = {
 };
 
 
+function aFechaHoraMySQL(
+    valor
+) {
+
+    if (!valor) {
+
+        return null;
+
+    }
+
+
+    const fecha =
+        new Date(
+            valor
+        );
+
+
+    if (
+        Number.isNaN(
+            fecha.getTime()
+        )
+    ) {
+
+        return null;
+
+    }
+
+
+    return fecha
+        .toISOString()
+        .slice(0, 19)
+        .replace("T", " ");
+
+}
+
+
 async function resolverDepartamentoArea(
     connection,
     usuarioAsignadoId
@@ -3006,7 +3042,7 @@ async function insertarCompromiso(
             compromiso.fechaLimite || null,
             status,
             status === 3
-                ? (compromiso.fechaCompletado || null)
+                ? aFechaHoraMySQL(compromiso.fechaCompletado)
                 : null
         ]
     );
