@@ -1435,38 +1435,6 @@ console.log(
             }
 
 
-            if (!departamentoId) {
-
-                return res
-                    .status(400)
-                    .json({
-
-                        ok: false,
-
-                        mensaje:
-                            "El departamento es obligatorio."
-
-                    });
-
-            }
-
-
-            if (!areaId) {
-
-                return res
-                    .status(400)
-                    .json({
-
-                        ok: false,
-
-                        mensaje:
-                            "El área es obligatoria."
-
-                    });
-
-            }
-
-
             /* =================================================
                INSERTAR REUNIÓN
                ================================================= */
@@ -2769,7 +2737,7 @@ app.get(
 
 
             /* =================================================
-               REUNIÓN + CREADOR + DEPARTAMENTO + ÁREA
+               REUNIÓN
                ================================================= */
 
             const [
@@ -2778,43 +2746,17 @@ app.get(
                 await db.execute(
                     `
                     SELECT
-
-                        r.ReunionId,
-                        r.Titulo,
-                        r.Descripcion,
-                        r.FechaInicio,
-                        r.FechaFin,
-                        r.Lugar,
-                        r.Estado,
-                        r.FechaRegistro,
-                        r.FechaActualizacion,
-                        r.UsuarioCreadorId,
-
-                        u.nombre AS CreadorNombre,
-
-                        r.DepartamentoId,
-                        s.SubsidiaryName AS Departamento,
-
-                        r.AreaId,
-                        a.AreaName AS Area
-
-                    FROM reuniones r
-
-                    LEFT JOIN usuarios u
-                        ON u.id =
-                           r.UsuarioCreadorId
-
-                    LEFT JOIN subsidiaries s
-                        ON s.SubsidiaryId =
-                           r.DepartamentoId
-
-                    LEFT JOIN areas a
-                        ON a.AreaId =
-                           r.AreaId
-
-                    WHERE
-                        r.ReunionId = ?
-
+                        ReunionId,
+                        Titulo,
+                        Descripcion,
+                        FechaInicio,
+                        FechaFin,
+                        Lugar,
+                        Estado,
+                        FechaFinalizacion,
+                        UsuarioCreadorId
+                    FROM reuniones
+                    WHERE ReunionId = ?
                     LIMIT 1
                     `,
                     [
@@ -2855,7 +2797,6 @@ app.get(
                         rp.Asistio,
                         u.nombre,
                         u.correo_electronico
-
                     FROM reunion_participantes rp
 
                     INNER JOIN usuarios u
@@ -2913,6 +2854,7 @@ app.get(
 
     }
 );
+
 
 /* =========================================================
    MIGRAR COMPROMISOS A LA TABLA COMPROMISOS
