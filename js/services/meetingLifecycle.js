@@ -1854,9 +1854,66 @@ async function crearReunionBD(
     }
 
 
+    /* =====================================================
+       DEPARTAMENTO Y ÁREA
+       ===================================================== */
+
+    const departamentoId =
+        departamentoReunion &&
+        departamentoReunion.value
+            ? Number(
+                departamentoReunion.value
+            )
+            : null;
+
+
+    const areaId =
+        areaReunion &&
+        areaReunion.value
+            ? Number(
+                areaReunion.value
+            )
+            : null;
+
+
+    /* =====================================================
+       VALIDAR DEPARTAMENTO
+       ===================================================== */
+
+    if (
+        !departamentoId
+    ) {
+
+        throw new Error(
+            "Debes seleccionar un departamento."
+        );
+
+    }
+
+
+    /* =====================================================
+       VALIDAR ÁREA
+       ===================================================== */
+
+    if (
+        !areaId
+    ) {
+
+        throw new Error(
+            "Debes seleccionar un área."
+        );
+
+    }
+
+
+    /* =====================================================
+       DATOS A ENVIAR
+       ===================================================== */
+
     console.log(
         "DATOS QUE SE ENVIARÁN A /api/reuniones:",
         {
+
             titulo:
                 tituloLimpio,
 
@@ -1867,13 +1924,31 @@ async function crearReunionBD(
                 fechaFinMySQL,
 
             usuarioCreadorId:
-                usuarioCreadorId,
+                Number(
+                    usuarioCreadorId
+                ),
+
+            departamentoId:
+                departamentoId,
+
+            areaId:
+                areaId,
+
+            heredarCompromisos:
+                Boolean(
+                    heredarCompromisos
+                ),
 
             tipoUsuarioCreadorId:
                 typeof usuarioCreadorId
+
         }
     );
 
+
+    /* =====================================================
+       CREAR REUNIÓN
+       ===================================================== */
 
     const response =
         await fetch(
@@ -1915,6 +1990,12 @@ async function crearReunionBD(
                             Number(
                                 usuarioCreadorId
                             ),
+
+                        departamentoId:
+                            departamentoId,
+
+                        areaId:
+                            areaId,
 
                         heredarCompromisos:
                             Boolean(
@@ -2117,6 +2198,7 @@ const duracion =
 console.log(
     "DATOS PARA CREAR REUNIÓN:",
     {
+
         titulo:
             titulo,
 
@@ -2127,7 +2209,24 @@ console.log(
             duracion,
 
         usuarioCreadorId:
-            usuarioSesion.id
+            usuarioSesion.id,
+
+        departamentoId:
+            departamentoReunion &&
+            departamentoReunion.value
+                ? Number(
+                    departamentoReunion.value
+                )
+                : null,
+
+        areaId:
+            areaReunion &&
+            areaReunion.value
+                ? Number(
+                    areaReunion.value
+                )
+                : null
+
     }
 );
 

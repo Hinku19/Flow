@@ -822,17 +822,30 @@ export function createArchiveView() {
                 reunionData.reunion ||
                 {};
 
+/* =====================================================
+   PARTICIPANTES
+   ===================================================== */
 
-            const s =
-                construirSecciones(
-                    secciones
-                );
+reunion.participantes =
+    Array.isArray(
+        reunionData.participantes
+    )
+        ? reunionData.participantes
+        : [];
 
-                reunionActual =
-            reunion;
 
-                seccionesActuales =
-                s;
+const s =
+    construirSecciones(
+        secciones
+    );
+
+
+reunionActual =
+    reunion;
+
+
+seccionesActuales =
+    s;
 
 
             console.log(
