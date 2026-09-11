@@ -32,6 +32,7 @@
 @import "components/commitment-list.css";
 @import "components/commitments-view.css";
 @import "components/innovation-form.css";
+@import "components/vpn-calculator.css";
 @import "components/development-table.css";
 @import "components/text-section.css";
 @import "components/link-list.css";
@@ -49,6 +50,9 @@
 
 /* Diálogos */
 @import "components/confirm-dialog.css";
+
+/* Perfil */
+@import "components/profile-menu.css";
 
 
 /* =========================================================

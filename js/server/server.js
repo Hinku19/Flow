@@ -118,6 +118,47 @@ const uploadEnlaceArchivo =
 
 
 /* =========================================================
+   ARCHIVOS SUBIDOS (FOTO DE PERFIL)
+   ---------------------------------------------------------
+   Mismo patrón: BLOB en MySQL, en la propia tabla usuarios
+   (columnas foto_mime / foto_contenido). Solo imágenes.
+   ========================================================= */
+
+const uploadFotoPerfil =
+    multer({
+
+        storage:
+            multer.memoryStorage(),
+
+        limits: {
+            fileSize:
+                5 * 1024 * 1024
+        },
+
+        fileFilter:
+            (req, file, cb) => {
+
+                const permitido =
+                    file.mimetype.startsWith("image/");
+
+                if (!permitido) {
+
+                    return cb(
+                        new Error(
+                            "Solo se permiten imágenes."
+                        )
+                    );
+
+                }
+
+                cb(null, true);
+
+            }
+
+    });
+
+
+/* =========================================================
    IDENTIFICAR AL USUARIO QUE HACE LA PETICIÓN
    ---------------------------------------------------------
    No hay tokens de sesión: el frontend manda quién es en el
@@ -460,7 +501,8 @@ app.post(
                         rol,
                         correo_electronico,
                         password_hash,
-                        activo
+                        activo,
+                        (foto_contenido IS NOT NULL) AS tieneFoto
                     FROM usuarios
                     WHERE correo_electronico = ?
                     LIMIT 1
@@ -582,7 +624,10 @@ app.post(
                         usuario.correo_electronico,
 
                     activo:
-                        usuario.activo
+                        usuario.activo,
+
+                    tieneFoto:
+                        Boolean(usuario.tieneFoto)
 
                 }
 
@@ -908,6 +953,301 @@ app.put(
 
                     mensaje:
                         "Error interno al actualizar el usuario.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   SUBIR FOTO DE PERFIL
+   ---------------------------------------------------------
+   Solo el propio usuario puede cambiar su foto.
+   ========================================================= */
+
+app.post(
+    "/api/usuarios/:id/foto",
+    uploadFotoPerfil.single("foto"),
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
+            const usuarioId =
+                Number(
+                    req.params.id
+                );
+
+            if (usuarioSolicitante.id !== usuarioId) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            if (!req.file) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No se recibió ninguna imagen."
+
+                    });
+
+            }
+
+
+            await db.execute(
+                `
+                UPDATE usuarios
+                SET
+                    foto_mime = ?,
+                    foto_contenido = ?
+                WHERE id = ?
+                `,
+                [
+                    req.file.mimetype,
+                    req.file.buffer,
+                    usuarioId
+                ]
+            );
+
+
+            return res.json({
+
+                ok: true,
+
+                mensaje:
+                    "Foto de perfil actualizada correctamente."
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL SUBIR FOTO DE PERFIL:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible actualizar la foto de perfil.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   QUITAR FOTO DE PERFIL
+   ========================================================= */
+
+app.delete(
+    "/api/usuarios/:id/foto",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
+            const usuarioId =
+                Number(
+                    req.params.id
+                );
+
+            if (usuarioSolicitante.id !== usuarioId) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            await db.execute(
+                `
+                UPDATE usuarios
+                SET
+                    foto_mime = NULL,
+                    foto_contenido = NULL
+                WHERE id = ?
+                `,
+                [
+                    usuarioId
+                ]
+            );
+
+
+            return res.json({
+
+                ok: true,
+
+                mensaje:
+                    "Foto de perfil eliminada correctamente."
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL QUITAR FOTO DE PERFIL:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible quitar la foto de perfil.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   OBTENER FOTO DE PERFIL
+   ---------------------------------------------------------
+   Sirve el contenido de la imagen guardada como BLOB en
+   usuarios.foto_contenido.
+   ========================================================= */
+
+app.get(
+    "/api/usuarios/:id/foto",
+    async (req, res) => {
+
+        try {
+
+            const usuarioId =
+                Number(
+                    req.params.id
+                );
+
+            const [rows] =
+                await db.execute(
+                    `
+                    SELECT
+                        foto_mime,
+                        foto_contenido
+                    FROM usuarios
+                    WHERE id = ?
+                    LIMIT 1
+                    `,
+                    [
+                        usuarioId
+                    ]
+                );
+
+            if (
+                rows.length === 0 ||
+                !rows[0].foto_contenido
+            ) {
+
+                return res
+                    .status(404)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "El usuario no tiene foto de perfil."
+
+                    });
+
+            }
+
+
+            res.set(
+                "Content-Type",
+                rows[0].foto_mime ||
+                "application/octet-stream"
+            );
+
+            return res.send(
+                rows[0].foto_contenido
+            );
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL OBTENER FOTO DE PERFIL:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible obtener la foto de perfil.",
 
                     error:
                         error.message
@@ -1771,6 +2111,7 @@ app.get(
                         c.ReunionId,
                         r.Titulo AS ReunionTitulo,
                         r.FechaInicio AS ReunionFecha,
+                        u.id AS UsuarioAsignadoId,
                         u.nombre AS ResponsableNombre,
                         CASE
                             WHEN c.Status IN (1, 2)
@@ -1804,6 +2145,9 @@ app.get(
                         descripcion:
                             row.Descripcion ||
                             row.Titulo,
+
+                        usuarioAsignadoId:
+                            row.UsuarioAsignadoId,
 
                         usuarioAsignadoNombre:
                             row.ResponsableNombre,
@@ -4740,16 +5084,152 @@ app.delete(
 
 
 /* =========================================================
+   CÁLCULO DE VALOR PRESENTE NETO (VPN)
+   ---------------------------------------------------------
+   Misma fórmula que usaba el formato Excel de VPN que antes
+   se subía como archivo adjunto (ver
+   js/utils/calcularVPN.js para la versión del frontend, que
+   se usa para mostrar el resultado en vivo mientras se
+   captura). Se vuelve a calcular aquí para no depender de
+   lo que mande el cliente.
+   ========================================================= */
+
+function aNumeroVPN(
+    valor
+) {
+
+    const numero =
+        Number(
+            valor
+        );
+
+    return Number.isFinite(numero)
+        ? numero
+        : 0;
+
+}
+
+
+function sumarMontosVPN(
+    filas
+) {
+
+    return (
+        Array.isArray(filas)
+            ? filas
+            : []
+    ).reduce(
+        (total, fila) =>
+            total +
+            aNumeroVPN(
+                fila?.total
+            ),
+        0
+    );
+
+}
+
+
+function calcularVPN({
+    tasaDescuentoAnual,
+    mesesProyeccion,
+    capitalHumano,
+    inversiones,
+    costos,
+    beneficios
+}) {
+
+    const capitalHumanoTotal =
+        (
+            Array.isArray(capitalHumano)
+                ? capitalHumano
+                : []
+        ).reduce(
+            (total, fila) =>
+                total +
+                (
+                    aNumeroVPN(fila?.horas) *
+                    aNumeroVPN(fila?.salarioDiario)
+                ) / 8,
+            0
+        );
+
+    const inversionesTotal =
+        sumarMontosVPN(
+            inversiones
+        );
+
+    const costosTotal =
+        sumarMontosVPN(
+            costos
+        );
+
+    const beneficiosTotal =
+        sumarMontosVPN(
+            beneficios
+        );
+
+    const flujoNetoMensual =
+        beneficiosTotal -
+        costosTotal;
+
+    const inversionTotal =
+        capitalHumanoTotal +
+        inversionesTotal;
+
+    const meses =
+        aNumeroVPN(mesesProyeccion) ||
+        36;
+
+    const tasaMensual =
+        aNumeroVPN(tasaDescuentoAnual) /
+        100 /
+        12;
+
+    let valorPresenteFlujos =
+        0;
+
+    for (
+        let mes = 1;
+        mes <= meses;
+        mes++
+    ) {
+
+        valorPresenteFlujos +=
+            flujoNetoMensual /
+            Math.pow(
+                1 + tasaMensual,
+                mes
+            );
+
+    }
+
+    const resultadoVPN =
+        valorPresenteFlujos -
+        inversionTotal;
+
+    return {
+
+        capitalHumanoTotal,
+        inversionesTotal,
+        costosTotal,
+        beneficiosTotal,
+        flujoNetoMensual,
+        inversionTotal,
+        resultadoVPN
+
+    };
+
+}
+
+
+/* =========================================================
    REGISTRAR INNOVACIÓN
    ========================================================= */
 
 app.post(
     "/api/innovaciones",
     uploadInnovacion.fields([
-        {
-            name: "vpnArchivo",
-            maxCount: 1
-        },
         {
             name: "evidenciaArchivo",
             maxCount: 1
@@ -4848,9 +5328,30 @@ app.post(
             }
 
 
+            let vpnDatos;
+
+            try {
+
+                vpnDatos =
+                    JSON.parse(
+                        campos.vpnDatos ||
+                        "null"
+                    );
+
+            }
+            catch (error) {
+
+                vpnDatos =
+                    null;
+
+            }
+
             if (
-                !archivos.vpnArchivo ||
-                archivos.vpnArchivo.length === 0
+                !vpnDatos ||
+                !String(
+                    vpnDatos.tasaDescuentoAnual ??
+                    ""
+                ).trim()
             ) {
 
                 return res
@@ -4860,7 +5361,7 @@ app.post(
                         ok: false,
 
                         mensaje:
-                            "Debe adjuntar el Formato VPN."
+                            "Debe capturar la tasa de descuento del VPN."
 
                     });
 
@@ -4931,15 +5432,59 @@ app.post(
                 resultado.insertId;
 
 
+            /* =============================================
+               GUARDAR VPN (RECALCULADO EN EL SERVIDOR)
+               ============================================= */
+
+            const resultadoVpn =
+                calcularVPN(
+                    vpnDatos
+                );
+
+            await connection.execute(
+                `
+                INSERT INTO innovacion_vpn
+                (
+                    innovacion_id,
+                    tasa_descuento_anual,
+                    meses_proyeccion,
+                    capital_humano,
+                    inversiones,
+                    costos,
+                    beneficios,
+                    capital_humano_total,
+                    inversiones_total,
+                    costos_total,
+                    beneficios_total,
+                    flujo_neto_mensual,
+                    inversion_total,
+                    resultado_vpn
+                )
+                VALUES
+                (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
+                `,
+                [
+                    innovacionId,
+                    aNumeroVPN(vpnDatos.tasaDescuentoAnual),
+                    aNumeroVPN(vpnDatos.mesesProyeccion) || 36,
+                    JSON.stringify(vpnDatos.capitalHumano || []),
+                    JSON.stringify(vpnDatos.inversiones || []),
+                    JSON.stringify(vpnDatos.costos || []),
+                    JSON.stringify(vpnDatos.beneficios || []),
+                    resultadoVpn.capitalHumanoTotal,
+                    resultadoVpn.inversionesTotal,
+                    resultadoVpn.costosTotal,
+                    resultadoVpn.beneficiosTotal,
+                    resultadoVpn.flujoNetoMensual,
+                    resultadoVpn.inversionTotal,
+                    resultadoVpn.resultadoVPN
+                ]
+            );
+
+
             const archivosAGuardar = [
-
-                {
-                    tipo:
-                        "vpn",
-
-                    archivo:
-                        archivos.vpnArchivo[0]
-                },
 
                 ...(
                     archivos.evidenciaArchivo &&

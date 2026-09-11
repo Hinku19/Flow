@@ -33,6 +33,18 @@
     --color-success-bg: #EAF1E0;
     --color-succes-text: #38571F;
 
+    /*Acentos por módulo (identidad visual de cada sección)*/
+    --color-historial: #7379EF;      /*morado - Historial de Reuniones*/
+    --color-historial-light: #8589F5;
+    --color-historial-bg: #EDEDFC;
+    --color-programar: #4298E6;      /*azul - Programar Reunión*/
+    --color-programar-light: #55A8F0;
+    --color-programar-bg: #E8F2FF;
+    --color-compromisos: #C9860F;    /*dorado (oscurecido para contraste de texto) - Compromisos*/
+    --color-compromisos-light: #FFC957;
+    --color-compromisos-card: #F5B93F; /*tono real de la tarjeta del dashboard*/
+    --color-compromisos-bg: #FFF6E5;
+
     /*Espaciado (escala de 4px)*/
     --space-2xs: 4px;
     --space-xs: 8px;

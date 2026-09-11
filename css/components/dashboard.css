@@ -388,72 +388,13 @@
 /* =========================================================
    COLORES DE TARJETAS
    ---------------------------------------------------------
-   Una sola familia navy en cuatro profundidades.
-   La jerarquía va de la acción principal (más
-   oscura, más peso visual) a la secundaria.
-
-   Contraste del texto blanco sobre cada tono:
-   900 → 14:1   |   700 → 9.9:1
-   600 → 6.7:1  |   400 → 4.7:1
-   Todos por encima del mínimo AA.
+   Cada tarjeta tiene su propio color de identidad (ver
+   variables --color-historial/-programar/-compromisos en
+   variables.css), reutilizado también como acento en la
+   pantalla interna de esa sección. Programar Reunión,
+   Historial y Compromisos se definen más abajo, junto con
+   Usuarios; Innovaciones usa --color-warning/--color-progress.
    ========================================================= */
-
-/* ---------------------------------------------------------
-   PROGRAMAR REUNIÓN — acción principal
-   --------------------------------------------------------- */
-
-.dashboard-card--primary {
-    background:
-        linear-gradient(
-            135deg,
-            var(--color-accent-700) 0%,
-            var(--color-accent-900) 100%
-        );
-}
-
-.dashboard-card--primary
-.dashboard-card__icon {
-    color: var(--color-accent-800);
-}
-
-
-/* ---------------------------------------------------------
-   HISTORIAL
-   --------------------------------------------------------- */
-
-.dashboard-card--history {
-    background:
-        linear-gradient(
-            135deg,
-            var(--color-accent-600) 0%,
-            var(--color-accent-800) 100%
-        );
-}
-
-.dashboard-card--history
-.dashboard-card__icon {
-    color: var(--color-accent-700);
-}
-
-
-/* ---------------------------------------------------------
-   COMPROMISOS
-   --------------------------------------------------------- */
-
-.dashboard-card--commitments {
-    background:
-        linear-gradient(
-            135deg,
-            var(--color-accent-500) 0%,
-            var(--color-accent-700) 100%
-        );
-}
-
-.dashboard-card--commitments
-.dashboard-card__icon {
-    color: var(--color-accent-600);
-}
-
 
 /* ---------------------------------------------------------
    INNOVACIONES
@@ -579,14 +520,14 @@
     background:
         linear-gradient(
             135deg,
-            #8589f5 0%,
-            #7379ef 100%
+            var(--color-historial-light) 0%,
+            var(--color-historial) 100%
         );
 }
 
 .dashboard-card--history
 .dashboard-card__icon {
-    color: #747af0;
+    color: var(--color-historial);
 }
 
 
@@ -617,14 +558,14 @@
     background:
         linear-gradient(
             135deg,
-            #55a8f0 0%,
-            #4298e6 100%
+            var(--color-programar-light) 0%,
+            var(--color-programar) 100%
         );
 }
 
 .dashboard-card--primary
 .dashboard-card__icon {
-    color: #469ce9;
+    color: var(--color-programar);
 }
 
 
@@ -636,14 +577,14 @@
     background:
         linear-gradient(
             135deg,
-            #ffc957 0%,
-            #f5b93f 100%
+            var(--color-compromisos-light) 0%,
+            var(--color-compromisos-card) 100%
         );
 }
 
 .dashboard-card--commitments
 .dashboard-card__icon {
-    color: #f4ba42;
+    color: var(--color-compromisos-card);
 }
 
 

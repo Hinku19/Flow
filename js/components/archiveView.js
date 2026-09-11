@@ -615,6 +615,15 @@ export function createArchiveView() {
                     "objetivos"
                 ),
 
+            showCheckbox:
+                false,
+
+            checkCompletado:
+                (id) =>
+                    developmentTable.todosLosPuntosCompletados(
+                        id
+                    ),
+
             onChange:
                 (objetivos) => {
 

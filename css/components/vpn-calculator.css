@@ -1,0 +1,225 @@
+/* =========================================================
+   FLOW - CALCULADORA DE VPN
+   ========================================================= */
+
+.vpn-calculator {
+    display: flex;
+    flex-direction: column;
+
+    gap: var(--space-md);
+}
+
+
+/* =========================================================
+   BLOQUES (CAPITAL HUMANO / INVERSIONES / COSTOS / BENEFICIOS)
+   ========================================================= */
+
+.vpn-calculator__block {
+    display: flex;
+    flex-direction: column;
+
+    gap: var(--space-xs);
+
+    padding: var(--space-sm);
+
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+
+    background: var(--color-surface-alt);
+}
+
+
+.vpn-calculator__block-title {
+    margin: 0;
+
+    font-size: var(--text-sm);
+    font-weight: var(--weight-bold);
+
+    color: var(--color-text);
+}
+
+
+.vpn-calculator__table {
+    display: flex;
+    flex-direction: column;
+
+    gap: var(--space-2xs);
+}
+
+
+.vpn-calculator__row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)) 32px;
+
+    gap: var(--space-2xs);
+
+    align-items: center;
+}
+
+
+.vpn-calculator__row--header span {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+
+    color: var(--color-text-subtle);
+}
+
+
+.vpn-calculator__input {
+    width: 100%;
+
+    box-sizing: border-box;
+
+    padding: var(--space-2xs) var(--space-xs);
+
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+
+    background-color: var(--color-surface);
+
+    color: var(--color-text);
+
+    font-family: inherit;
+    font-size: var(--text-sm);
+
+    outline: none;
+
+    transition: border-color var(--transition-fast);
+}
+
+
+.vpn-calculator__input:focus {
+    border-color: var(--color-progress);
+}
+
+
+.vpn-calculator__delete {
+    width: 28px;
+    height: 28px;
+
+    border: none;
+    border-radius: var(--radius-sm);
+
+    background: transparent;
+
+    color: var(--color-danger);
+
+    font-size: var(--text-sm);
+
+    cursor: pointer;
+}
+
+
+.vpn-calculator__delete:hover {
+    background: rgba(214, 40, 40, 0.1);
+}
+
+
+.vpn-calculator__vacio {
+    margin: 0;
+
+    font-size: var(--text-xs);
+
+    color: var(--color-text-subtle);
+}
+
+
+.vpn-calculator__add {
+    align-self: flex-start;
+
+    padding: var(--space-2xs) var(--space-sm);
+
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-sm);
+
+    background: var(--color-surface);
+
+    color: var(--color-accent);
+
+    font-family: inherit;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+
+    cursor: pointer;
+
+    transition: background var(--transition-fast);
+}
+
+
+.vpn-calculator__add:hover {
+    background: var(--color-surface-alt);
+}
+
+
+/* =========================================================
+   RESUMEN
+   ========================================================= */
+
+.vpn-calculator__resumen {
+    display: flex;
+    flex-direction: column;
+
+    gap: var(--space-2xs);
+
+    padding: var(--space-sm) var(--space-md);
+
+    border-radius: var(--radius-sm);
+
+    background: var(--color-accent-900);
+}
+
+
+.vpn-calculator__resumen-fila {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+
+    gap: var(--space-sm);
+
+    font-size: var(--text-sm);
+
+    color: var(--color-on-accent);
+}
+
+
+.vpn-calculator__resumen-fila span {
+    opacity: 0.75;
+}
+
+
+.vpn-calculator__resultado {
+    margin-top: var(--space-2xs);
+    padding-top: var(--space-xs);
+
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+
+    font-size: var(--text-base);
+    font-weight: var(--weight-bold);
+}
+
+
+.vpn-calculator__resultado-valor {
+    color: var(--color-warning);
+}
+
+
+.vpn-calculator__resultado-valor--negativo {
+    color: #ff8f8f;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 700px) {
+
+    .vpn-calculator__row {
+        grid-template-columns: 1fr;
+    }
+
+    .vpn-calculator__delete {
+        justify-self: end;
+    }
+
+}

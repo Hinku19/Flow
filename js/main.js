@@ -92,6 +92,10 @@ import {
 } from "./components/settingsMenu.js";
 
 import {
+    initProfileMenu
+} from "./components/profileMenu.js";
+
+import {
     initLogin
 } from "./components/login.js";
 
@@ -448,6 +452,15 @@ function montarReunion() {
             sectionKey(
                 "objetivos"
             ),
+
+        showCheckbox:
+            false,
+
+        checkCompletado:
+            (id) =>
+                developmentTable.todosLosPuntosCompletados(
+                    id
+                ),
 
         onChange:
             (objetivos) => {
@@ -1109,6 +1122,13 @@ initInnovationForm();
    ========================================================= */
 
 initSettingsMenu();
+
+
+/* =========================================================
+   MENÚ DE PERFIL
+   ========================================================= */
+
+initProfileMenu();
 
 
 /*

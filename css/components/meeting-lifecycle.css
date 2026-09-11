@@ -113,8 +113,8 @@
 
 .start-dialog {
 
-    /* Marco azul pastel */
-    border: 2px solid #05466e;
+    /* Marco azul - identidad de "Programar Reunión" */
+    border: 2px solid var(--color-programar);
 
     border-radius: var(--radius-lg);
 
@@ -127,7 +127,7 @@
 
     /* Sombra exterior */
     box-shadow:
-        0 12px 30px rgba(11, 53, 83, 0.12);
+        0 12px 30px rgba(39, 116, 189, 0.18);
 
 }
 
@@ -136,6 +136,7 @@
 .start-dialog__title {
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
+  color: var(--color-programar);
   margin-bottom: var(--space-lg);
 }
 
@@ -265,9 +266,14 @@
 
 .start-dialog__confirm {
   border: none;
-  background-color: var(--color-accent);
+  background-color: var(--color-programar);
   color: var(--color-on-accent);
 }
+.start-dialog .field__input:focus {
+  border-color: var(--color-programar);
+  box-shadow: 0 0 0 3px rgba(39, 116, 189, 0.15);
+}
+
 .start-dialog__confirm:disabled {
   opacity: 0.4;
   cursor: not-allowed;

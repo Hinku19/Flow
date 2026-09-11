@@ -17,8 +17,8 @@
 }
 
 .commitment-list__add:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  border-color: var(--color-compromisos);
+  color: var(--color-compromisos);
 }
 
 .commitment-list__dialog {
@@ -68,8 +68,8 @@
 
 .field__input:focus {
   outline: none;
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(0, 48, 73, 0.12);
+  border-color: var(--color-compromisos);
+  box-shadow: 0 0 0 3px rgba(201, 134, 15, 0.18);
 }
 
 .field-row {
@@ -104,7 +104,7 @@
 
 .commitment-list__save {
   border: none;
-  background-color: var(--color-accent);
+  background-color: var(--color-compromisos);
   color: var(--color-on-accent);
 }
 

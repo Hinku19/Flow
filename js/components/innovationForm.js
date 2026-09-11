@@ -10,6 +10,10 @@ import {
     getUsuarioActual
 } from "../services/auth.service.js";
 
+import {
+    createVpnCalculator
+} from "./vpnCalculator.js";
+
 
 /* =========================================================
    INICIALIZAR FORMULARIO
@@ -68,6 +72,16 @@ export function initInnovationForm() {
         form.querySelector(
             ".innovation-form__submit"
         );
+
+    const vpnCalculator =
+        createVpnCalculator({
+
+            container:
+                form.querySelector(
+                    "#innovacion-vpn-calculadora"
+                )
+
+        });
 
 
     let areasCargadas =
@@ -388,19 +402,12 @@ export function initInnovationForm() {
         );
 
 
-        const vpnArchivo =
-            form.querySelector(
-                "#innovacion-vpn-archivo"
-            ).files[0];
-
-        if (vpnArchivo) {
-
-            formData.append(
-                "vpnArchivo",
-                vpnArchivo
-            );
-
-        }
+        formData.append(
+            "vpnDatos",
+            JSON.stringify(
+                vpnCalculator.getDatos()
+            )
+        );
 
 
         const evidenciaArchivo =
@@ -513,6 +520,8 @@ export function initInnovationForm() {
                 );
 
                 form.reset();
+
+                vpnCalculator.reset();
 
                 prellenarResponsable();
 

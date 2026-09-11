@@ -4,6 +4,17 @@
 
 
 /* =========================================================
+   TÍTULO
+   ========================================================= */
+
+.innovation-form-view .view__title {
+    padding-left: var(--space-sm);
+
+    border-left: 4px solid var(--color-progress);
+}
+
+
+/* =========================================================
    SUBTÍTULO
    ========================================================= */
 
@@ -51,6 +62,7 @@
     box-sizing: border-box;
 
     border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-progress);
     border-radius: var(--radius-md);
 
     background: var(--color-surface);
@@ -65,7 +77,7 @@
     font-size: var(--text-lg);
     font-weight: var(--weight-bold);
 
-    color: var(--color-text);
+    color: var(--color-progress);
 }
 
 
@@ -172,10 +184,10 @@
 .innovation-form input[type="text"]:focus,
 .innovation-form select:focus,
 .innovation-form textarea:focus {
-    border-color: var(--color-accent-500);
+    border-color: var(--color-progress);
 
     box-shadow:
-        0 0 0 3px rgba(0, 113, 158, 0.15);
+        0 0 0 3px rgba(247, 127, 0, 0.15);
 }
 
 

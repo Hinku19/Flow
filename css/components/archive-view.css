@@ -3,7 +3,7 @@
   align-items: center;
   gap: var(--space-md);
   padding: var(--space-sm) var(--space-md);
-  background-color: var(--color-surface-alt);
+  background-color: var(--color-historial-bg);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-lg);
 }
@@ -19,8 +19,8 @@
 }
 
 .archive__back:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  border-color: var(--color-historial);
+  color: var(--color-historial);
 }
 
 .archive__label {
@@ -35,7 +35,7 @@
   color: var(--color-text);
   margin: var(--space-lg) 0 var(--space-sm);
   padding-bottom: var(--space-2xs);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 2px solid var(--color-historial-bg);
 }
 
 .archive__list {

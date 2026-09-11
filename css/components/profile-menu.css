@@ -1,0 +1,293 @@
+/* =========================================================
+   BOTÓN DE PERFIL (AVATAR CIRCULAR)
+   ========================================================= */
+
+.profile-menu {
+    position: relative;
+}
+
+.profile-menu__avatar-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--color-border);
+    background-color: var(--color-accent);
+    padding: 0;
+    cursor: pointer;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color var(--transition-fast);
+}
+
+.profile-menu__avatar-btn:hover {
+    border-color: var(--color-accent);
+}
+
+.profile-menu__avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-menu__avatar-iniciales {
+    color: var(--color-on-accent);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-bold);
+}
+
+
+/* =========================================================
+   DROPDOWN DEL PERFIL
+   ========================================================= */
+
+.profile-menu__panel {
+    position: absolute;
+    top: calc(100% + var(--space-xs));
+    right: 0;
+    min-width: 200px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-xs);
+    flex-direction: column;
+    gap: var(--space-2xs);
+    z-index: 70;
+}
+
+.profile-menu__panel[hidden] {
+    display: none;
+}
+
+.profile-menu__panel:not([hidden]) {
+    display: flex;
+}
+
+.profile-menu__item {
+    text-align: left;
+    border: none;
+    background: none;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    color: var(--color-text);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.profile-menu__item:hover {
+    background-color: var(--color-surface-alt);
+}
+
+.profile-menu__item--danger {
+    color: var(--color-danger);
+}
+
+
+/* =========================================================
+   DIÁLOGO "INFORMACIÓN DE PERFIL"
+   ========================================================= */
+
+.profile-info-dialog {
+    width: min(420px, 90vw);
+    border: none;
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    box-shadow: var(--shadow-lg);
+}
+
+.profile-info-dialog::backdrop {
+    background-color: rgba(0, 48, 73, 0.35);
+}
+
+.profile-info__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-md);
+}
+
+.profile-info__title {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-bold);
+    color: var(--color-text);
+}
+
+.profile-info__close {
+    border: none;
+    background: none;
+    color: var(--color-text-subtle);
+    font-size: var(--text-base);
+    cursor: pointer;
+    padding: var(--space-2xs) var(--space-xs);
+    border-radius: var(--radius-sm);
+}
+
+.profile-info__close:hover {
+    color: var(--color-danger);
+}
+
+
+/* Avatar grande + acciones de foto */
+
+.profile-info__avatar-section {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+}
+
+.profile-info__avatar {
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background-color: var(--color-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.profile-info__avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-info__avatar-iniciales {
+    color: var(--color-on-accent);
+    font-size: var(--text-xl);
+    font-weight: var(--weight-bold);
+}
+
+.profile-info__avatar-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.profile-info__upload-btn,
+.profile-info__remove-btn {
+    display: inline-block;
+    text-align: center;
+    border-radius: var(--radius-sm);
+    padding: var(--space-2xs) var(--space-md);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+}
+
+.profile-info__upload-btn {
+    border: 1px solid var(--color-accent);
+    background-color: var(--color-accent);
+    color: var(--color-on-accent);
+}
+
+.profile-info__remove-btn {
+    border: 1px solid var(--color-border-strong);
+    background: none;
+    color: var(--color-text-subtle);
+}
+
+.profile-info__remove-btn:hover {
+    color: var(--color-danger);
+    border-color: var(--color-danger);
+}
+
+
+/* Datos de solo lectura */
+
+.profile-info__datos {
+    margin: 0 0 var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.profile-info__campo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+}
+
+.profile-info__campo dt {
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+}
+
+.profile-info__campo dd {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    color: var(--color-text);
+}
+
+
+/* Subtítulos internos (resumen / accesos) */
+
+.profile-info__subtitulo {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-bold);
+    color: var(--color-text);
+    margin-bottom: var(--space-sm);
+}
+
+.profile-info__resumen {
+    margin-bottom: var(--space-lg);
+}
+
+.profile-info__stats {
+    display: flex;
+    gap: var(--space-md);
+}
+
+.profile-info__stat {
+    flex: 1;
+    text-align: center;
+    background-color: var(--color-surface-alt);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm);
+}
+
+.profile-info__stat-value {
+    display: block;
+    font-size: var(--text-xl);
+    font-weight: var(--weight-bold);
+    color: var(--color-accent);
+}
+
+.profile-info__stat-label {
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+}
+
+
+/* Accesos rápidos */
+
+.profile-info__accesos {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.profile-info__acceso-btn {
+    text-align: left;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.profile-info__acceso-btn:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}

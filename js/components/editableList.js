@@ -14,7 +14,7 @@ function formatearFechaCompletado(fechaISO){
     return `${dia}/${mes}/${d.getFullYear()}`;
 }
 
-export function createEditableList({container, itemName, storageKey, onChange}){
+export function createEditableList({container, itemName, storageKey, onChange, showCheckbox = true, checkCompletado}){
     const list = container.querySelector(".editable-list__list")
     const input = container.querySelector(".editable-list__input")
     const addBtn = container.querySelector(".editable-list__add")
@@ -46,11 +46,15 @@ export function createEditableList({container, itemName, storageKey, onChange}){
         item.classList.toggle("editable-list__item--done", data.done);
         item.dataset.id = data.id;
 
-        const check = document.createElement("input");
-        check.type = "checkbox"
-        check.classList.add("editable-list__check");
-        check.checked = data.done;
-        check.setAttribute("aria-label", `Marcar ${itemName} como completado`);
+        let check = null;
+
+        if (showCheckbox) {
+            check = document.createElement("input");
+            check.type = "checkbox"
+            check.classList.add("editable-list__check");
+            check.checked = data.done;
+            check.setAttribute("aria-label", `Marcar ${itemName} como completado`);
+        }
 
         const contentWrapper = document.createElement("div");
         contentWrapper.classList.add("editable-list__content");
@@ -80,7 +84,8 @@ export function createEditableList({container, itemName, storageKey, onChange}){
         deleteBtn.textContent = "✕";
         deleteBtn.setAttribute("aria-label",`Eliminar ${itemName}`)
 
-        item.append(check, contentWrapper, deleteBtn);
+        if (check) item.append(check);
+        item.append(contentWrapper, deleteBtn);
         return item;
     }
 
@@ -119,12 +124,35 @@ export function createEditableList({container, itemName, storageKey, onChange}){
         render()
     }
     async function removeItem(id) {
-    const confirmado = await confirmDialog(
-        "¿Estás seguro de eliminar? Tus datos relacionados a este objetivo en la sección de desarrollo se van a eliminar.",
-        { danger: true }
-    );
 
-    if (!confirmado) return;
+    if (typeof checkCompletado === "function") {
+
+        if (!checkCompletado(id)) {
+            const continuar = await confirmDialog(
+                "Este objetivo tiene puntos no completados",
+                { acceptLabel: "Continuar", cancelLabel: "Cancelar" }
+            );
+
+            if (!continuar) return;
+        }
+
+        const eliminar = await confirmDialog(
+            "Se va a eliminar el objetivo con sus respectivos puntos",
+            { danger: true, acceptLabel: "Eliminar", cancelLabel: "Cancelar" }
+        );
+
+        if (!eliminar) return;
+
+    } else {
+
+        const confirmado = await confirmDialog(
+            "¿Estás seguro de eliminar? Tus datos relacionados a este objetivo en la sección de desarrollo se van a eliminar.",
+            { danger: true }
+        );
+
+        if (!confirmado) return;
+
+    }
 
     items = items.filter((data) => data.id !== id);
     render();

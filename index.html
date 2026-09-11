@@ -136,13 +136,56 @@
 
             </div>
 
-            <button
-                type="button"
-                id="btn-cerrar-sesion"
-                class="app-header__logout"
-            >
-                Cerrar sesión
-            </button>
+            <div class="profile-menu">
+
+                <button
+                    type="button"
+                    id="btn-perfil"
+                    class="profile-menu__avatar-btn"
+                    aria-label="Perfil"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                >
+
+                    <img
+                        id="perfil-avatar-img"
+                        class="profile-menu__avatar-img"
+                        alt=""
+                        hidden
+                    >
+
+                    <span
+                        id="perfil-avatar-iniciales"
+                        class="profile-menu__avatar-iniciales"
+                    ></span>
+
+                </button>
+
+                <div
+                    class="profile-menu__panel"
+                    id="profile-menu-panel"
+                    hidden
+                >
+
+                    <button
+                        type="button"
+                        class="profile-menu__item"
+                        id="btn-abrir-perfil"
+                    >
+                        Información de perfil
+                    </button>
+
+                    <button
+                        type="button"
+                        id="btn-cerrar-sesion"
+                        class="profile-menu__item profile-menu__item--danger"
+                    >
+                        Cerrar sesión
+                    </button>
+
+                </div>
+
+            </div>
 
         </div>
 
@@ -2195,26 +2238,11 @@
                             Valor Presente Neto
                         </legend>
 
+                        <p class="innovation-form__hint">
+                            El valor presente (VPN) es una herramienta de evaluación financiera a largo plazo, con el cuál se calcula la viabilidad de un proyecto.
+                        </p>
 
-                        <div class="form-group">
-
-                            <label for="innovacion-vpn-archivo">
-                                Subir Formato VPN (Adjuntar Formato Excel)
-                                <span class="innovation-form__required">*</span>
-                            </label>
-
-                            <input
-                                id="innovacion-vpn-archivo"
-                                type="file"
-                                accept=".xls,.xlsx"
-                                required
-                            >
-
-                            <p class="innovation-form__hint">
-                                El valor presente (VPN) es una herramienta de evaluación financiera a largo plazo, con el cuál se calcula la viabilidad de un proyecto.
-                            </p>
-
-                        </div>
+                        <div id="innovacion-vpn-calculadora"></div>
 
                     </fieldset>
 
@@ -2794,6 +2822,157 @@
                 class="confirm-dialog__accept"
             >
                 Sí
+            </button>
+
+        </div>
+
+    </dialog>
+
+
+    <!-- =========================================================
+         DIÁLOGO DE INFORMACIÓN DE PERFIL
+         ========================================================= -->
+
+    <dialog class="profile-info-dialog" id="profile-info-dialog">
+
+        <div class="profile-info__header">
+
+            <h2 class="profile-info__title">
+                Mi perfil
+            </h2>
+
+            <button
+                type="button"
+                id="btn-cerrar-perfil"
+                class="profile-info__close"
+                aria-label="Cerrar"
+            >
+                ✕
+            </button>
+
+        </div>
+
+
+        <div class="profile-info__avatar-section">
+
+            <div class="profile-info__avatar">
+
+                <img
+                    id="perfil-info-avatar-img"
+                    class="profile-info__avatar-img"
+                    alt=""
+                    hidden
+                >
+
+                <span
+                    id="perfil-info-avatar-iniciales"
+                    class="profile-info__avatar-iniciales"
+                ></span>
+
+            </div>
+
+            <div class="profile-info__avatar-actions">
+
+                <label
+                    for="perfil-foto-input"
+                    class="profile-info__upload-btn"
+                >
+                    Cambiar foto
+                </label>
+
+                <input
+                    type="file"
+                    id="perfil-foto-input"
+                    accept="image/*"
+                    hidden
+                >
+
+                <button
+                    type="button"
+                    id="btn-quitar-foto"
+                    class="profile-info__remove-btn"
+                >
+                    Quitar foto
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <dl class="profile-info__datos">
+
+            <div class="profile-info__campo">
+                <dt>Nombre</dt>
+                <dd id="perfil-info-nombre"></dd>
+            </div>
+
+            <div class="profile-info__campo">
+                <dt>Correo</dt>
+                <dd id="perfil-info-correo"></dd>
+            </div>
+
+            <div class="profile-info__campo">
+                <dt>Departamento</dt>
+                <dd id="perfil-info-departamento"></dd>
+            </div>
+
+        </dl>
+
+
+        <div class="profile-info__resumen">
+
+            <h3 class="profile-info__subtitulo">
+                Resumen de actividad
+            </h3>
+
+            <div class="profile-info__stats">
+
+                <div class="profile-info__stat">
+                    <span
+                        class="profile-info__stat-value"
+                        id="perfil-stat-pendientes"
+                    >0</span>
+                    <span class="profile-info__stat-label">
+                        Pendientes
+                    </span>
+                </div>
+
+                <div class="profile-info__stat">
+                    <span
+                        class="profile-info__stat-value"
+                        id="perfil-stat-completados"
+                    >0</span>
+                    <span class="profile-info__stat-label">
+                        Completados
+                    </span>
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="profile-info__accesos">
+
+            <h3 class="profile-info__subtitulo">
+                Accesos rápidos
+            </h3>
+
+            <button
+                type="button"
+                class="profile-info__acceso-btn"
+                data-view="compromisos"
+            >
+                Mis compromisos
+            </button>
+
+            <button
+                type="button"
+                class="profile-info__acceso-btn"
+                data-view="historial"
+            >
+                Historial de reuniones
             </button>
 
         </div>

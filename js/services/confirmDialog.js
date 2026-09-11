@@ -3,8 +3,10 @@ const message = dialog.querySelector(".confirm-dialog__message");
 const acceptBtn = dialog.querySelector(".confirm-dialog__accept");
 const cancelBtn = dialog.querySelector(".confirm-dialog__cancel");
 
-export function confirmDialog(texto, { danger = false } = {}) {
+export function confirmDialog(texto, { danger = false, acceptLabel = "Sí", cancelLabel = "No" } = {}) {
   message.textContent = texto;
+  acceptBtn.textContent = acceptLabel;
+  cancelBtn.textContent = cancelLabel;
   acceptBtn.classList.toggle("confirm-dialog__accept--danger", danger);
   dialog.showModal();
 

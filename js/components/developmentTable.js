@@ -483,6 +483,11 @@ function createInsertButton(tipo, label, index) {
     render();
   }
 
+  function todosLosPuntosCompletados(objetivoId) {
+    const puntos = getBlocks(objetivoId).filter((b) => b.tipo === "punto");
+    return puntos.every((punto) => (punto.avance ?? 0) === 100);
+  }
+
   table.addEventListener("click", (event) => {
     const row = event.target.closest(".development__row");
     if (!row) return;
@@ -600,5 +605,5 @@ if (existente) existente.remove();
   topbar.append(createEditToggle(), createInfoIcon());
 
   container.insertBefore(topbar, table);
-  return { setObjetivos, refreshTextAreas };
+  return { setObjetivos, refreshTextAreas, todosLosPuntosCompletados };
 }

@@ -4,6 +4,17 @@
 
 
 /* =========================================================
+   TÍTULO
+   ========================================================= */
+
+.commitments-view .view__title {
+    padding-left: var(--space-sm);
+
+    border-left: 4px solid var(--color-compromisos);
+}
+
+
+/* =========================================================
    SUBTÍTULO
    ========================================================= */
 
@@ -35,6 +46,7 @@
     box-sizing: border-box;
 
     border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-compromisos);
     border-radius: var(--radius-md);
 
     background-color: var(--color-surface-alt);
@@ -81,10 +93,10 @@
 .commitments-filter__select:focus {
     outline: none;
 
-    border-color: var(--color-accent);
+    border-color: var(--color-compromisos);
 
     box-shadow:
-        0 0 0 3px rgba(0, 48, 73, 0.12);
+        0 0 0 3px rgba(201, 134, 15, 0.18);
 }
 
 
@@ -163,10 +175,10 @@
 .commitments-view__fecha-edit:focus {
     outline: none;
 
-    border-color: var(--color-accent);
+    border-color: var(--color-compromisos);
 
     box-shadow:
-        0 0 0 3px rgba(0, 48, 73, 0.12);
+        0 0 0 3px rgba(201, 134, 15, 0.18);
 }
 
 
