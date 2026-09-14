@@ -96,13 +96,30 @@ import {
 } from "./components/profileMenu.js";
 
 import {
+    initFilesView
+} from "./components/filesView.js";
+
+import {
+    initInnovationsList
+} from "./components/innovationsList.js";
+
+import {
+    initInnovationDetail
+} from "./components/innovationDetail.js";
+
+import {
+    initInnovationReview
+} from "./components/innovationReview.js";
+
+import {
     initLogin
 } from "./components/login.js";
 
 import {
     cerrarSesion,
     usuarioAutenticado,
-    esAdmin
+    esAdmin,
+    getUsuarioActual
 } from "./services/auth.service.js";
 
 
@@ -207,6 +224,26 @@ function inicializarNavegacion() {
         ) {
 
             historyView.render();
+
+        }
+
+
+        if (
+            vista === "archivos"
+        ) {
+
+            filesView.render();
+
+            innovationsList.render();
+
+        }
+
+
+        if (
+            vista === "innovaciones"
+        ) {
+
+            innovationReview.render();
 
         }
 
@@ -1103,6 +1140,40 @@ const commitmentsView =
 
 
 /* =========================================================
+   VISOR DE ARCHIVOS
+   ========================================================= */
+
+const filesView =
+    initFilesView();
+
+
+/* =========================================================
+   INNOVACIONES REGISTRADAS
+   ========================================================= */
+
+const innovationDetail =
+    initInnovationDetail();
+
+const innovationsList =
+    initInnovationsList({
+
+        onOpen:
+            (innovacionId) => {
+
+                innovationDetail.abrir(
+                    innovacionId
+                );
+
+            }
+
+    });
+
+
+const innovationReview =
+    initInnovationReview();
+
+
+/* =========================================================
    MODO HORIZONTAL DE LA REUNIÓN
    ========================================================= */
 
@@ -1132,17 +1203,18 @@ initProfileMenu();
 
 
 /*
- * "Control de Usuarios" (con el rol de cada quien incluido)
- * es solo para administrador. El backend también rechaza
- * estas acciones si alguien las alcanza sin serlo (ver
- * server.js), esto solo evita mostrarlas de entrada.
+ * "Control de Usuarios" y "Archivos" (con el rol de cada
+ * quien incluido / el contenido subido por todos) son solo
+ * para administrador. El backend también rechaza estas
+ * acciones si alguien las alcanza sin serlo (ver server.js),
+ * esto solo evita mostrarlas de entrada.
  */
 
 if (!esAdmin()) {
 
     document
         .querySelectorAll(
-            '.settings-menu__item[data-view="usuarios"]'
+            '.settings-menu__item[data-view="usuarios"], .settings-menu__item[data-view="archivos"]'
         )
         .forEach(
             (boton) => {
@@ -1152,6 +1224,29 @@ if (!esAdmin()) {
 
             }
         );
+
+}
+
+
+/*
+ * La tuerquita de configuración solo se muestra a
+ * administrador y líder — operador no tiene ningún
+ * elemento dentro del menú, así que ni se le muestra.
+ */
+
+if (
+    getUsuarioActual()?.rol === "operador"
+) {
+
+    const settingsMenu =
+        document.querySelector(".settings-menu");
+
+    if (settingsMenu) {
+
+        settingsMenu.hidden =
+            true;
+
+    }
 
 }
 

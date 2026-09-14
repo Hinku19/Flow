@@ -1,0 +1,161 @@
+/* =========================================================
+   VISOR DE ARCHIVOS
+   ========================================================= */
+
+.files-view {
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.files-view__header {
+    margin-bottom: var(--space-lg);
+}
+
+.files-view__subtitle {
+    margin-top: var(--space-2xs);
+    color: var(--color-text-subtle);
+    font-size: var(--text-sm);
+}
+
+
+/* =========================================================
+   FILTROS
+   ========================================================= */
+
+.files-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+}
+
+.files-filter {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+}
+
+.files-filter label {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    color: var(--color-text-subtle);
+}
+
+.files-filter__select,
+.files-filter__input {
+    height: 40px;
+    padding: 0 var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: var(--text-sm);
+}
+
+.files-filter__input {
+    min-width: 240px;
+}
+
+.files-filter__select:focus,
+.files-filter__input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(0, 48, 73, 0.12);
+}
+
+
+/* =========================================================
+   TARJETAS
+   ========================================================= */
+
+.files-view__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--space-md);
+}
+
+.file-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.file-card:hover {
+    border-color: var(--color-accent);
+    box-shadow: var(--shadow-md);
+}
+
+.file-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+}
+
+.file-card__department {
+    font-weight: var(--weight-medium);
+    color: var(--color-accent);
+}
+
+.file-card__area {
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+}
+
+.file-card__title {
+    font-size: var(--text-base);
+    font-weight: var(--weight-bold);
+    color: var(--color-text);
+}
+
+.file-card__reference {
+    font-size: var(--text-sm);
+    color: var(--color-text-subtle);
+}
+
+.file-card__subtexto {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+}
+
+.file-card__download {
+    margin-top: auto;
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--color-border);
+    color: var(--color-accent);
+    font-weight: var(--weight-medium);
+    text-decoration: none;
+}
+
+.file-card__download:hover {
+    text-decoration: underline;
+}
+
+
+/* =========================================================
+   ESTADOS (VACÍO / CARGANDO)
+   ========================================================= */
+
+.files-view__empty {
+    padding: var(--space-xl);
+    text-align: center;
+    color: var(--color-text-subtle);
+}
+
+.files-view__loading {
+    padding: var(--space-lg);
+    text-align: center;
+    color: var(--color-text-subtle);
+    font-size: var(--text-sm);
+}

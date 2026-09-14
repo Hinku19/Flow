@@ -25,7 +25,13 @@ const vistas = {
         document.querySelector("#vista-innovaciones"),
 
     archivo:
-        document.querySelector("#vista-archivo")
+        document.querySelector("#vista-archivo"),
+
+    archivos:
+        document.querySelector("#vista-archivos"),
+
+    innovacionDetalle:
+        document.querySelector("#vista-innovacion-detalle")
 
 };
 
@@ -43,7 +49,9 @@ const VISTAS_CON_HISTORIAL = [
     "reunion",
     "compromisos",
     "innovaciones",
-    "archivo"
+    "archivo",
+    "archivos",
+    "innovacionDetalle"
 ];
 
 
@@ -98,6 +106,8 @@ function aplicarVista(nombre) {
  * compromisos
  * innovaciones
  * archivo
+ * archivos
+ * innovacionDetalle
  */
 export function showView(nombre) {
 

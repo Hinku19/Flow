@@ -132,6 +132,14 @@
                         Control de Usuarios
                     </button>
 
+                    <button
+                        type="button"
+                        class="settings-menu__item"
+                        data-view="archivos"
+                    >
+                        Archivos
+                    </button>
+
                 </div>
 
             </div>
@@ -788,6 +796,175 @@
     </section>
 
 </section>
+
+
+<!-- =====================================================
+     VISOR DE ARCHIVOS (SOLO ADMINISTRADOR)
+     ===================================================== -->
+
+<section
+    id="vista-archivos"
+    class="view view--hidden"
+>
+
+    <div class="view__navigation">
+
+        <button
+            type="button"
+            class="view__back"
+            data-view="dashboard"
+        >
+            ← Volver al inicio
+        </button>
+
+    </div>
+
+
+    <section class="files-view">
+
+        <header class="files-view__header">
+
+            <div class="files-view__heading">
+
+                <h1 class="view__title">
+                    Archivos
+                </h1>
+
+                <p class="files-view__subtitle">
+                    Adjuntos subidos durante las reuniones
+                </p>
+
+            </div>
+
+        </header>
+
+
+        <div class="files-filters">
+
+            <div class="files-filter">
+
+                <label for="filtro-archivos-texto">
+                    Buscar
+                </label>
+
+                <input
+                    type="text"
+                    id="filtro-archivos-texto"
+                    class="files-filter__input"
+                    placeholder="Nombre de archivo o referencia..."
+                >
+
+            </div>
+
+        </div>
+
+
+        <div
+            id="archivos-tarjetas"
+            class="files-view__grid"
+        >
+
+            <!--
+                Los archivos serán cargados
+                dinámicamente desde MySQL.
+            -->
+
+        </div>
+
+
+        <div
+            id="archivos-empty"
+            class="files-view__empty"
+            hidden
+        >
+
+            <h2>
+                Aún no hay archivos subidos.
+            </h2>
+
+        </div>
+
+
+        <div
+            id="archivos-loading"
+            class="files-view__loading"
+            hidden
+        >
+
+            Cargando archivos...
+
+        </div>
+
+
+        <!-- =========================================
+             INNOVACIONES REGISTRADAS
+             ========================================= -->
+
+        <section id="innovaciones-registradas" class="innovations-list">
+
+            <header class="innovations-list__header">
+
+                <h2 class="innovations-list__title">
+                    Innovaciones registradas
+                </h2>
+
+            </header>
+
+
+            <div class="innovations-list__filters">
+
+                <input
+                    type="text"
+                    id="filtro-innovaciones-texto"
+                    class="innovations-list__search"
+                    placeholder="Buscar por nombre, responsable o área..."
+                >
+
+            </div>
+
+
+            <div
+                id="innovaciones-tarjetas"
+                class="innovations-list__grid"
+            >
+
+                <!--
+                    Las innovaciones serán cargadas
+                    dinámicamente desde MySQL.
+                -->
+
+            </div>
+
+
+            <div
+                id="innovaciones-empty"
+                class="innovations-list__empty"
+                hidden
+            >
+
+                <p>
+                    Aún no hay innovaciones registradas.
+                </p>
+
+            </div>
+
+
+            <div
+                id="innovaciones-loading"
+                class="innovations-list__loading"
+                hidden
+            >
+
+                Cargando innovaciones...
+
+            </div>
+
+        </section>
+
+    </section>
+
+</section>
+
 
 <!-- =====================================================
      EDITAR USUARIO
@@ -1910,6 +2087,171 @@
                 </header>
 
 
+                <!-- =========================================
+                     REVISIÓN DEL LÍDER (INNOVACIÓN DEL MES)
+                     ========================================= -->
+
+                <section
+                    id="innovacion-review"
+                    class="innovation-review"
+                    hidden
+                >
+
+                    <div
+                        id="innovacion-review-pendiente"
+                        class="innovation-review__pendiente"
+                        hidden
+                    >
+
+                        <p>
+                            Aún no se ha subido la innovación de este mes para tu área.
+                        </p>
+
+                    </div>
+
+
+                    <article
+                        id="innovacion-review-visor"
+                        class="innovation-detail"
+                        hidden
+                    >
+
+                        <header class="innovation-detail__header">
+
+                            <div>
+                                <h1 id="innovacion-review-nombre" class="view__title"></h1>
+                                <p class="innovation-detail__meta">
+                                    <span id="innovacion-review-area"></span>
+                                    ·
+                                    <span id="innovacion-review-responsable"></span>
+                                    ·
+                                    <span id="innovacion-review-fecha"></span>
+                                </p>
+                            </div>
+
+                        </header>
+
+
+                        <section class="innovation-detail__section">
+                            <h2>Actividad que impacta</h2>
+                            <p id="innovacion-review-actividad"></p>
+                        </section>
+
+                        <section class="innovation-detail__section">
+                            <h2>Servicio relacionado</h2>
+                            <p id="innovacion-review-servicio"></p>
+                        </section>
+
+                        <section class="innovation-detail__section">
+                            <h2>Problemática</h2>
+                            <p id="innovacion-review-problematica"></p>
+                        </section>
+
+                        <section class="innovation-detail__section">
+                            <h2>Objetivo</h2>
+                            <p id="innovacion-review-objetivo"></p>
+                        </section>
+
+                        <section class="innovation-detail__section">
+                            <h2>Estrategia</h2>
+                            <p id="innovacion-review-estrategia"></p>
+                        </section>
+
+                        <section class="innovation-detail__section">
+                            <h2>Debilidad</h2>
+                            <p id="innovacion-review-debilidad"></p>
+                        </section>
+
+                        <section class="innovation-detail__section">
+                            <h2>Acciones</h2>
+                            <ol id="innovacion-review-acciones" class="innovation-detail__acciones"></ol>
+                        </section>
+
+                        <section class="innovation-detail__section">
+                            <h2>Justificación de la valuación</h2>
+                            <p id="innovacion-review-justificacion"></p>
+                        </section>
+
+
+                        <section class="innovation-detail__section">
+
+                            <h2>Resultado del VPN</h2>
+
+                            <div id="innovacion-review-vpn" class="innovation-detail__vpn">
+
+                                <div class="innovation-detail__vpn-item">
+                                    <span class="innovation-detail__vpn-label">Inversión total</span>
+                                    <span id="innovacion-review-vpn-inversion" class="innovation-detail__vpn-value"></span>
+                                </div>
+
+                                <div class="innovation-detail__vpn-item">
+                                    <span class="innovation-detail__vpn-label">Costos totales</span>
+                                    <span id="innovacion-review-vpn-costos" class="innovation-detail__vpn-value"></span>
+                                </div>
+
+                                <div class="innovation-detail__vpn-item">
+                                    <span class="innovation-detail__vpn-label">Beneficios totales</span>
+                                    <span id="innovacion-review-vpn-beneficios" class="innovation-detail__vpn-value"></span>
+                                </div>
+
+                                <div class="innovation-detail__vpn-item">
+                                    <span class="innovation-detail__vpn-label">Flujo neto mensual</span>
+                                    <span id="innovacion-review-vpn-flujo" class="innovation-detail__vpn-value"></span>
+                                </div>
+
+                                <div class="innovation-detail__vpn-item innovation-detail__vpn-item--resultado">
+                                    <span class="innovation-detail__vpn-label">Resultado del VPN</span>
+                                    <span id="innovacion-review-vpn-resultado" class="innovation-detail__vpn-value"></span>
+                                </div>
+
+                            </div>
+
+                            <p
+                                id="innovacion-review-sin-vpn"
+                                class="innovation-detail__sin-vpn"
+                                hidden
+                            >
+                                Esta innovación no tiene datos de VPN registrados.
+                            </p>
+
+                        </section>
+
+
+                        <section class="innovation-detail__section">
+
+                            <h2>Archivos adjuntos</h2>
+
+                            <div id="innovacion-review-archivos" class="innovation-card__files"></div>
+
+                        </section>
+
+
+                        <div class="innovation-review__actions">
+
+                            <span
+                                id="innovacion-review-badge"
+                                class="innovation-review__badge"
+                                hidden
+                            >
+                                ✓ Aprobada este mes
+                            </span>
+
+                            <button
+                                type="button"
+                                id="btn-dar-visto-bueno"
+                                class="innovation-review__approve-btn"
+                                hidden
+                            >
+                                Dar visto bueno
+                            </button>
+
+                        </div>
+
+                    </article>
+
+                </section>
+
+
                 <form
                     id="form-innovacion"
                     class="innovation-form"
@@ -2350,7 +2692,154 @@
 
                 </form>
 
+
             </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             DETALLE DE INNOVACIÓN
+             ===================================================== -->
+
+        <section
+            id="vista-innovacion-detalle"
+            class="view view--hidden"
+        >
+
+            <div class="view__navigation innovation-detail__no-print">
+
+                <button
+                    type="button"
+                    class="view__back"
+                    data-view="innovaciones"
+                >
+                    ← Volver a innovaciones
+                </button>
+
+                <button
+                    type="button"
+                    id="btn-imprimir-innovacion"
+                    class="innovation-detail__print"
+                >
+                    Imprimir
+                </button>
+
+            </div>
+
+
+            <article class="innovation-detail">
+
+                <header class="innovation-detail__header">
+
+                    <div>
+                        <h1 id="innovacion-detalle-nombre" class="view__title"></h1>
+                        <p class="innovation-detail__meta">
+                            <span id="innovacion-detalle-area"></span>
+                            ·
+                            <span id="innovacion-detalle-responsable"></span>
+                            ·
+                            <span id="innovacion-detalle-fecha"></span>
+                        </p>
+                    </div>
+
+                </header>
+
+
+                <section class="innovation-detail__section">
+                    <h2>Actividad que impacta</h2>
+                    <p id="innovacion-detalle-actividad"></p>
+                </section>
+
+                <section class="innovation-detail__section">
+                    <h2>Servicio relacionado</h2>
+                    <p id="innovacion-detalle-servicio"></p>
+                </section>
+
+                <section class="innovation-detail__section">
+                    <h2>Problemática</h2>
+                    <p id="innovacion-detalle-problematica"></p>
+                </section>
+
+                <section class="innovation-detail__section">
+                    <h2>Objetivo</h2>
+                    <p id="innovacion-detalle-objetivo"></p>
+                </section>
+
+                <section class="innovation-detail__section">
+                    <h2>Estrategia</h2>
+                    <p id="innovacion-detalle-estrategia"></p>
+                </section>
+
+                <section class="innovation-detail__section">
+                    <h2>Debilidad</h2>
+                    <p id="innovacion-detalle-debilidad"></p>
+                </section>
+
+                <section class="innovation-detail__section">
+                    <h2>Acciones</h2>
+                    <ol id="innovacion-detalle-acciones" class="innovation-detail__acciones"></ol>
+                </section>
+
+                <section class="innovation-detail__section">
+                    <h2>Justificación de la valuación</h2>
+                    <p id="innovacion-detalle-justificacion"></p>
+                </section>
+
+
+                <section class="innovation-detail__section">
+
+                    <h2>Resultado del VPN</h2>
+
+                    <div id="innovacion-detalle-vpn" class="innovation-detail__vpn">
+
+                        <div class="innovation-detail__vpn-item">
+                            <span class="innovation-detail__vpn-label">Inversión total</span>
+                            <span id="vpn-inversion-total" class="innovation-detail__vpn-value"></span>
+                        </div>
+
+                        <div class="innovation-detail__vpn-item">
+                            <span class="innovation-detail__vpn-label">Costos totales</span>
+                            <span id="vpn-costos-total" class="innovation-detail__vpn-value"></span>
+                        </div>
+
+                        <div class="innovation-detail__vpn-item">
+                            <span class="innovation-detail__vpn-label">Beneficios totales</span>
+                            <span id="vpn-beneficios-total" class="innovation-detail__vpn-value"></span>
+                        </div>
+
+                        <div class="innovation-detail__vpn-item">
+                            <span class="innovation-detail__vpn-label">Flujo neto mensual</span>
+                            <span id="vpn-flujo-neto" class="innovation-detail__vpn-value"></span>
+                        </div>
+
+                        <div class="innovation-detail__vpn-item innovation-detail__vpn-item--resultado">
+                            <span class="innovation-detail__vpn-label">Resultado del VPN</span>
+                            <span id="vpn-resultado" class="innovation-detail__vpn-value"></span>
+                        </div>
+
+                    </div>
+
+                    <p
+                        id="innovacion-detalle-sin-vpn"
+                        class="innovation-detail__sin-vpn"
+                        hidden
+                    >
+                        Esta innovación no tiene datos de VPN registrados.
+                    </p>
+
+                </section>
+
+
+                <section class="innovation-detail__section">
+
+                    <h2>Archivos adjuntos</h2>
+
+                    <div id="innovacion-detalle-archivos" class="innovation-card__files"></div>
+
+                </section>
+
+            </article>
 
         </section>
 
@@ -2949,6 +3438,30 @@
                 </div>
 
             </div>
+
+        </div>
+
+
+        <div
+            id="perfil-innovacion"
+            class="profile-info__innovacion"
+            hidden
+        >
+
+            <h3 class="profile-info__subtitulo">
+                Innovación
+            </h3>
+
+            <div class="profile-info__innovacion-bar">
+
+                <div
+                    id="perfil-innovacion-bar"
+                    class="profile-info__innovacion-fill"
+                ></div>
+
+            </div>
+
+            <p id="perfil-innovacion-texto" class="profile-info__innovacion-texto"></p>
 
         </div>
 

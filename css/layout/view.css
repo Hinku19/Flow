@@ -2,6 +2,10 @@
   display: none;
 }
 
+.view__navigation {
+  margin-bottom: var(--space-lg);
+}
+
 .view__title {
   font-size: var(--text-2xl);
   font-weight: var(--weight-bold);

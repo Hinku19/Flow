@@ -1,0 +1,180 @@
+/* =========================================================
+   DETALLE DE INNOVACIÓN
+   ========================================================= */
+
+.innovation-detail__no-print {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.innovation-detail__print {
+    flex-shrink: 0;
+    margin-left: auto;
+    border: 1px solid var(--color-accent);
+    background-color: var(--color-accent);
+    color: var(--color-on-accent);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+}
+
+.innovation-detail__print:hover {
+    background-color: var(--color-accent-hover);
+}
+
+.innovation-detail {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.innovation-detail__header {
+    margin-bottom: var(--space-lg);
+    padding-bottom: var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.innovation-detail__meta {
+    margin-top: var(--space-2xs);
+    color: var(--color-text-subtle);
+    font-size: var(--text-sm);
+}
+
+.innovation-detail__section {
+    margin-bottom: var(--space-lg);
+}
+
+.innovation-detail__section h2 {
+    font-size: var(--text-base);
+    font-weight: var(--weight-bold);
+    color: var(--color-text);
+    margin-bottom: var(--space-xs);
+}
+
+.innovation-detail__section p {
+    color: var(--color-text);
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.innovation-detail__acciones {
+    margin: 0;
+    padding-left: var(--space-lg);
+    color: var(--color-text);
+    line-height: 1.5;
+}
+
+
+/* =========================================================
+   VPN
+   ========================================================= */
+
+.innovation-detail__vpn {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--space-sm);
+}
+
+.innovation-detail__vpn-item {
+    padding: var(--space-sm);
+    background-color: var(--color-surface-alt);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+}
+
+.innovation-detail__vpn-item--resultado {
+    background-color: var(--color-accent);
+}
+
+.innovation-detail__vpn-item--resultado .innovation-detail__vpn-label,
+.innovation-detail__vpn-item--resultado .innovation-detail__vpn-value {
+    color: var(--color-on-accent);
+}
+
+.innovation-detail__vpn-label {
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+}
+
+.innovation-detail__vpn-value {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-bold);
+    color: var(--color-text);
+}
+
+.innovation-detail__sin-vpn {
+    color: var(--color-text-subtle);
+    font-size: var(--text-sm);
+}
+
+
+/* =========================================================
+   REVISIÓN DEL LÍDER
+   ========================================================= */
+
+.innovation-review {
+    margin-bottom: var(--space-xl);
+}
+
+.innovation-review__pendiente {
+    padding: var(--space-xl);
+    text-align: center;
+    color: var(--color-text-subtle);
+    background-color: var(--color-surface-alt);
+    border-radius: var(--radius-md);
+}
+
+.innovation-review__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-md);
+    margin-top: var(--space-lg);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--color-border);
+}
+
+.innovation-review__badge {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    color: var(--color-success);
+}
+
+.innovation-review__approve-btn {
+    border: none;
+    background-color: var(--color-success);
+    color: #ffffff;
+    padding: var(--space-sm) var(--space-lg);
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+}
+
+.innovation-review__approve-btn:hover {
+    opacity: 0.9;
+}
+
+
+/* =========================================================
+   IMPRESIÓN
+   ---------------------------------------------------------
+   Las demás vistas ya están en display:none (view--hidden),
+   así que el navegador no las imprime; solo hace falta ocultar
+   el encabezado global y los botones de esta vista.
+   ========================================================= */
+
+@media print {
+
+    .app-header,
+    .innovation-detail__no-print {
+        display: none !important;
+    }
+
+}

@@ -5621,6 +5621,802 @@ app.post(
 
 
 /* =========================================================
+   LISTAR INNOVACIONES (TARJETAS)
+   ---------------------------------------------------------
+   Abierto a cualquier usuario autenticado, igual que el
+   formulario de captura. Trae los archivos de cada innovación
+   ya agrupados, para que la tarjeta pueda mostrar sus enlaces
+   de descarga sin una petición extra por innovación.
+   ========================================================= */
+
+app.get(
+    "/api/innovaciones",
+    async (req, res) => {
+
+        try {
+
+            const [innovaciones] =
+                await db.execute(
+                    `
+                    SELECT
+                        id,
+                        area_nombre,
+                        responsable_nombre,
+                        responsable_apellido,
+                        nombre_innovacion,
+                        fecha_creacion,
+                        aprobada
+                    FROM innovaciones
+                    ORDER BY fecha_creacion DESC
+                    `
+                );
+
+            const [archivos] =
+                await db.execute(
+                    `
+                    SELECT
+                        id,
+                        innovacion_id,
+                        tipo,
+                        nombre_original,
+                        tipo_mime
+                    FROM innovacion_archivos
+                    ORDER BY id ASC
+                    `
+                );
+
+            const archivosPorInnovacion =
+                new Map();
+
+            for (const archivo of archivos) {
+
+                if (!archivosPorInnovacion.has(archivo.innovacion_id)) {
+
+                    archivosPorInnovacion.set(
+                        archivo.innovacion_id,
+                        []
+                    );
+
+                }
+
+                archivosPorInnovacion.get(archivo.innovacion_id).push({
+
+                    id:
+                        archivo.id,
+
+                    tipo:
+                        archivo.tipo,
+
+                    nombreOriginal:
+                        archivo.nombre_original,
+
+                    tipoMime:
+                        archivo.tipo_mime
+
+                });
+
+            }
+
+            const resultado =
+                innovaciones.map(
+                    (innovacion) => ({
+
+                        id:
+                            innovacion.id,
+
+                        areaNombre:
+                            innovacion.area_nombre,
+
+                        responsableNombre:
+                            `${innovacion.responsable_nombre} ${innovacion.responsable_apellido}`.trim(),
+
+                        nombreInnovacion:
+                            innovacion.nombre_innovacion,
+
+                        fechaCreacion:
+                            innovacion.fecha_creacion,
+
+                        aprobada:
+                            Boolean(innovacion.aprobada),
+
+                        archivos:
+                            archivosPorInnovacion.get(innovacion.id) ||
+                            []
+
+                    })
+                );
+
+            return res.json({
+
+                ok: true,
+
+                innovaciones:
+                    resultado
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL OBTENER INNOVACIONES:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible obtener las innovaciones.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   ESTADO DE LA INNOVACIÓN DEL MES (POR ÁREA)
+   ---------------------------------------------------------
+   Cada área debe subir una innovación al mes. El % que se ve
+   en el perfil de los operadores y la revisión del líder se
+   calculan aquí mismo, según el área del usuario que pregunta:
+   0%  -> no hay ninguna innovación de esta área este mes
+   95% -> ya se subió, falta el visto bueno del líder
+   100% -> el líder ya dio el visto bueno
+   No se guarda el % en ningún lado: se recalcula cada vez, así
+   que al cambiar de mes vuelve a 0% sin necesidad de ningún
+   proceso aparte.
+   ---------------------------------------------------------
+   IMPORTANTE: esta ruta debe registrarse ANTES de
+   "/api/innovaciones/:id" (más abajo) — Express prueba las
+   rutas en el orden en que se registran, así que si quedara
+   después, "estado-mes" se interpretaría como el :id de esa
+   ruta y nunca llegaría aquí.
+   ========================================================= */
+
+app.get(
+    "/api/innovaciones/estado-mes",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
+            const [rows] =
+                await db.execute(
+                    `
+                    SELECT
+                        id,
+                        aprobada
+                    FROM innovaciones
+                    WHERE
+                        area_nombre = ?
+                        AND YEAR(fecha_creacion) = YEAR(CURDATE())
+                        AND MONTH(fecha_creacion) = MONTH(CURDATE())
+                    ORDER BY fecha_creacion DESC
+                    LIMIT 1
+                    `,
+                    [
+                        usuarioSolicitante.area
+                    ]
+                );
+
+            if (rows.length === 0) {
+
+                return res.json({
+
+                    ok: true,
+
+                    area:
+                        usuarioSolicitante.area,
+
+                    estado: 0,
+
+                    innovacionId: null
+
+                });
+
+            }
+
+            const innovacionDelMes =
+                rows[0];
+
+            return res.json({
+
+                ok: true,
+
+                area:
+                    usuarioSolicitante.area,
+
+                estado:
+                    innovacionDelMes.aprobada ? 100 : 95,
+
+                innovacionId:
+                    innovacionDelMes.id
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL OBTENER EL ESTADO DE LA INNOVACIÓN DEL MES:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible obtener el estado de la innovación del mes.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   DETALLE DE UNA INNOVACIÓN
+   ---------------------------------------------------------
+   Trae todos los campos capturados en el formulario, los
+   totales del VPN (sin el desglose fila por fila) y la lista
+   de archivos adjuntos, para el visor de detalle.
+   ========================================================= */
+
+app.get(
+    "/api/innovaciones/:id",
+    async (req, res) => {
+
+        try {
+
+            const innovacionId =
+                Number(
+                    req.params.id
+                );
+
+            if (!innovacionId) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "ID de innovación no válido."
+
+                    });
+
+            }
+
+
+            const [innovaciones] =
+                await db.execute(
+                    `
+                    SELECT *
+                    FROM innovaciones
+                    WHERE id = ?
+                    LIMIT 1
+                    `,
+                    [
+                        innovacionId
+                    ]
+                );
+
+            if (innovaciones.length === 0) {
+
+                return res
+                    .status(404)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Innovación no encontrada."
+
+                    });
+
+            }
+
+            const innovacion =
+                innovaciones[0];
+
+
+            const [vpnFilas] =
+                await db.execute(
+                    `
+                    SELECT
+                        tasa_descuento_anual,
+                        meses_proyeccion,
+                        capital_humano_total,
+                        inversiones_total,
+                        costos_total,
+                        beneficios_total,
+                        flujo_neto_mensual,
+                        inversion_total,
+                        resultado_vpn
+                    FROM innovacion_vpn
+                    WHERE innovacion_id = ?
+                    LIMIT 1
+                    `,
+                    [
+                        innovacionId
+                    ]
+                );
+
+
+            const [archivos] =
+                await db.execute(
+                    `
+                    SELECT
+                        id,
+                        tipo,
+                        nombre_original,
+                        tipo_mime
+                    FROM innovacion_archivos
+                    WHERE innovacion_id = ?
+                    ORDER BY id ASC
+                    `,
+                    [
+                        innovacionId
+                    ]
+                );
+
+
+            return res.json({
+
+                ok: true,
+
+                innovacion: {
+
+                    id:
+                        innovacion.id,
+
+                    areaNombre:
+                        innovacion.area_nombre,
+
+                    responsableNombre:
+                        `${innovacion.responsable_nombre} ${innovacion.responsable_apellido}`.trim(),
+
+                    nombreInnovacion:
+                        innovacion.nombre_innovacion,
+
+                    actividadImpacta:
+                        innovacion.actividad_impacta,
+
+                    servicioRelacionado:
+                        innovacion.servicio_relacionado,
+
+                    problematica:
+                        innovacion.problematica,
+
+                    objetivo:
+                        innovacion.objetivo,
+
+                    estrategia:
+                        innovacion.estrategia,
+
+                    debilidad:
+                        innovacion.debilidad,
+
+                    acciones:
+                        [
+                            innovacion.accion_1,
+                            innovacion.accion_2,
+                            innovacion.accion_3,
+                            innovacion.accion_4,
+                            innovacion.accion_5
+                        ].filter(Boolean),
+
+                    justificacionValuacion:
+                        innovacion.justificacion_valuacion,
+
+                    fechaCreacion:
+                        innovacion.fecha_creacion,
+
+                    aprobada:
+                        Boolean(innovacion.aprobada),
+
+                    fechaAprobacion:
+                        innovacion.fecha_aprobacion,
+
+                    vpn:
+                        vpnFilas[0] || null,
+
+                    archivos:
+                        archivos.map(
+                            (archivo) => ({
+
+                                id:
+                                    archivo.id,
+
+                                tipo:
+                                    archivo.tipo,
+
+                                nombreOriginal:
+                                    archivo.nombre_original,
+
+                                tipoMime:
+                                    archivo.tipo_mime
+
+                            })
+                        )
+
+                }
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL OBTENER DETALLE DE INNOVACIÓN:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible obtener el detalle de la innovación.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   DAR VISTO BUENO A UNA INNOVACIÓN (SOLO LÍDER)
+   ---------------------------------------------------------
+   Solo el líder del área a la que pertenece la innovación
+   puede aprobarla.
+   ========================================================= */
+
+app.post(
+    "/api/innovaciones/:id/aprobar",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
+            if (usuarioSolicitante.rol !== "lider") {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            const innovacionId =
+                Number(
+                    req.params.id
+                );
+
+            if (!innovacionId) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "ID de innovación no válido."
+
+                    });
+
+            }
+
+
+            const [rows] =
+                await db.execute(
+                    `
+                    SELECT area_nombre
+                    FROM innovaciones
+                    WHERE id = ?
+                    LIMIT 1
+                    `,
+                    [
+                        innovacionId
+                    ]
+                );
+
+            if (rows.length === 0) {
+
+                return res
+                    .status(404)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Innovación no encontrada."
+
+                    });
+
+            }
+
+
+            if (rows[0].area_nombre !== usuarioSolicitante.area) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            await db.execute(
+                `
+                UPDATE innovaciones
+                SET
+                    aprobada = 1,
+                    fecha_aprobacion = NOW(),
+                    aprobada_por = ?
+                WHERE id = ?
+                `,
+                [
+                    usuarioSolicitante.id,
+                    innovacionId
+                ]
+            );
+
+
+            return res.json({
+
+                ok: true,
+
+                mensaje:
+                    "Innovación aprobada correctamente."
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL APROBAR LA INNOVACIÓN:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible aprobar la innovación.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   ELIMINAR INNOVACIÓN (SOLO ADMINISTRADOR)
+   ========================================================= */
+
+app.delete(
+    "/api/innovaciones/:id",
+    async (req, res) => {
+
+        let connection;
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
+            if (!esAdmin(usuarioSolicitante)) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            const innovacionId =
+                Number(
+                    req.params.id
+                );
+
+            if (!innovacionId) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "ID de innovación no válido."
+
+                    });
+
+            }
+
+
+            connection =
+                await db.getConnection();
+
+            await connection.beginTransaction();
+
+            await connection.execute(
+                `DELETE FROM innovacion_archivos WHERE innovacion_id = ?`,
+                [
+                    innovacionId
+                ]
+            );
+
+            await connection.execute(
+                `DELETE FROM innovacion_vpn WHERE innovacion_id = ?`,
+                [
+                    innovacionId
+                ]
+            );
+
+            const [resultado] =
+                await connection.execute(
+                    `DELETE FROM innovaciones WHERE id = ?`,
+                    [
+                        innovacionId
+                    ]
+                );
+
+            if (resultado.affectedRows === 0) {
+
+                await connection.rollback();
+
+                return res
+                    .status(404)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Innovación no encontrada."
+
+                    });
+
+            }
+
+            await connection.commit();
+
+
+            return res.json({
+
+                ok: true,
+
+                mensaje:
+                    "Innovación eliminada correctamente."
+
+            });
+
+        }
+        catch (error) {
+
+            if (connection) {
+
+                await connection.rollback();
+
+            }
+
+            console.error(
+                "ERROR AL ELIMINAR LA INNOVACIÓN:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible eliminar la innovación.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+        finally {
+
+            if (connection) {
+
+                connection.release();
+
+            }
+
+        }
+
+    }
+);
+
+
+/* =========================================================
    OBTENER ARCHIVO DE INNOVACIÓN
    ---------------------------------------------------------
    Sirve el contenido de un archivo (VPN, evidencia o imagen)
@@ -6075,6 +6871,113 @@ app.delete(
 
                     mensaje:
                         "No fue posible eliminar el archivo.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   VISOR DE ARCHIVOS (SOLO ADMINISTRADOR)
+   ---------------------------------------------------------
+   Metadatos (sin el BLOB) de los adjuntos subidos durante las
+   reuniones (reunion_enlace_archivos), para listarlos y
+   descargarlos desde un solo lugar. Las innovaciones tienen su
+   propia vista de tarjetas (ver GET /api/innovaciones) y no se
+   listan aquí para no duplicarlas. La descarga real sigue
+   pasando por el endpoint ya existente
+   (/api/enlaces/archivos/:id).
+   ========================================================= */
+
+app.get(
+    "/api/archivos",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
+            if (!esAdmin(usuarioSolicitante)) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            const [rows] =
+                await db.execute(
+                    `
+                    SELECT
+                        ea.id AS archivoId,
+                        ea.nombre_original AS nombreArchivo,
+                        ea.tipo_mime AS tipoMime,
+                        ea.fecha_creacion AS fechaCreacion,
+                        r.Titulo AS referenciaTitulo,
+                        DATE_FORMAT(r.FechaInicio, '%Y-%m-%d') AS referenciaSubtitulo,
+                        COALESCE(s.SubsidiaryName, u.departamento) AS departamentoNombre,
+                        COALESCE(a.AreaName, u.area) AS areaNombre
+                    FROM reunion_enlace_archivos ea
+                    INNER JOIN reuniones r
+                        ON r.ReunionId = ea.reunion_id
+                    LEFT JOIN subsidiaries s
+                        ON s.SubsidiaryId = r.DepartamentoId
+                    LEFT JOIN areas a
+                        ON a.AreaId = r.AreaId
+                    LEFT JOIN usuarios u
+                        ON u.id = r.UsuarioCreadorId
+                    ORDER BY ea.fecha_creacion DESC
+                    `
+                );
+
+
+            return res.json({
+
+                ok: true,
+
+                archivos:
+                    rows
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL OBTENER EL LISTADO DE ARCHIVOS:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible obtener el listado de archivos.",
 
                     error:
                         error.message

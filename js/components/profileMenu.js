@@ -242,6 +242,8 @@ export function initProfileMenu() {
 
         await cargarResumenActividad();
 
+        await cargarEstadoInnovacion();
+
     }
 
     if (btnAbrirPerfil) {
@@ -332,6 +334,111 @@ export function initProfileMenu() {
 
             console.error(
                 "No fue posible obtener el resumen de actividad:",
+                error
+            );
+
+        }
+
+    }
+
+
+    /* =====================================================
+       INNOVACIÓN DEL MES (SOLO OPERADORES)
+       ---------------------------------------------------------
+       0%  -> no se ha subido la innovación del área este mes
+       95% -> ya se subió, falta el visto bueno del líder
+       100% -> el líder ya dio el visto bueno
+       ===================================================== */
+
+    function diasRestantesDelMes() {
+
+        const hoy =
+            new Date();
+
+        const ultimoDiaDelMes =
+            new Date(
+                hoy.getFullYear(),
+                hoy.getMonth() + 1,
+                0
+            ).getDate();
+
+        return ultimoDiaDelMes - hoy.getDate();
+
+    }
+
+
+    async function cargarEstadoInnovacion() {
+
+        const contenedor =
+            document.querySelector("#perfil-innovacion");
+
+        if (!contenedor) return;
+
+        if (usuario.rol !== "operador") {
+
+            contenedor.hidden = true;
+
+            return;
+
+        }
+
+        contenedor.hidden = false;
+
+        const barra =
+            document.querySelector("#perfil-innovacion-bar");
+
+        const texto =
+            document.querySelector("#perfil-innovacion-texto");
+
+        try {
+
+            const response =
+                await fetch(
+                    `${API_URL}/innovaciones/estado-mes`,
+                    {
+                        headers: headerUsuario()
+                    }
+                );
+
+            const data =
+                await response.json();
+
+            if (!data.ok) return;
+
+            if (barra) barra.style.width = `${data.estado}%`;
+
+            if (texto) {
+
+                if (data.estado === 0) {
+
+                    texto.textContent =
+                        "0% — aún no se sube la innovación de este mes.";
+
+                } else if (data.estado === 95) {
+
+                    texto.textContent =
+                        "95% — subida, en espera del visto bueno del líder.";
+
+                } else {
+
+                    texto.textContent =
+                        "100% — aprobada por el líder.";
+
+                }
+
+            }
+
+            contenedor.classList.toggle(
+                "profile-info__innovacion--urgente",
+                data.estado !== 100 &&
+                diasRestantesDelMes() <= 10
+            );
+
+        }
+        catch (error) {
+
+            console.error(
+                "No fue posible obtener el estado de la innovación del mes:",
                 error
             );
 

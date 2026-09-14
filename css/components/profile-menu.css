@@ -266,6 +266,43 @@
 }
 
 
+/* Innovación del mes */
+
+.profile-info__innovacion {
+    margin-bottom: var(--space-lg);
+}
+
+.profile-info__innovacion-bar {
+    height: 10px;
+    border-radius: var(--radius-lg);
+    background-color: var(--color-surface-alt);
+    overflow: hidden;
+}
+
+.profile-info__innovacion-fill {
+    height: 100%;
+    width: 0%;
+    background-color: var(--color-accent);
+    border-radius: var(--radius-lg);
+    transition: width var(--transition-base);
+}
+
+.profile-info__innovacion-texto {
+    margin-top: var(--space-xs);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+}
+
+.profile-info__innovacion--urgente .profile-info__innovacion-fill {
+    background-color: var(--color-danger);
+}
+
+.profile-info__innovacion--urgente .profile-info__innovacion-texto {
+    color: var(--color-danger);
+    font-weight: var(--weight-medium);
+}
+
+
 /* Accesos rápidos */
 
 .profile-info__accesos {
