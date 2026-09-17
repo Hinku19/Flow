@@ -588,6 +588,25 @@
 }
 
 
+/* ---------------------------------------------------------
+   EVALUACIONES
+   --------------------------------------------------------- */
+
+.dashboard-card--evaluations {
+    background:
+        linear-gradient(
+            135deg,
+            var(--color-evaluaciones-light) 0%,
+            var(--color-evaluaciones) 100%
+        );
+}
+
+.dashboard-card--evaluations
+.dashboard-card__icon {
+    color: var(--color-evaluaciones);
+}
+
+
 /* =========================================================
    VISTA DE USUARIOS
    ========================================================= */

@@ -16,25 +16,44 @@ import {
 } from "../services/confirmDialog.js";
 
 
-export function initInnovationsList({ onOpen } = {}) {
+export function initInnovationsList({
+
+    onOpen,
+
+    gridSelector =
+        "#innovaciones-tarjetas",
+
+    emptySelector =
+        "#innovaciones-empty",
+
+    loadingSelector =
+        "#innovaciones-loading",
+
+    filtroSelector =
+        "#filtro-innovaciones-texto",
+
+    soloMesActual =
+        false
+
+} = {}) {
 
     const grid =
-        document.querySelector("#innovaciones-tarjetas");
+        document.querySelector(gridSelector);
 
     const empty =
-        document.querySelector("#innovaciones-empty");
+        document.querySelector(emptySelector);
 
     const loading =
-        document.querySelector("#innovaciones-loading");
+        document.querySelector(loadingSelector);
 
     const filtroTexto =
-        document.querySelector("#filtro-innovaciones-texto");
+        document.querySelector(filtroSelector);
 
 
     if (!grid) {
 
         console.warn(
-            "No se encontró #innovaciones-tarjetas"
+            `No se encontró "${gridSelector}"`
         );
 
         return {
@@ -162,6 +181,28 @@ export function initInnovationsList({ onOpen } = {}) {
        FILTRO
        ===================================================== */
 
+    function esDeEsteMes(
+        innovacion
+    ) {
+
+        if (!innovacion.fechaCreacion) return false;
+
+        const fecha =
+            new Date(innovacion.fechaCreacion);
+
+        if (Number.isNaN(fecha.getTime())) return false;
+
+        const hoy =
+            new Date();
+
+        return (
+            fecha.getFullYear() === hoy.getFullYear() &&
+            fecha.getMonth() === hoy.getMonth()
+        );
+
+    }
+
+
     function aplicarFiltro() {
 
         const texto =
@@ -172,6 +213,15 @@ export function initInnovationsList({ onOpen } = {}) {
         const innovacionesFiltradas =
             innovaciones.filter(
                 (innovacion) => {
+
+                    if (
+                        soloMesActual &&
+                        !esDeEsteMes(innovacion)
+                    ) {
+
+                        return false;
+
+                    }
 
                     if (!texto) return true;
 

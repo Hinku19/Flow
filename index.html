@@ -461,6 +461,48 @@
 
                     </button>
 
+
+                    <!-- =========================================
+                         EVALUACIONES
+                         ========================================= -->
+
+                    <button
+                        type="button"
+                        class="dashboard-card dashboard-card--evaluations"
+                        data-view="evaluaciones"
+                    >
+
+                        <span class="dashboard-card__icon">
+
+                            <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+
+                                <path
+                                    d="M9 11l3 3L22 4"
+                                ></path>
+
+                                <path
+                                    d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+                                ></path>
+
+                            </svg>
+
+                        </span>
+
+
+                        <span class="dashboard-card__title">
+                            Evaluaciones
+                        </span>
+
+
+                        <span class="dashboard-card__description">
+                            Responde las evaluaciones del periodo y consulta resultados.
+                        </span>
+
+                    </button>
+
                 </div>
 
             </div>
@@ -520,6 +562,296 @@
         <p class="historial__empty">
             Aún no hay reuniones guardadas.
         </p>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     EVALUACIONES
+     ===================================================== -->
+
+<section
+    id="vista-evaluaciones"
+    class="view view--hidden"
+>
+
+    <div class="view__navigation">
+
+        <button
+            type="button"
+            class="view__back"
+            data-view="dashboard"
+        >
+            ← Volver al inicio
+        </button>
+
+    </div>
+
+
+    <div class="evaluations-view">
+
+        <header>
+
+            <h1 class="view__title">
+                Evaluaciones
+            </h1>
+
+            <p class="evaluations-view__subtitle">
+                Responde las evaluaciones del periodo actual (escala de Likert). Tus respuestas son anónimas.
+            </p>
+
+            <p
+                id="evaluaciones-periodo-aviso"
+                class="evaluations-periodo-aviso"
+                hidden
+            ></p>
+
+        </header>
+
+
+        <!-- =========================================
+             SUBMENÚ DE FORMULARIOS
+             ========================================= -->
+
+        <div
+            id="evaluaciones-submenu"
+            class="evaluations-submenu"
+            role="tablist"
+        >
+
+            <button
+                type="button"
+                class="evaluations-submenu__btn"
+                data-tab="general"
+                role="tab"
+            >
+                Evaluación General
+            </button>
+
+            <button
+                type="button"
+                class="evaluations-submenu__btn"
+                data-tab="otros_dptos_ti"
+                role="tab"
+            >
+                Otros dptos a TI
+            </button>
+
+            <button
+                type="button"
+                class="evaluations-submenu__btn"
+                data-tab="lider_dpto"
+                role="tab"
+            >
+                Líder de dpto.
+            </button>
+
+            <button
+                type="button"
+                class="evaluations-submenu__btn"
+                data-tab="clima_organizacional"
+                role="tab"
+            >
+                Clima organizacional
+            </button>
+
+            <button
+                type="button"
+                class="evaluations-submenu__btn"
+                data-tab="colaborador_colaborador"
+                role="tab"
+            >
+                Colaborador a colaborador
+            </button>
+
+        </div>
+
+
+        <div
+            id="evaluaciones-form-container"
+            class="evaluations-tab"
+        ></div>
+
+
+        <!-- =========================================
+             RESULTADOS (SOLO LÍDERES Y ADMINISTRADORES)
+             ========================================= -->
+
+        <section
+            id="evaluaciones-resultados"
+            class="evaluations-resultados"
+            hidden
+        >
+
+            <div class="evaluations-resultados__header">
+
+                <h2>Resultados</h2>
+
+                <span class="evaluations-resultados__badge">
+                    Líderes y administradores
+                </span>
+
+            </div>
+
+
+            <div
+                id="evaluaciones-periodos-admin"
+                class="evaluations-periodos-admin"
+                hidden
+            >
+
+                <div class="evaluations-resultados__campo">
+                    <label for="evaluaciones-periodo-nombre">Nombre del periodo</label>
+                    <input
+                        type="text"
+                        id="evaluaciones-periodo-nombre"
+                        placeholder="Ej. Evaluación Q3 2026"
+                    >
+                </div>
+
+                <div class="evaluations-resultados__campo">
+                    <label for="evaluaciones-periodo-inicio">Fecha de inicio</label>
+                    <input type="date" id="evaluaciones-periodo-inicio">
+                </div>
+
+                <div class="evaluations-resultados__campo">
+                    <label for="evaluaciones-periodo-fin">Fecha de cierre (opcional)</label>
+                    <input type="date" id="evaluaciones-periodo-fin">
+                </div>
+
+                <fieldset
+                    id="evaluaciones-periodo-formularios"
+                    class="evaluations-periodos-admin__fieldset"
+                >
+
+                    <legend>Encuestas a incluir</legend>
+
+                    <label>
+                        <input type="checkbox" value="general" checked>
+                        Evaluación General
+                    </label>
+
+                    <label>
+                        <input type="checkbox" value="otros_dptos_ti" checked>
+                        Otros dptos a TI
+                    </label>
+
+                    <label>
+                        <input type="checkbox" value="lider_dpto" checked>
+                        Líder de dpto.
+                    </label>
+
+                    <label>
+                        <input type="checkbox" value="clima_organizacional" checked>
+                        Clima organizacional
+                    </label>
+
+                    <label>
+                        <input type="checkbox" value="colaborador_colaborador" checked>
+                        Colaborador a colaborador
+                    </label>
+
+                </fieldset>
+
+                <button
+                    type="button"
+                    id="evaluaciones-periodo-abrir"
+                    class="evaluations-periodos-admin__btn"
+                >
+                    Abrir nuevo periodo
+                </button>
+
+                <button
+                    type="button"
+                    id="evaluaciones-periodo-cerrar"
+                    class="evaluations-periodos-admin__btn evaluations-periodos-admin__btn--cerrar"
+                    hidden
+                >
+                    Cerrar periodo activo
+                </button>
+
+            </div>
+
+
+            <div class="evaluations-resultados__controles">
+
+                <div class="evaluations-resultados__campo">
+                    <label for="evaluaciones-resultados-periodo">Periodo</label>
+                    <select id="evaluaciones-resultados-periodo"></select>
+                </div>
+
+                <div class="evaluations-resultados__campo">
+                    <label for="evaluaciones-resultados-formulario">Formulario</label>
+                    <select id="evaluaciones-resultados-formulario">
+                        <option value="general">Evaluación General</option>
+                        <option value="otros_dptos_ti">Otros dptos a TI</option>
+                        <option value="lider_dpto">Líder de dpto.</option>
+                        <option value="clima_organizacional">Clima organizacional</option>
+                        <option value="colaborador_colaborador">Colaborador a colaborador</option>
+                    </select>
+                </div>
+
+                <div class="evaluations-resultados__campo">
+                    <label for="evaluaciones-resultados-departamento">Departamento</label>
+                    <select id="evaluaciones-resultados-departamento">
+                        <option value="todos">Todos los departamentos</option>
+                    </select>
+                </div>
+
+            </div>
+
+
+            <div class="evaluations-resultados__leyenda">
+
+                <span class="evaluations-resultados__leyenda-item">
+                    <span class="evaluations-resultados__leyenda-punto" style="background: var(--color-success)"></span>
+                    Totalmente de acuerdo
+                </span>
+
+                <span class="evaluations-resultados__leyenda-item">
+                    <span class="evaluations-resultados__leyenda-punto" style="background: #8FB768"></span>
+                    De acuerdo
+                </span>
+
+                <span class="evaluations-resultados__leyenda-item">
+                    <span class="evaluations-resultados__leyenda-punto" style="background: var(--color-border-strong)"></span>
+                    Neutral
+                </span>
+
+                <span class="evaluations-resultados__leyenda-item">
+                    <span class="evaluations-resultados__leyenda-punto" style="background: var(--color-warning)"></span>
+                    En desacuerdo
+                </span>
+
+                <span class="evaluations-resultados__leyenda-item">
+                    <span class="evaluations-resultados__leyenda-punto" style="background: var(--color-danger)"></span>
+                    Totalmente en desacuerdo
+                </span>
+
+            </div>
+
+
+            <p
+                id="evaluaciones-resultados-total"
+                class="evaluations-form__intro"
+            ></p>
+
+            <div
+                id="evaluaciones-resultados-lista"
+                class="evaluations-resultados__lista"
+            ></div>
+
+            <p
+                id="evaluaciones-resultados-vacio"
+                class="evaluations-empty"
+                hidden
+            >
+                Aún no hay respuestas para este formulario en el periodo seleccionado.
+            </p>
+
+        </section>
 
     </div>
 
@@ -2088,6 +2420,43 @@
 
 
                 <!-- =========================================
+                     SUBMENÚ
+                     ========================================= -->
+
+                <div
+                    class="innovations-submenu"
+                    role="tablist"
+                >
+
+                    <button
+                        type="button"
+                        class="innovations-submenu__btn innovations-submenu__btn--activo"
+                        data-tab="ver"
+                        role="tab"
+                        aria-selected="true"
+                    >
+                        Innovaciones del mes
+                    </button>
+
+                    <button
+                        type="button"
+                        class="innovations-submenu__btn"
+                        data-tab="subir"
+                        role="tab"
+                        aria-selected="false"
+                    >
+                        Subir innovación
+                    </button>
+
+                </div>
+
+
+                <div
+                    id="innovaciones-tab-ver"
+                    class="innovations-tab"
+                >
+
+                <!-- =========================================
                      REVISIÓN DEL LÍDER (INNOVACIÓN DEL MES)
                      ========================================= -->
 
@@ -2251,6 +2620,83 @@
 
                 </section>
 
+
+                <!-- =========================================
+                     INNOVACIONES DEL MES (TARJETAS)
+                     ========================================= -->
+
+                <section
+                    id="innovaciones-mes"
+                    class="innovations-list"
+                >
+
+                    <header class="innovations-list__header">
+
+                        <h2 class="innovations-list__title">
+                            Innovaciones subidas este mes
+                        </h2>
+
+                    </header>
+
+
+                    <div class="innovations-list__filters">
+
+                        <input
+                            type="text"
+                            id="filtro-innovaciones-mes-texto"
+                            class="innovations-list__search"
+                            placeholder="Buscar por nombre, responsable o área..."
+                        >
+
+                    </div>
+
+
+                    <div
+                        id="innovaciones-mes-tarjetas"
+                        class="innovations-list__grid"
+                    >
+
+                        <!--
+                            Las innovaciones de este mes se cargan
+                            dinámicamente desde MySQL.
+                        -->
+
+                    </div>
+
+
+                    <div
+                        id="innovaciones-mes-empty"
+                        class="innovations-list__empty"
+                        hidden
+                    >
+
+                        <p>
+                            Aún no hay innovaciones subidas este mes.
+                        </p>
+
+                    </div>
+
+
+                    <div
+                        id="innovaciones-mes-loading"
+                        class="innovations-list__loading"
+                        hidden
+                    >
+
+                        Cargando innovaciones...
+
+                    </div>
+
+                </section>
+
+                </div>
+
+
+                <div
+                    id="innovaciones-tab-subir"
+                    class="innovations-tab"
+                    hidden
+                >
 
                 <form
                     id="form-innovacion"
@@ -2691,6 +3137,8 @@
                     </div>
 
                 </form>
+
+                </div>
 
 
             </div>

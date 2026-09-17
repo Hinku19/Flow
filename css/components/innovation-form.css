@@ -30,6 +30,62 @@
 
 
 /* =========================================================
+   SUBMENÚ (VER / SUBIR)
+   ========================================================= */
+
+.innovations-submenu {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-xl);
+    margin-bottom: var(--space-lg);
+}
+
+.innovations-submenu__btn {
+    padding: var(--space-sm) var(--space-lg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: none;
+    color: var(--color-text-muted);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.innovations-submenu__btn:hover {
+    border-color: var(--color-progress);
+    color: var(--color-progress);
+}
+
+.innovations-submenu__btn--activo {
+    background-color: var(--color-progress);
+    border-color: var(--color-progress);
+    color: var(--color-text);
+}
+
+
+/* =========================================================
+   ACENTOS ANARANJADOS (SOLO DENTRO DE ESTA VISTA — el mismo
+   color ya identifica al título "Innovaciones"; la lista de
+   Archivos comparte estas clases y se deja en azul)
+   ========================================================= */
+
+#vista-innovaciones .innovations-list__title {
+    padding-left: var(--space-sm);
+    border-left: 4px solid var(--color-progress);
+}
+
+#vista-innovaciones .innovations-list__search:focus {
+    border-color: var(--color-progress);
+    box-shadow: 0 0 0 3px rgba(247, 127, 0, 0.15);
+}
+
+#vista-innovaciones .innovation-card:hover {
+    border-color: var(--color-progress);
+}
+
+
+/* =========================================================
    FORMULARIO
    ========================================================= */
 

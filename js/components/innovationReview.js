@@ -1,9 +1,10 @@
 /* =========================================================
    REVISIÓN DE LA INNOVACIÓN DEL MES (SOLO LÍDER)
    ---------------------------------------------------------
-   Reemplaza el formulario y las tarjetas por un único visor
-   de solo lectura de la innovación de este mes para el área
-   del líder, con un botón para darle el visto bueno.
+   Dentro de la pestaña "Innovaciones del mes", agrega arriba
+   de las tarjetas un visor de solo lectura de la innovación de
+   este mes para el área del líder, con un botón para darle el
+   visto bueno. Para el resto de los roles queda oculto.
    ========================================================= */
 
 import {
@@ -40,12 +41,6 @@ export function initInnovationReview() {
 
     const btnAprobar =
         document.querySelector("#btn-dar-visto-bueno");
-
-    const formulario =
-        document.querySelector("#form-innovacion");
-
-    const listaRegistradas =
-        document.querySelector("#innovaciones-registradas");
 
 
     if (!seccion) {
@@ -143,9 +138,6 @@ export function initInnovationReview() {
             usuario?.rol === "lider";
 
         seccion.hidden = !esLider;
-
-        if (formulario) formulario.hidden = esLider;
-        if (listaRegistradas) listaRegistradas.hidden = esLider;
 
         if (!esLider) return;
 

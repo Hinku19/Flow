@@ -1,0 +1,727 @@
+/* =========================================================
+   FLOW - MÓDULO DE EVALUACIONES (ESCALA DE LIKERT)
+   ========================================================= */
+
+
+/* =========================================================
+   TÍTULO Y SUBTÍTULO
+   ========================================================= */
+
+.evaluations-view .view__title {
+    padding-left: var(--space-sm);
+
+    border-left: 4px solid var(--color-evaluaciones);
+}
+
+
+.evaluations-view__subtitle {
+    margin: 8px 0 0;
+
+    font-size: 15px;
+
+    line-height: 1.5;
+
+    color: var(--color-text-subtle);
+}
+
+
+/* =========================================================
+   AVISO DE PERIODO
+   ========================================================= */
+
+.evaluations-periodo-aviso {
+    margin: var(--space-md) 0 0;
+
+    padding: var(--space-sm) var(--space-md);
+
+    border-radius: var(--radius-sm);
+
+    background: var(--color-evaluaciones-bg);
+
+    color: var(--color-evaluaciones);
+
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+}
+
+
+.evaluations-periodo-aviso--cerrado {
+    background: #fde7e7;
+
+    color: #a14d4d;
+}
+
+
+/* =========================================================
+   SUBMENÚ (PESTAÑAS DE FORMULARIOS)
+   ========================================================= */
+
+.evaluations-submenu {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-xl);
+    margin-bottom: var(--space-lg);
+}
+
+
+.evaluations-submenu__btn {
+    padding: var(--space-sm) var(--space-lg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: none;
+    color: var(--color-text-second);
+    font-weight: var(--weight-medium);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+
+.evaluations-submenu__btn:not(.evaluations-submenu__btn--activo):hover {
+    border-color: var(--color-evaluaciones);
+    color: var(--color-evaluaciones);
+}
+
+
+.evaluations-submenu__btn--activo {
+    background-color: var(--color-evaluaciones);
+    border-color: var(--color-evaluaciones);
+    color: var(--color-on-accent);
+}
+
+
+.evaluations-submenu__btn--completo::after {
+    content: " ✓";
+}
+
+
+/* =========================================================
+   FORMULARIO
+   ========================================================= */
+
+.evaluations-form {
+    display: flex;
+    flex-direction: column;
+
+    gap: var(--space-lg);
+
+    width: 100%;
+    max-width: 900px;
+
+    margin: 0 auto;
+}
+
+
+.evaluations-form__intro {
+    margin: 0;
+
+    font-size: var(--text-sm);
+
+    color: var(--color-text-second);
+}
+
+
+/* =========================================================
+   SELECTOR DE DESTINATARIO (LÍDER / COMPAÑERO)
+   ========================================================= */
+
+.evaluations-target {
+    display: flex;
+    flex-direction: column;
+
+    gap: var(--space-2xs);
+
+    padding: var(--space-md);
+
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-evaluaciones);
+    border-radius: var(--radius-md);
+
+    background: var(--color-surface);
+}
+
+
+.evaluations-target label {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+
+    color: var(--color-text);
+}
+
+
+.evaluations-target select {
+    height: 40px;
+
+    padding: 0 var(--space-sm);
+
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+
+    background-color: var(--color-surface);
+
+    color: var(--color-text);
+
+    font-family: inherit;
+    font-size: var(--text-sm);
+
+    cursor: pointer;
+}
+
+
+.evaluations-target select:focus {
+    outline: none;
+
+    border-color: var(--color-evaluaciones);
+
+    box-shadow: 0 0 0 3px rgba(14, 131, 136, 0.15);
+}
+
+
+/* =========================================================
+   LISTA DE PREGUNTAS
+   ========================================================= */
+
+.evaluations-question-list {
+    display: flex;
+    flex-direction: column;
+
+    gap: var(--space-md);
+}
+
+
+.evaluations-question {
+    display: flex;
+    flex-direction: column;
+
+    gap: var(--space-sm);
+
+    padding: var(--space-md) var(--space-lg);
+
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-evaluaciones);
+    border-radius: var(--radius-md);
+
+    background: var(--color-surface);
+
+    box-shadow: var(--shadow-sm);
+}
+
+
+.evaluations-question__texto {
+    margin: 0;
+
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+
+    color: var(--color-text);
+}
+
+
+.evaluations-question__opciones {
+    display: flex;
+    flex-wrap: wrap;
+
+    gap: var(--space-sm);
+}
+
+
+.evaluations-question__opcion {
+    display: flex;
+    align-items: center;
+
+    gap: var(--space-2xs);
+
+    padding: var(--space-2xs) var(--space-sm);
+
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-lg);
+
+    font-size: var(--text-xs);
+
+    color: var(--color-text-second);
+
+    cursor: pointer;
+
+    transition:
+        border-color var(--transition-fast),
+        background-color var(--transition-fast),
+        color var(--transition-fast);
+}
+
+
+.evaluations-question__opcion:has(input:checked) {
+    border-color: var(--color-evaluaciones);
+
+    background: var(--color-evaluaciones-bg);
+
+    color: var(--color-evaluaciones);
+
+    font-weight: var(--weight-medium);
+}
+
+
+.evaluations-question__opcion input[type="radio"] {
+    accent-color: var(--color-evaluaciones);
+}
+
+
+/* =========================================================
+   ACCIONES / ENVÍO
+   ========================================================= */
+
+.evaluations-form__actions {
+    display: flex;
+    justify-content: center;
+}
+
+
+.evaluations-form__submit {
+    min-width: 160px;
+    height: 44px;
+
+    padding: 0 var(--space-lg);
+
+    border: none;
+    border-radius: var(--radius-lg);
+
+    background: var(--color-evaluaciones);
+
+    color: var(--color-on-accent);
+
+    font-family: inherit;
+    font-size: var(--text-base);
+    font-weight: var(--weight-bold);
+
+    cursor: pointer;
+
+    box-shadow: 0 5px 12px rgba(14, 131, 136, 0.35);
+
+    transition:
+        transform var(--transition-fast),
+        box-shadow var(--transition-fast),
+        filter var(--transition-fast);
+}
+
+
+.evaluations-form__submit:hover {
+    filter: brightness(1.06);
+
+    transform: translateY(-2px);
+}
+
+
+.evaluations-form__submit:disabled {
+    opacity: 0.6;
+
+    cursor: wait;
+
+    transform: none;
+}
+
+
+.evaluations-feedback {
+    margin: 0;
+
+    padding: var(--space-sm) var(--space-md);
+
+    border-radius: var(--radius-sm);
+
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+
+    text-align: center;
+}
+
+
+.evaluations-feedback--success {
+    background: var(--color-success-bg);
+
+    color: var(--color-succes-text);
+}
+
+
+.evaluations-feedback--error {
+    background: #fde7e7;
+
+    color: #a14d4d;
+}
+
+
+.evaluations-empty {
+    padding: var(--space-lg);
+
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-md);
+
+    color: var(--color-text-subtle);
+
+    font-size: var(--text-sm);
+
+    text-align: center;
+}
+
+
+.evaluations-empty--done {
+    padding: var(--space-xl) var(--space-lg);
+
+    border: 2px solid var(--color-evaluaciones);
+    border-style: solid;
+
+    background: var(--color-evaluaciones-bg);
+
+    color: var(--color-evaluaciones);
+}
+
+
+.evaluations-empty--done .evaluations-empty__icono {
+    margin: 0 0 var(--space-sm);
+
+    font-size: 2.5rem;
+    line-height: 1;
+}
+
+
+.evaluations-empty--done .evaluations-empty__texto {
+    margin: 0;
+
+    font-size: var(--text-lg);
+    font-weight: var(--weight-bold);
+}
+
+
+/* =========================================================
+   RESULTADOS (SOLO LÍDERES Y ADMINISTRADORES)
+   ========================================================= */
+
+.evaluations-resultados {
+    margin-top: var(--space-xl);
+
+    padding-top: var(--space-xl);
+
+    border-top: 2px solid var(--color-evaluaciones-bg);
+}
+
+
+.evaluations-resultados__header {
+    display: flex;
+    align-items: baseline;
+
+    gap: var(--space-sm);
+
+    padding-left: var(--space-sm);
+
+    border-left: 4px solid var(--color-evaluaciones);
+}
+
+
+.evaluations-resultados__header h2 {
+    margin: 0;
+
+    font-size: var(--text-lg);
+    font-weight: var(--weight-bold);
+
+    color: var(--color-evaluaciones);
+}
+
+
+.evaluations-resultados__badge {
+    padding: 2px var(--space-xs);
+
+    border-radius: var(--radius-sm);
+
+    background: var(--color-evaluaciones-bg);
+
+    color: var(--color-evaluaciones);
+
+    font-size: var(--text-xs);
+    font-weight: var(--weight-bold);
+
+    text-transform: uppercase;
+}
+
+
+.evaluations-resultados__controles {
+    display: flex;
+    flex-wrap: wrap;
+
+    gap: var(--space-md);
+
+    margin: var(--space-md) 0 var(--space-lg);
+}
+
+
+.evaluations-resultados__campo {
+    display: flex;
+    flex-direction: column;
+
+    gap: var(--space-2xs);
+
+    min-width: 220px;
+}
+
+
+.evaluations-resultados__campo label {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+
+    color: var(--color-text-second);
+}
+
+
+.evaluations-resultados__campo select,
+.evaluations-resultados__campo input {
+    height: 38px;
+
+    padding: 0 var(--space-sm);
+
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+
+    background-color: var(--color-surface);
+
+    color: var(--color-text);
+
+    font-family: inherit;
+    font-size: var(--text-sm);
+}
+
+
+/* =========================================================
+   ADMINISTRAR PERIODOS (SOLO ADMINISTRADOR)
+   ========================================================= */
+
+.evaluations-periodos-admin {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+
+    gap: var(--space-md);
+
+    margin-bottom: var(--space-lg);
+
+    padding: var(--space-md);
+
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-md);
+
+    background: var(--color-surface-alt);
+}
+
+
+.evaluations-periodos-admin__fieldset {
+    display: flex;
+    flex-wrap: wrap;
+
+    gap: var(--space-xs) var(--space-md);
+
+    padding: var(--space-sm) var(--space-md);
+
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+
+    background: var(--color-surface);
+}
+
+
+.evaluations-periodos-admin__fieldset legend {
+    padding: 0 4px;
+
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+
+    color: var(--color-text-second);
+}
+
+
+.evaluations-periodos-admin__fieldset label {
+    display: flex;
+    align-items: center;
+
+    gap: 4px;
+
+    font-size: var(--text-sm);
+
+    color: var(--color-text);
+
+    white-space: nowrap;
+}
+
+
+.evaluations-periodos-admin__fieldset input[type="checkbox"] {
+    accent-color: var(--color-evaluaciones);
+}
+
+
+.evaluations-periodos-admin__btn {
+    height: 38px;
+
+    padding: 0 var(--space-md);
+
+    border: none;
+    border-radius: var(--radius-sm);
+
+    background: var(--color-evaluaciones);
+
+    color: var(--color-on-accent);
+
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+
+    cursor: pointer;
+}
+
+
+.evaluations-periodos-admin__btn--cerrar {
+    background: var(--color-danger);
+}
+
+
+/* =========================================================
+   TARJETAS DE RESULTADOS POR PREGUNTA
+   ========================================================= */
+
+.evaluations-resultados__lista {
+    display: flex;
+    flex-direction: column;
+
+    gap: var(--space-md);
+}
+
+
+.evaluations-resultados__pregunta {
+    padding: var(--space-md) var(--space-lg);
+
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+
+    background: var(--color-surface);
+
+    box-shadow: var(--shadow-sm);
+}
+
+
+.evaluations-resultados__pregunta-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+
+    gap: var(--space-md);
+
+    margin-bottom: var(--space-sm);
+}
+
+
+.evaluations-resultados__pregunta-texto {
+    margin: 0;
+
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+
+    color: var(--color-text);
+}
+
+
+.evaluations-resultados__promedio {
+    flex-shrink: 0;
+
+    font-size: var(--text-base);
+    font-weight: var(--weight-bold);
+
+    color: var(--color-evaluaciones);
+
+    white-space: nowrap;
+}
+
+
+.evaluations-resultados__barra {
+    display: flex;
+
+    height: 14px;
+
+    border-radius: var(--radius-sm);
+
+    overflow: hidden;
+
+    background: var(--color-surface-alt);
+}
+
+
+.evaluations-resultados__segmento {
+    height: 100%;
+
+    transition: width var(--transition-base);
+}
+
+
+.evaluations-resultados__segmento--totalmente_acuerdo {
+    background: var(--color-success);
+}
+
+
+.evaluations-resultados__segmento--de_acuerdo {
+    background: #8FB768;
+}
+
+
+.evaluations-resultados__segmento--neutral {
+    background: var(--color-border-strong);
+}
+
+
+.evaluations-resultados__segmento--en_desacuerdo {
+    background: var(--color-warning);
+}
+
+
+.evaluations-resultados__segmento--totalmente_desacuerdo {
+    background: var(--color-danger);
+}
+
+
+.evaluations-resultados__leyenda {
+    display: flex;
+    flex-wrap: wrap;
+
+    gap: var(--space-sm) var(--space-md);
+
+    margin: var(--space-sm) 0 var(--space-md);
+
+    font-size: var(--text-xs);
+
+    color: var(--color-text-subtle);
+}
+
+
+.evaluations-resultados__leyenda-item {
+    display: flex;
+    align-items: center;
+
+    gap: 4px;
+}
+
+
+.evaluations-resultados__leyenda-punto {
+    width: 10px;
+    height: 10px;
+
+    border-radius: 50%;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 700px) {
+
+    .evaluations-question {
+        padding: var(--space-md);
+    }
+
+    .evaluations-resultados__pregunta-top {
+        flex-direction: column;
+    }
+
+}

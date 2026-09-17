@@ -112,6 +112,14 @@ import {
 } from "./components/innovationReview.js";
 
 import {
+    initEvaluacionesForm
+} from "./components/evaluacionesForm.js";
+
+import {
+    initEvaluacionesResultados
+} from "./components/evaluacionesResultados.js";
+
+import {
     initLogin
 } from "./components/login.js";
 
@@ -243,7 +251,24 @@ function inicializarNavegacion() {
             vista === "innovaciones"
         ) {
 
+            innovationsSubmenu.mostrarTab(
+                "ver"
+            );
+
             innovationReview.render();
+
+            innovationsListMes.render();
+
+        }
+
+
+        if (
+            vista === "evaluaciones"
+        ) {
+
+            evaluacionesForm.render();
+
+            evaluacionesResultados.render();
 
         }
 
@@ -1169,8 +1194,151 @@ const innovationsList =
     });
 
 
+const innovationsListMes =
+    initInnovationsList({
+
+        gridSelector:
+            "#innovaciones-mes-tarjetas",
+
+        emptySelector:
+            "#innovaciones-mes-empty",
+
+        loadingSelector:
+            "#innovaciones-mes-loading",
+
+        filtroSelector:
+            "#filtro-innovaciones-mes-texto",
+
+        soloMesActual:
+            true,
+
+        onOpen:
+            (innovacionId) => {
+
+                innovationDetail.abrir(
+                    innovacionId
+                );
+
+            }
+
+    });
+
+
 const innovationReview =
     initInnovationReview();
+
+
+/* =========================================================
+   SUBMENÚ DE INNOVACIONES
+   ---------------------------------------------------------
+   "Innovaciones del mes" (revisión del líder + tarjetas del
+   mes) y "Subir innovación" (formulario) como pestañas dentro
+   de la misma vista, en vez de decidir sola cuál mostrar según
+   el rol.
+   ========================================================= */
+
+function initInnovationsSubmenu() {
+
+    const botones =
+        document.querySelectorAll(
+            ".innovations-submenu__btn"
+        );
+
+    const tabVer =
+        document.querySelector(
+            "#innovaciones-tab-ver"
+        );
+
+    const tabSubir =
+        document.querySelector(
+            "#innovaciones-tab-subir"
+        );
+
+
+    if (
+        !botones.length ||
+        !tabVer ||
+        !tabSubir
+    ) {
+
+        return {
+            mostrarTab: () => {}
+        };
+
+    }
+
+
+    function mostrarTab(
+        tab
+    ) {
+
+        tabVer.hidden =
+            tab !== "ver";
+
+        tabSubir.hidden =
+            tab !== "subir";
+
+
+        botones.forEach(
+            (boton) => {
+
+                const activo =
+                    boton.dataset.tab === tab;
+
+                boton.classList.toggle(
+                    "innovations-submenu__btn--activo",
+                    activo
+                );
+
+                boton.setAttribute(
+                    "aria-selected",
+                    String(activo)
+                );
+
+            }
+        );
+
+    }
+
+
+    botones.forEach(
+        (boton) => {
+
+            boton.addEventListener(
+                "click",
+                () => {
+
+                    mostrarTab(
+                        boton.dataset.tab
+                    );
+
+                }
+            );
+
+        }
+    );
+
+
+    return {
+        mostrarTab
+    };
+
+}
+
+
+const innovationsSubmenu =
+    initInnovationsSubmenu();
+
+
+/* =========================================================
+   EVALUACIONES
+   ========================================================= */
+
+const evaluacionesForm =
+    initEvaluacionesForm();
+
+const evaluacionesResultados =
+    initEvaluacionesResultados();
 
 
 /* =========================================================

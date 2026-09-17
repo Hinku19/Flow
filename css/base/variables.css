@@ -44,6 +44,9 @@
     --color-compromisos-light: #FFC957;
     --color-compromisos-card: #F5B93F; /*tono real de la tarjeta del dashboard*/
     --color-compromisos-bg: #FFF6E5;
+    --color-evaluaciones: #0E8388;   /*verde azulado (teal) - Evaluaciones*/
+    --color-evaluaciones-light: #16A3A0;
+    --color-evaluaciones-bg: #E3F5F4;
 
     /*Espaciado (escala de 4px)*/
     --space-2xs: 4px;
