@@ -183,6 +183,11 @@
   color: #ffffff;
 }
 
+.commitment-card__badge--en-revision {
+  background-color: var(--color-evaluaciones-bg);
+  color: var(--color-evaluaciones);
+}
+
 .commitment-card__badge--completado {
   background-color: var(--color-success-bg);
   color: var(--color-success-text);

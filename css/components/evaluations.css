@@ -488,6 +488,13 @@
 }
 
 
+.evaluations-resultados__periodo-fechas {
+    font-size: var(--text-xs);
+
+    color: var(--color-text-subtle);
+}
+
+
 /* =========================================================
    ADMINISTRAR PERIODOS (SOLO ADMINISTRADOR)
    ========================================================= */
@@ -575,6 +582,48 @@
 
 .evaluations-periodos-admin__btn--cerrar {
     background: var(--color-danger);
+}
+
+
+/* =========================================================
+   EXPORTAR A PDF
+   ========================================================= */
+
+.evaluations-resultados__acciones {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: var(--space-sm);
+}
+
+
+.evaluations-resultados__btn-pdf {
+    height: 38px;
+
+    padding: 0 var(--space-md);
+
+    border: none;
+    border-radius: var(--radius-sm);
+
+    background: var(--color-evaluaciones);
+
+    color: var(--color-on-accent);
+
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+
+    cursor: pointer;
+
+    white-space: nowrap;
+}
+
+
+.evaluations-resultados__btn-pdf:disabled {
+    opacity: 0.5;
+
+    cursor: not-allowed;
 }
 
 

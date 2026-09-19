@@ -17,7 +17,8 @@ import {
 } from "../services/confirmDialog.js";
 
 import {
-    obtenerFormulario
+    obtenerFormulario,
+    obtenerEtiquetaLikert
 } from "./evaluacionesCatalogo.js";
 
 
@@ -56,6 +57,12 @@ export function initEvaluacionesResultados() {
     const vacioResultados =
         document.querySelector("#evaluaciones-resultados-vacio");
 
+    const periodoFechas =
+        document.querySelector("#evaluaciones-resultados-periodo-fechas");
+
+    const botonPDF =
+        document.querySelector("#evaluaciones-resultados-pdf");
+
 
     if (!seccion) {
 
@@ -68,6 +75,45 @@ export function initEvaluacionesResultados() {
 
     let periodos = [];
     let departamentosCargados = false;
+    let ultimoContextoResultados = null;
+
+
+    function formatearFecha(valor) {
+
+        if (!valor) return null;
+
+        const fecha =
+            new Date(`${String(valor).slice(0, 10)}T00:00:00`);
+
+        if (Number.isNaN(fecha.getTime())) {
+            return null;
+        }
+
+        return fecha.toLocaleDateString(
+            "es-MX",
+            {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric"
+            }
+        );
+
+    }
+
+
+    function formatearRangoFechas(periodo) {
+
+        const inicio =
+            formatearFecha(periodo.fecha_inicio);
+
+        const fin =
+            formatearFecha(periodo.fecha_fin);
+
+        if (!inicio) return "sin fechas definidas";
+
+        return `${inicio} al ${fin || "sin fecha de cierre"}`;
+
+    }
 
 
     function escaparHTML(valor) {
@@ -212,7 +258,7 @@ export function initEvaluacionesResultados() {
             periodos.map(
                 (periodo) => `
                     <option value="${periodo.id}">
-                        ${escaparHTML(periodo.nombre)}${periodo.activo ? " (activo)" : ""}
+                        ${escaparHTML(periodo.nombre)}${periodo.activo ? " (activo)" : ""} — ${escaparHTML(formatearRangoFechas(periodo))}
                     </option>
                 `
             ).join("");
@@ -235,6 +281,25 @@ export function initEvaluacionesResultados() {
 
         }
 
+        pintarDetallePeriodo();
+
+    }
+
+
+    function pintarDetallePeriodo() {
+
+        if (!periodoFechas) return;
+
+        const periodo =
+            periodos.find(
+                (item) => String(item.id) === String(selectPeriodo?.value)
+            );
+
+        periodoFechas.textContent =
+            periodo
+                ? `Vigencia: ${formatearRangoFechas(periodo)}`
+                : "";
+
     }
 
 
@@ -245,7 +310,8 @@ export function initEvaluacionesResultados() {
         const esAdministrador =
             esAdmin();
 
-        panelAdmin.hidden = !esAdministrador;
+        panelAdmin.style.display =
+            esAdministrador ? "" : "none";
 
         if (!esAdministrador) return;
 
@@ -288,6 +354,9 @@ export function initEvaluacionesResultados() {
             if (totalResultados) totalResultados.textContent = "";
             if (vacioResultados) vacioResultados.hidden = false;
 
+            ultimoContextoResultados = null;
+            actualizarDisponibilidadPDF();
+
             return;
 
         }
@@ -314,6 +383,19 @@ export function initEvaluacionesResultados() {
 
             }
 
+            ultimoContextoResultados = {
+
+                periodo:
+                    periodos.find((periodo) => String(periodo.id) === String(periodoId)) || null,
+
+                formularioSlug,
+
+                departamento,
+
+                data
+
+            };
+
             pintarResultados(formularioSlug, data);
 
         }
@@ -335,7 +417,11 @@ export function initEvaluacionesResultados() {
                     "No fue posible obtener los resultados.";
             }
 
+            ultimoContextoResultados = null;
+
         }
+
+        actualizarDisponibilidadPDF();
 
     }
 
@@ -395,6 +481,198 @@ export function initEvaluacionesResultados() {
 
                 }
             ).join("");
+
+    }
+
+
+    /* =====================================================
+       EXPORTAR RESULTADOS A PDF
+       ===================================================== */
+
+    function actualizarDisponibilidadPDF() {
+
+        if (!botonPDF) return;
+
+        botonPDF.disabled =
+            !ultimoContextoResultados ||
+            !ultimoContextoResultados.data?.total;
+
+    }
+
+
+    function generarPDFResultados() {
+
+        if (!ultimoContextoResultados || !ultimoContextoResultados.data?.total) {
+            return;
+        }
+
+        if (!window.jspdf?.jsPDF) {
+
+            alert(
+                "No fue posible generar el PDF: la librería jsPDF no está disponible."
+            );
+
+            return;
+
+        }
+
+        const {
+            periodo,
+            formularioSlug,
+            departamento,
+            data
+        } = ultimoContextoResultados;
+
+        const catalogo =
+            obtenerFormulario(formularioSlug);
+
+        const { jsPDF } = window.jspdf;
+
+        const doc =
+            new jsPDF({ unit: "pt", format: "letter" });
+
+        const margenIzq = 48;
+        const anchoUtil = 516;
+        let y = 56;
+
+        function saltoDePaginaSiNecesario(espacioRequerido) {
+
+            if (y + espacioRequerido <= 760) return;
+
+            doc.addPage();
+            y = 56;
+
+        }
+
+        function escribirParrafo(texto, tamaño, estilo, interlineado) {
+
+            doc.setFont("helvetica", estilo || "normal");
+            doc.setFontSize(tamaño);
+
+            const lineas =
+                doc.splitTextToSize(texto, anchoUtil);
+
+            saltoDePaginaSiNecesario(lineas.length * interlineado);
+
+            doc.text(lineas, margenIzq, y);
+
+            y += lineas.length * interlineado;
+
+        }
+
+        escribirParrafo(
+            "Resultados de evaluación",
+            18,
+            "bold",
+            22
+        );
+
+        y += 6;
+
+        escribirParrafo(
+            `Encuesta: ${catalogo?.titulo || formularioSlug}`,
+            11,
+            "normal",
+            15
+        );
+
+        escribirParrafo(
+            `Periodo: ${periodo?.nombre || "—"} (${formatearRangoFechas(periodo || {})})`,
+            11,
+            "normal",
+            15
+        );
+
+        escribirParrafo(
+            `Departamento: ${departamento === "todos" ? "Todos los departamentos" : departamento}`,
+            11,
+            "normal",
+            15
+        );
+
+        escribirParrafo(
+            `Total de respuestas: ${data.total}`,
+            11,
+            "normal",
+            15
+        );
+
+        y += 10;
+
+        const ordenLikert = [
+            "totalmente_acuerdo",
+            "de_acuerdo",
+            "neutral",
+            "en_desacuerdo",
+            "totalmente_desacuerdo"
+        ];
+
+        data.preguntas.forEach(
+            (pregunta, indice) => {
+
+                const texto =
+                    catalogo?.preguntas.find((p) => p.id === pregunta.id)?.texto ||
+                    pregunta.id;
+
+                saltoDePaginaSiNecesario(30);
+
+                doc.setDrawColor(200);
+                doc.line(margenIzq, y - 8, margenIzq + anchoUtil, y - 8);
+
+                escribirParrafo(
+                    `${indice + 1}. ${texto}`,
+                    12,
+                    "bold",
+                    16
+                );
+
+                escribirParrafo(
+                    `Promedio: ${pregunta.promedio !== null ? `${pregunta.promedio} / 5` : "Sin datos"}`,
+                    10,
+                    "normal",
+                    14
+                );
+
+                ordenLikert.forEach(
+                    (valor) => {
+
+                        const cantidad =
+                            pregunta.distribucion[valor] || 0;
+
+                        const porcentaje =
+                            pregunta.totalRespuestas
+                                ? Math.round((cantidad / pregunta.totalRespuestas) * 100)
+                                : 0;
+
+                        escribirParrafo(
+                            `• ${obtenerEtiquetaLikert(valor)}: ${cantidad} (${porcentaje}%)`,
+                            10,
+                            "normal",
+                            13
+                        );
+
+                    }
+                );
+
+                y += 8;
+
+            }
+        );
+
+        const nombreArchivo =
+            `evaluacion_${formularioSlug}_${(periodo?.nombre || "periodo").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`;
+
+        doc.save(nombreArchivo);
+
+    }
+
+
+    if (botonPDF) {
+
+        botonPDF.addEventListener(
+            "click",
+            generarPDFResultados
+        );
 
     }
 
@@ -628,7 +906,12 @@ export function initEvaluacionesResultados() {
 
         selectPeriodo.addEventListener(
             "change",
-            cargarResultados
+            () => {
+
+                pintarDetallePeriodo();
+                cargarResultados();
+
+            }
         );
 
     }

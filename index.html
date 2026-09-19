@@ -780,6 +780,10 @@
                 <div class="evaluations-resultados__campo">
                     <label for="evaluaciones-resultados-periodo">Periodo</label>
                     <select id="evaluaciones-resultados-periodo"></select>
+                    <span
+                        id="evaluaciones-resultados-periodo-fechas"
+                        class="evaluations-resultados__periodo-fechas"
+                    ></span>
                 </div>
 
                 <div class="evaluations-resultados__campo">
@@ -833,10 +837,23 @@
             </div>
 
 
-            <p
-                id="evaluaciones-resultados-total"
-                class="evaluations-form__intro"
-            ></p>
+            <div class="evaluations-resultados__acciones">
+
+                <p
+                    id="evaluaciones-resultados-total"
+                    class="evaluations-form__intro"
+                ></p>
+
+                <button
+                    type="button"
+                    id="evaluaciones-resultados-pdf"
+                    class="evaluations-resultados__btn-pdf"
+                    disabled
+                >
+                    Descargar PDF
+                </button>
+
+            </div>
 
             <div
                 id="evaluaciones-resultados-lista"
@@ -2344,6 +2361,10 @@
 
                                 <option value="en-progreso">
                                     En progreso
+                                </option>
+
+                                <option value="en-revision">
+                                    En espera de visto bueno
                                 </option>
 
                                 <option value="completado">
@@ -4274,13 +4295,20 @@
 
 
     <!-- =========================================================
+         LIBRERÍAS EXTERNAS
+         ========================================================= -->
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+
+    <!-- =========================================================
          JAVASCRIPT PRINCIPAL
          ========================================================= -->
 
     <script
         type="module"
         src="js/main.js"
-        
+
     ></script>
 
 </body>

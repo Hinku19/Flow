@@ -183,6 +183,34 @@
 
 
 /* =========================================================
+   VISTO BUENO (SOLO LÍDER Y ADMINISTRADOR)
+   ========================================================= */
+
+.commitments-view__aprobar {
+    margin-top: var(--space-sm);
+
+    padding: var(--space-2xs) var(--space-md);
+
+    border: none;
+    border-radius: var(--radius-md);
+
+    background: var(--color-evaluaciones);
+
+    color: var(--color-on-accent);
+
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+
+    cursor: pointer;
+}
+
+
+.commitments-view__aprobar:hover {
+    filter: brightness(1.08);
+}
+
+
+/* =========================================================
    ESTADO VACÍO
    ========================================================= */
 

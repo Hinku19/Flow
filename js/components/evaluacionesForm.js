@@ -7,6 +7,7 @@ import {
 } from "./config.js";
 
 import {
+    esAdmin,
     headerUsuario
 } from "../services/auth.service.js";
 
@@ -49,6 +50,29 @@ export function initEvaluacionesForm() {
     let estadoActual = null;
     let tabActiva = "general";
     let colegaSiguiente = null;
+
+
+    function formatearFecha(valor) {
+
+        if (!valor) return null;
+
+        const fecha =
+            new Date(`${String(valor).slice(0, 10)}T00:00:00`);
+
+        if (Number.isNaN(fecha.getTime())) {
+            return null;
+        }
+
+        return fecha.toLocaleDateString(
+            "es-MX",
+            {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric"
+            }
+        );
+
+    }
 
 
     function escaparHTML(valor) {
@@ -137,8 +161,19 @@ export function initEvaluacionesForm() {
 
         avisoPeriodo.classList.remove("evaluations-periodo-aviso--cerrado");
 
+        const inicio =
+            formatearFecha(estadoActual.periodoActivo.fechaInicio);
+
+        const fin =
+            formatearFecha(estadoActual.periodoActivo.fechaFin);
+
+        const rango =
+            inicio
+                ? ` (del ${inicio} al ${fin || "sin fecha de cierre definida"})`
+                : "";
+
         avisoPeriodo.textContent =
-            `Periodo activo: ${estadoActual.periodoActivo.nombre}`;
+            `Periodo activo: ${estadoActual.periodoActivo.nombre}${rango}`;
 
     }
 
@@ -636,6 +671,20 @@ export function initEvaluacionesForm() {
         await cargarEstado();
 
         pintarAvisoPeriodo();
+
+        if (esAdmin()) {
+
+            submenu.style.display = "none";
+
+            contenedor.innerHTML =
+                `<p class="evaluations-empty">Los administradores no responden evaluaciones. Consulta la sección de Resultados para revisarlas.</p>`;
+
+            return;
+
+        }
+
+        submenu.style.display = "";
+
         pintarSubmenu();
         renderContenido();
 

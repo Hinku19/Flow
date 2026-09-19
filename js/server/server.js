@@ -2038,10 +2038,35 @@ const STATUS_A_ESTADO = {
 
     1: "pendiente",
     2: "en-progreso",
-    3: "completado",
     4: "vencido"
 
 };
+
+
+/*
+ * Status 3 ("completado" a nivel de columna) por sí solo no
+ * basta: el operador puede reportarlo, pero solo cuenta como
+ * completado de verdad cuando el líder de su área dio el visto
+ * bueno (columna Aprobado). Sin ese visto bueno se muestra
+ * como "en-revision", el mismo patrón que 95%/100% en
+ * innovaciones (ver /api/innovaciones/estado-mes).
+ */
+function calcularEstadoCompromiso(
+    status,
+    aprobado
+) {
+
+    if (Number(status) === 3) {
+
+        return aprobado
+            ? "completado"
+            : "en-revision";
+
+    }
+
+    return STATUS_A_ESTADO[status] || "pendiente";
+
+}
 
 
 app.get(
@@ -2115,6 +2140,8 @@ app.get(
                         c.FechaFinEstimada,
                         c.FechaFinReal,
                         c.Status,
+                        c.Aprobado,
+                        c.FechaAprobacion,
                         c.ReunionId,
                         r.Titulo AS ReunionTitulo,
                         r.FechaInicio AS ReunionFecha,
@@ -2169,12 +2196,22 @@ app.get(
                             row.FechaFinReal,
 
                         estado:
-                            STATUS_A_ESTADO[row.StatusEfectivo] ||
-                            "pendiente",
+                            calcularEstadoCompromiso(
+                                row.StatusEfectivo,
+                                row.Aprobado
+                            ),
 
                         estadoReal:
-                            STATUS_A_ESTADO[row.Status] ||
-                            "pendiente",
+                            calcularEstadoCompromiso(
+                                row.Status,
+                                row.Aprobado
+                            ),
+
+                        aprobado:
+                            Boolean(row.Aprobado),
+
+                        fechaAprobacion:
+                            row.FechaAprobacion,
 
                         prioridad:
                             row.Prioridad,
@@ -2296,7 +2333,7 @@ app.patch(
             const [compromisoActual] =
                 await db.execute(
                     `
-                    SELECT c.UsuarioAsignadoId, c.Status, c.FechaFinReal, u.area
+                    SELECT c.UsuarioAsignadoId, c.Status, c.FechaFinReal, c.Aprobado, u.area
                     FROM compromisos c
                     INNER JOIN usuarios u
                         ON u.id = c.UsuarioAsignadoId
@@ -2372,30 +2409,34 @@ app.patch(
 
 
             /*
-             * FechaFinReal registra cuándo se completó de
-             * verdad (a diferencia de FechaFinEstimada, que es
-             * la fecha límite). Se marca al pasar a completado
-             * y se limpia si deja de estarlo; si no cambia de
-             * completado, se conserva la que ya tenía.
+             * "Completado" desde aquí es solo el reporte del
+             * operador (Status = 3): igual que con las
+             * innovaciones, no cuenta como completado de verdad
+             * hasta que el líder de su área da el visto bueno
+             * (POST /api/compromisos/:id/aprobar, que es lo
+             * único que puede poner Aprobado = 1). Por eso,
+             * cualquier cambio de estado que no sea "seguir
+             * completado" reinicia Aprobado/FechaFinReal: hay
+             * que volver a aprobarlo si se reabre y se vuelve a
+             * marcar como completado.
              */
 
             const nuevoStatus =
                 ESTADO_A_STATUS[estado];
 
-            const pasaACompletado =
+            const seMantieneCompletado =
                 nuevoStatus === 3 &&
-                Number(compromisoActual[0].Status) !== 3;
-
-            const dejaDeCompletado =
-                nuevoStatus !== 3 &&
                 Number(compromisoActual[0].Status) === 3;
 
+            const aprobado =
+                seMantieneCompletado
+                    ? Boolean(compromisoActual[0].Aprobado)
+                    : false;
+
             const fechaFinReal =
-                pasaACompletado
-                    ? new Date()
-                    : dejaDeCompletado
-                        ? null
-                        : compromisoActual[0].FechaFinReal;
+                seMantieneCompletado
+                    ? compromisoActual[0].FechaFinReal
+                    : null;
 
 
             const [resultado] =
@@ -2406,6 +2447,9 @@ app.patch(
                         Status = ?,
                         FechaFinEstimada = ?,
                         FechaFinReal = ?,
+                        Aprobado = ?,
+                        FechaAprobacion = CASE WHEN ? THEN FechaAprobacion ELSE NULL END,
+                        AprobadoPor = CASE WHEN ? THEN AprobadoPor ELSE NULL END,
                         FechaActualizacion = NOW()
                     WHERE CompromisoId = ?
                     `,
@@ -2413,6 +2457,9 @@ app.patch(
                         nuevoStatus,
                         fechaLimite,
                         fechaFinReal,
+                        aprobado,
+                        seMantieneCompletado,
+                        seMantieneCompletado,
                         compromisoId
                     ]
                 );
@@ -2462,6 +2509,199 @@ app.patch(
 
                     mensaje:
                         "No fue posible actualizar el compromiso.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   DAR VISTO BUENO A UN COMPROMISO (SOLO LÍDER / ADMIN)
+   ---------------------------------------------------------
+   Mismo patrón que POST /api/innovaciones/:id/aprobar: solo el
+   líder del área del responsable (o un administrador) puede
+   darlo, y solo aplica si el compromiso está reportado como
+   completado (Status = 3) y todavía sin aprobar.
+   ========================================================= */
+
+app.post(
+    "/api/compromisos/:id/aprobar",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
+            if (
+                usuarioSolicitante.rol !== "lider" &&
+                usuarioSolicitante.rol !== "administrador"
+            ) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            const compromisoId =
+                Number(
+                    req.params.id
+                );
+
+            if (!compromisoId) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "ID de compromiso no válido."
+
+                    });
+
+            }
+
+
+            const [compromisoActual] =
+                await db.execute(
+                    `
+                    SELECT c.Status, c.Aprobado, u.area
+                    FROM compromisos c
+                    INNER JOIN usuarios u
+                        ON u.id = c.UsuarioAsignadoId
+                    WHERE c.CompromisoId = ?
+                    LIMIT 1
+                    `,
+                    [
+                        compromisoId
+                    ]
+                );
+
+            if (compromisoActual.length === 0) {
+
+                return res
+                    .status(404)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Compromiso no encontrado."
+
+                    });
+
+            }
+
+
+            if (
+                usuarioSolicitante.rol === "lider" &&
+                usuarioSolicitante.area !== compromisoActual[0].area
+            ) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            if (Number(compromisoActual[0].Status) !== 3) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Este compromiso todavía no fue reportado como completado."
+
+                    });
+
+            }
+
+
+            if (Boolean(compromisoActual[0].Aprobado)) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Este compromiso ya tiene el visto bueno."
+
+                    });
+
+            }
+
+
+            await db.execute(
+                `
+                UPDATE compromisos
+                SET
+                    Aprobado = 1,
+                    FechaAprobacion = NOW(),
+                    AprobadoPor = ?,
+                    FechaFinReal = NOW(),
+                    FechaActualizacion = NOW()
+                WHERE CompromisoId = ?
+                `,
+                [
+                    usuarioSolicitante.id,
+                    compromisoId
+                ]
+            );
+
+
+            return res.json({
+
+                ok: true,
+
+                mensaje:
+                    "Compromiso aprobado correctamente."
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL APROBAR EL COMPROMISO:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible aprobar el compromiso.",
 
                     error:
                         error.message
@@ -3289,42 +3529,6 @@ const ESTADO_A_STATUS = {
 };
 
 
-function aFechaHoraMySQL(
-    valor
-) {
-
-    if (!valor) {
-
-        return null;
-
-    }
-
-
-    const fecha =
-        new Date(
-            valor
-        );
-
-
-    if (
-        Number.isNaN(
-            fecha.getTime()
-        )
-    ) {
-
-        return null;
-
-    }
-
-
-    return fecha
-        .toISOString()
-        .slice(0, 19)
-        .replace("T", " ");
-
-}
-
-
 async function resolverDepartamentoArea(
     connection,
     usuarioAsignadoId
@@ -3429,6 +3633,14 @@ async function insertarCompromiso(
         1;
 
 
+    /*
+     * FechaFinReal y Aprobado nunca se toman del cliente: aun
+     * si el compromiso ya llega marcado "completado" desde la
+     * reunión, sigue sin contar como completado de verdad hasta
+     * que el líder de su área lo apruebe (ver
+     * POST /api/compromisos/:id/aprobar).
+     */
+
     await connection.execute(
         `
         INSERT INTO compromisos
@@ -3443,11 +3655,12 @@ async function insertarCompromiso(
             FechaInicioEstimada,
             FechaFinEstimada,
             Status,
-            FechaFinReal
+            FechaFinReal,
+            Aprobado
         )
         VALUES
         (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
         `,
         [
@@ -3461,9 +3674,8 @@ async function insertarCompromiso(
             compromiso.fechaInicio || null,
             compromiso.fechaLimite || null,
             status,
-            status === 3
-                ? aFechaHoraMySQL(compromiso.fechaCompletado)
-                : null
+            null,
+            0
         ]
     );
 
@@ -7023,6 +7235,16 @@ function evaluacionFormularioVisible(
     definicion,
     usuarioSolicitante
 ) {
+
+    /*
+     * Los administradores solo consultan resultados: nunca
+     * responden encuestas, sin importar rol requerido o área.
+     */
+    if (usuarioSolicitante.rol === "administrador") {
+
+        return false;
+
+    }
 
     if (
         definicion.soloRoles &&

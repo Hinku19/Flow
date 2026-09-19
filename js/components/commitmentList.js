@@ -5,6 +5,7 @@ import { capitalizar } from "../utils/capitalize.js";
 export const ESTADO_LABEL = {
   "pendiente": "Pendiente",
   "en-progreso": "En progreso",
+  "en-revision": "En espera de visto bueno",
   "completado": "Completado",
   "vencido": "Vencido",
 };

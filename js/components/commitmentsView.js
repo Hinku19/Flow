@@ -16,6 +16,7 @@ import {
 } from "../utils/capitalize.js";
 
 import {
+    getUsuarioActual,
     headerUsuario
 } from "../services/auth.service.js";
 
@@ -26,7 +27,8 @@ import {
 
 const ESTADOS_ACTIVOS = [
     "pendiente",
-    "en-progreso"
+    "en-progreso",
+    "en-revision"
 ];
 
 /*
@@ -87,6 +89,22 @@ export function initCommitmentsView() {
 
     let compromisos =
         [];
+
+
+    /*
+     * "en-revision" no es una opción del <select> (no es algo
+     * que se pueda "elegir": es "completado" sin visto bueno
+     * todavía). Para el <select> y para reenviar el estado sin
+     * tocarlo (edición de solo la fecha límite), se trata igual
+     * que "completado".
+     */
+    function estadoEditable(estadoReal) {
+
+        return estadoReal === "en-revision"
+            ? "completado"
+            : estadoReal;
+
+    }
 
 
     /* =====================================================
@@ -265,6 +283,66 @@ export function initCommitmentsView() {
             alert(
                 error.message ||
                 "No fue posible actualizar el compromiso."
+            );
+
+        }
+
+    }
+
+
+    /* =====================================================
+       DAR VISTO BUENO (SOLO LÍDER / ADMINISTRADOR)
+       ===================================================== */
+
+    async function aprobarCompromiso(
+        id
+    ) {
+
+        try {
+
+            const response =
+                await fetch(
+                    `${API_URL}/compromisos/${id}/aprobar`,
+                    {
+
+                        method:
+                            "POST",
+
+                        headers:
+                            headerUsuario()
+
+                    }
+                );
+
+
+            const data =
+                await response.json();
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.mensaje ||
+                    data.error ||
+                    "No fue posible aprobar el compromiso."
+                );
+
+            }
+
+
+            await render();
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR APROBANDO COMPROMISO:",
+                error
+            );
+
+            alert(
+                error.message ||
+                "No fue posible aprobar el compromiso."
             );
 
         }
@@ -645,7 +723,7 @@ export function initCommitmentsView() {
                 option.textContent =
                     ESTADO_LABEL[valor];
 
-                if (valor === data.estadoReal) {
+                if (valor === estadoEditable(data.estadoReal)) {
 
                     option.selected =
                         true;
@@ -729,6 +807,41 @@ export function initCommitmentsView() {
 
             card.append(
                 completado
+            );
+
+        }
+
+
+        const usuario =
+            getUsuarioActual();
+
+        const puedeAprobar =
+            data.estadoReal === "en-revision" &&
+            (
+                usuario?.rol === "administrador" ||
+                usuario?.rol === "lider"
+            );
+
+        if (puedeAprobar) {
+
+            const aprobarBtn =
+                document.createElement("button");
+
+            aprobarBtn.type =
+                "button";
+
+            aprobarBtn.classList.add(
+                "commitments-view__aprobar"
+            );
+
+            aprobarBtn.textContent =
+                "Dar visto bueno";
+
+            aprobarBtn.dataset.id =
+                data.id;
+
+            card.append(
+                aprobarBtn
             );
 
         }
@@ -889,7 +1002,7 @@ export function initCommitmentsView() {
                     estado:
                         esEstado
                             ? event.target.value
-                            : item.estadoReal,
+                            : estadoEditable(item.estadoReal),
 
                     fechaLimite:
                         esFecha
@@ -924,6 +1037,34 @@ export function initCommitmentsView() {
 
 
             eliminarCompromiso(
+                boton.dataset.id
+            );
+
+        }
+    );
+
+
+    /* =====================================================
+       DAR VISTO BUENO (CLIC)
+       ===================================================== */
+
+    list.addEventListener(
+        "click",
+        (event) => {
+
+            const boton =
+                event.target.closest(
+                    ".commitments-view__aprobar"
+                );
+
+            if (!boton) {
+
+                return;
+
+            }
+
+
+            aprobarCompromiso(
                 boton.dataset.id
             );
 
