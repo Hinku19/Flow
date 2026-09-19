@@ -28,39 +28,20 @@ echo ==========================================
 set "VBS_HIDDEN=%TEMP%\flow_backend_hidden.vbs"
 > "%VBS_HIDDEN%" echo Set WshShell = CreateObject("WScript.Shell")
 >> "%VBS_HIDDEN%" echo WshShell.CurrentDirectory = "%~dp0"
->> "%VBS_HIDDEN%" echo WshShell.Run "cmd /c npm start > ""%~dp0backend.log"" 2>&1", 0, False
+>> "%VBS_HIDDEN%" echo WshShell.Run "cmd /c npm start > ""%TEMP%\flow-backend.log"" 2>&1", 0, False
 start "" wscript.exe /B "%VBS_HIDDEN%"
-echo Backend iniciado sin ventana. Log: %~dp0backend.log
+echo Backend iniciado sin ventana. Log: %TEMP%\flow-backend.log
 
 echo.
 echo ==========================================
-echo  FLOW - Abriendo proyecto en VS Code
+echo  FLOW - Iniciando Live Server (frontend, puerto 5501, en segundo plano)
 echo ==========================================
-set "VSCODE_EXE="
-if exist "%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd" set "VSCODE_EXE=%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd"
-if not defined VSCODE_EXE if exist "%ProgramFiles%\Microsoft VS Code\bin\code.cmd" set "VSCODE_EXE=%ProgramFiles%\Microsoft VS Code\bin\code.cmd"
-if not defined VSCODE_EXE if exist "%ProgramFiles(x86)%\Microsoft VS Code\bin\code.cmd" set "VSCODE_EXE=%ProgramFiles(x86)%\Microsoft VS Code\bin\code.cmd"
-
-if defined VSCODE_EXE (
-    call "%VSCODE_EXE%" --list-extensions | find /I "ritwickdey.liveserver" >nul
-    if errorlevel 1 (
-        echo Instalando extension Live Server en VS Code...
-        call "%VSCODE_EXE%" --install-extension ritwickdey.liveserver >nul
-    )
-    call "%VSCODE_EXE%" .
-) else (
-    where code >nul 2>nul
-    if not errorlevel 1 (
-        call code --list-extensions | find /I "ritwickdey.liveserver" >nul
-        if errorlevel 1 (
-            echo Instalando extension Live Server en VS Code...
-            call code --install-extension ritwickdey.liveserver >nul
-        )
-        call code .
-    ) else (
-        echo [!] No se encontro VS Code. Abrelo manualmente.
-        pause
-    )
-)
+set "VBS_LIVESERVER=%TEMP%\flow_liveserver_hidden.vbs"
+> "%VBS_LIVESERVER%" echo Set WshShell = CreateObject("WScript.Shell")
+>> "%VBS_LIVESERVER%" echo WshShell.CurrentDirectory = "%~dp0"
+>> "%VBS_LIVESERVER%" echo WshShell.Run "cmd /c npx --yes live-server --port=5501 --ignore=node_modules,.git > ""%TEMP%\flow-liveserver.log"" 2>&1", 0, False
+start "" wscript.exe /B "%VBS_LIVESERVER%"
+echo Live Server iniciado sin ventana. Se abrira el navegador en http://127.0.0.1:5501
+echo Log: %TEMP%\flow-liveserver.log
 
 exit /b 0
