@@ -8,9 +8,7 @@ const db = require("./db");
 
 const {
     VALORES_LIKERT_VALIDOS,
-    PUNTAJE_LIKERT,
-    FORMULARIOS_EVALUACION,
-    FORMULARIOS_VALIDOS
+    PUNTAJE_LIKERT
 } = require("./evaluacionesCatalogo");
 
 db.getConnection()
@@ -7222,111 +7220,286 @@ app.get(
 
 
 /* =========================================================
-   EVALUACIONES (ESCALA DE LIKERT)
+   EVALUACIONES PERSONALIZADAS (CREADAS POR EL ADMINISTRADOR)
    ---------------------------------------------------------
-   Respuestas anónimas (evaluacion_respuestas no guarda quién
-   respondió). evaluacion_envios sí guarda usuario_id, pero
-   solo para impedir respuestas duplicadas por periodo/
-   formulario/colega y mostrar "ya respondiste" — nunca se usa
-   para mostrar resultados individuales.
+   Independientes de los periodos y de las 5 evaluaciones
+   fijas. Cada una tiene su propio estado (activa/cerrada) y
+   fecha de cierre opcional. Las respuestas son anónimas:
+   evaluacion_personalizada_respuestas no guarda usuario_id;
+   evaluacion_personalizada_envios solo evita duplicados.
    ========================================================= */
 
-function evaluacionFormularioVisible(
-    definicion,
-    usuarioSolicitante
-) {
+const TIPOS_PREGUNTA_PERSONALIZADA = [
+    "opcion_multiple",
+    "casillas",
+    "likert",
+    "texto"
+];
 
-    /*
-     * Los administradores solo consultan resultados: nunca
-     * responden encuestas, sin importar rol requerido o área.
-     */
-    if (usuarioSolicitante.rol === "administrador") {
+const DESTINATARIOS_PERSONALIZADA_VALIDOS = [
+    "lider",
+    "operador"
+];
 
-        return false;
+const MAX_PREGUNTAS_PERSONALIZADA = 50;
+const MAX_OPCIONES_PERSONALIZADA = 12;
+const MAX_LARGO_RESPUESTA_TEXTO = 2000;
+
+
+function parsearJSONColumna(valor, respaldo) {
+
+    if (valor === null || valor === undefined) {
+        return respaldo;
+    }
+
+    if (typeof valor === "string") {
+
+        try {
+            return JSON.parse(valor);
+        }
+        catch {
+            return respaldo;
+        }
 
     }
 
-    if (
-        definicion.soloRoles &&
-        !definicion.soloRoles.includes(usuarioSolicitante.rol)
-    ) {
-
-        return false;
-
-    }
-
-    if (
-        definicion.ocultarParaAreas &&
-        definicion.ocultarParaAreas.includes(usuarioSolicitante.area)
-    ) {
-
-        return false;
-
-    }
-
-    return true;
+    return valor;
 
 }
 
 
-function evaluacionFormularioHabilitadoEnPeriodo(
-    periodoActivo,
-    slug
-) {
+/*
+ * Normaliza y valida las preguntas que envía el editor. Los
+ * ids de pregunta/opción los asigna el servidor, así que el
+ * cliente no puede colisionar ni inventar ids.
+ */
+function validarPreguntasPersonalizadas(preguntas) {
 
-    return (
-        Array.isArray(periodoActivo?.formulariosHabilitados) &&
-        periodoActivo.formulariosHabilitados.includes(slug)
-    );
+    if (!Array.isArray(preguntas) || preguntas.length === 0) {
+        return { error: "Agrega al menos una pregunta." };
+    }
+
+    if (preguntas.length > MAX_PREGUNTAS_PERSONALIZADA) {
+        return { error: `Máximo ${MAX_PREGUNTAS_PERSONALIZADA} preguntas por evaluación.` };
+    }
+
+    const normalizadas = [];
+
+    for (let indice = 0; indice < preguntas.length; indice++) {
+
+        const pregunta = preguntas[indice];
+        const numero = indice + 1;
+
+        const texto = String(pregunta?.texto || "").trim();
+
+        if (!texto) {
+            return { error: `La pregunta ${numero} no tiene texto.` };
+        }
+
+        if (texto.length > 500) {
+            return { error: `La pregunta ${numero} supera los 500 caracteres.` };
+        }
+
+        if (!TIPOS_PREGUNTA_PERSONALIZADA.includes(pregunta?.tipo)) {
+            return { error: `La pregunta ${numero} tiene un tipo no válido.` };
+        }
+
+        const normalizada = {
+            id: `p${numero}`,
+            tipo: pregunta.tipo,
+            texto,
+            requerida: pregunta.requerida !== false,
+            opciones: []
+        };
+
+        if (pregunta.tipo === "opcion_multiple" || pregunta.tipo === "casillas") {
+
+            const textosOpciones =
+                (Array.isArray(pregunta.opciones) ? pregunta.opciones : [])
+                    .map((opcion) => String(opcion?.texto ?? opcion ?? "").trim())
+                    .filter(Boolean);
+
+            if (textosOpciones.length < 2) {
+                return { error: `La pregunta ${numero} necesita al menos 2 opciones.` };
+            }
+
+            if (textosOpciones.length > MAX_OPCIONES_PERSONALIZADA) {
+                return { error: `La pregunta ${numero} supera las ${MAX_OPCIONES_PERSONALIZADA} opciones.` };
+            }
+
+            if (textosOpciones.some((opcion) => opcion.length > 200)) {
+                return { error: `Una opción de la pregunta ${numero} supera los 200 caracteres.` };
+            }
+
+            if (new Set(textosOpciones.map((opcion) => opcion.toLowerCase())).size !== textosOpciones.length) {
+                return { error: `La pregunta ${numero} tiene opciones repetidas.` };
+            }
+
+            normalizada.opciones =
+                textosOpciones.map((opcion, posicion) => ({
+                    id: `o${posicion + 1}`,
+                    texto: opcion
+                }));
+
+        }
+
+        normalizadas.push(normalizada);
+
+    }
+
+    return { preguntas: normalizadas };
 
 }
 
 
-async function obtenerPeriodoEvaluacionActivo() {
+/*
+ * Valida las respuestas contra la definición guardada de la
+ * evaluación. Devuelve solo las respuestas contestadas, ya
+ * saneadas.
+ */
+function validarRespuestasPersonalizadas(preguntas, respuestas) {
 
-    const [filas] =
-        await db.execute(
-            `
-            SELECT id, nombre, fecha_inicio, fecha_fin, activo, formularios_habilitados
-            FROM evaluacion_periodos
-            WHERE activo = 1
-            ORDER BY creado_en DESC
-            LIMIT 1
-            `
-        );
-
-    const periodo =
-        filas[0] || null;
-
-    if (!periodo) {
-        return null;
+    if (!respuestas || typeof respuestas !== "object" || Array.isArray(respuestas)) {
+        return { error: "Las respuestas son obligatorias." };
     }
 
-    const formulariosHabilitados =
-        typeof periodo.formularios_habilitados === "string"
-            ? JSON.parse(periodo.formularios_habilitados)
-            : periodo.formularios_habilitados;
+    const limpias = {};
+
+    for (const pregunta of preguntas) {
+
+        const valor = respuestas[pregunta.id];
+
+        let contestada = false;
+
+        if (pregunta.tipo === "opcion_multiple") {
+
+            if (valor !== undefined && valor !== null && valor !== "") {
+
+                if (!pregunta.opciones.some((opcion) => opcion.id === valor)) {
+                    return { error: `Respuesta no válida en "${pregunta.texto}".` };
+                }
+
+                limpias[pregunta.id] = valor;
+                contestada = true;
+
+            }
+
+        }
+        else if (pregunta.tipo === "casillas") {
+
+            if (Array.isArray(valor) && valor.length > 0) {
+
+                const unicos = [...new Set(valor)];
+
+                if (unicos.some((id) => !pregunta.opciones.some((opcion) => opcion.id === id))) {
+                    return { error: `Respuesta no válida en "${pregunta.texto}".` };
+                }
+
+                limpias[pregunta.id] = unicos;
+                contestada = true;
+
+            }
+
+        }
+        else if (pregunta.tipo === "likert") {
+
+            if (valor !== undefined && valor !== null && valor !== "") {
+
+                if (!VALORES_LIKERT_VALIDOS.includes(valor)) {
+                    return { error: `Respuesta no válida en "${pregunta.texto}".` };
+                }
+
+                limpias[pregunta.id] = valor;
+                contestada = true;
+
+            }
+
+        }
+        else if (pregunta.tipo === "texto") {
+
+            const texto = typeof valor === "string" ? valor.trim() : "";
+
+            if (texto) {
+
+                if (texto.length > MAX_LARGO_RESPUESTA_TEXTO) {
+                    return { error: `La respuesta a "${pregunta.texto}" es demasiado larga.` };
+                }
+
+                limpias[pregunta.id] = texto;
+                contestada = true;
+
+            }
+
+        }
+
+        if (!contestada && pregunta.requerida) {
+            return { error: `Falta responder: "${pregunta.texto}".` };
+        }
+
+    }
+
+    return { respuestas: limpias };
+
+}
+
+
+/*
+ * destinatarios se guarda como texto "lider,operador". Devuelve
+ * un arreglo con los roles a los que se dirige la evaluación.
+ */
+function parsearDestinatariosPersonalizada(valor) {
+
+    const roles =
+        String(valor || "")
+            .split(",")
+            .map((rol) => rol.trim())
+            .filter((rol) => DESTINATARIOS_PERSONALIZADA_VALIDOS.includes(rol));
+
+    return roles.length ? roles : [...DESTINATARIOS_PERSONALIZADA_VALIDOS];
+
+}
+
+
+function evaluacionPersonalizadaFormatear(fila, extra = {}) {
 
     return {
 
-        ...periodo,
-
-        formulariosHabilitados:
-            Array.isArray(formulariosHabilitados)
-                ? formulariosHabilitados
-                : FORMULARIOS_VALIDOS
+        id: fila.id,
+        titulo: fila.titulo,
+        descripcion: fila.descripcion || "",
+        preguntas: parsearJSONColumna(fila.preguntas_json, []),
+        destinatarios: parsearDestinatariosPersonalizada(fila.destinatarios),
+        activa: Number(fila.activa) === 1,
+        vigente: Number(fila.vigente) === 1,
+        fechaCierre: fila.fecha_cierre,
+        creadoEn: fila.creado_en,
+        ...extra
 
     };
 
 }
 
 
+const SQL_VIGENTE_PERSONALIZADA =
+    "(e.activa = 1 AND (e.fecha_cierre IS NULL OR e.fecha_cierre >= CURDATE()))";
+
+
+function puedeVerResultadosPersonalizadas(usuario) {
+
+    return esAdmin(usuario);
+
+}
+
+
 /* =========================================================
-   ESTADO DE EVALUACIONES (PERIODO ACTIVO + FORMULARIOS)
+   LISTAR
+   ---------------------------------------------------------
+   Administrador: todas, con conteo de respuestas.
+   Resto: solo las vigentes, con "yaRespondido".
    ========================================================= */
 
 app.get(
-    "/api/evaluaciones/estado",
+    "/api/evaluaciones/personalizadas",
     async (req, res) => {
 
         try {
@@ -7339,243 +7512,81 @@ app.get(
                 return res
                     .status(401)
                     .json({
-
                         ok: false,
-
-                        mensaje:
-                            "No fue posible identificar al usuario."
-
+                        mensaje: "No fue posible identificar al usuario."
                     });
 
             }
 
-
-            const periodoActivo =
-                await obtenerPeriodoEvaluacionActivo();
-
-            const formularios = {};
-
-            if (!periodoActivo) {
-
-                for (const slug of FORMULARIOS_VALIDOS) {
-
-                    formularios[slug] = {
-                        visible: false
-                    };
-
-                }
-
-                return res.json({
-
-                    ok: true,
-
-                    periodoActivo: null,
-
-                    formularios
-
-                });
-
-            }
-
-
-            const [enviosPropios] =
+            const [filas] =
                 await db.execute(
                     `
-                    SELECT formulario, colega_objetivo_id
-                    FROM evaluacion_envios
-                    WHERE periodo_id = ? AND usuario_id = ?
+                    SELECT
+                        e.id, e.titulo, e.descripcion, e.preguntas_json, e.destinatarios,
+                        e.activa, e.fecha_cierre, e.creado_en,
+                        ${SQL_VIGENTE_PERSONALIZADA} AS vigente,
+                        (
+                            SELECT COUNT(*)
+                            FROM evaluacion_personalizada_respuestas r
+                            WHERE r.evaluacion_id = e.id
+                        ) AS total_respuestas,
+                        (
+                            SELECT COUNT(*)
+                            FROM evaluacion_personalizada_envios v
+                            WHERE v.evaluacion_id = e.id AND v.usuario_id = ?
+                        ) AS ya_respondido
+                    FROM evaluacion_personalizada e
+                    ORDER BY e.creado_en DESC
                     `,
                     [
-                        periodoActivo.id,
                         usuarioSolicitante.id
                     ]
                 );
 
+            const administrador =
+                esAdmin(usuarioSolicitante);
 
-            const [lideresArea] =
-                await db.execute(
-                    `
-                    SELECT id, nombre
-                    FROM usuarios
-                    WHERE area = ? AND rol = 'lider' AND activo = 1
-                    LIMIT 1
-                    `,
-                    [
-                        usuarioSolicitante.area
-                    ]
-                );
-
-            const liderArea =
-                lideresArea[0] || null;
-
-            const yaEvaluoALider =
-                enviosPropios.some(
-                    (envio) => envio.formulario === "lider_dpto"
-                );
-
-
-            for (const slug of FORMULARIOS_VALIDOS) {
-
-                const definicion =
-                    FORMULARIOS_EVALUACION[slug];
-
-                if (
-                    !evaluacionFormularioVisible(definicion, usuarioSolicitante) ||
-                    !evaluacionFormularioHabilitadoEnPeriodo(periodoActivo, slug)
-                ) {
-
-                    formularios[slug] = {
-                        visible: false
-                    };
-
-                    continue;
-
-                }
-
-
-                if (definicion.objetivo === "colega_area") {
-
-                    const [colegasFilas] =
-                        await db.execute(
-                            `
-                            SELECT id, nombre
-                            FROM usuarios
-                            WHERE area = ? AND activo = 1 AND id <> ?
-                            ORDER BY nombre
-                            `,
-                            [
-                                usuarioSolicitante.area,
-                                usuarioSolicitante.id
-                            ]
-                        );
-
-                    /*
-                     * El líder ya tiene su propia encuesta
-                     * dedicada ("Evaluación a líder de dpto.").
-                     * En cuanto el usuario la responde, el
-                     * líder deja de aparecer aquí como
-                     * "compañero" para no evaluarlo dos veces.
-                     */
-
-                    const colegasFiltrados =
-                        colegasFilas.filter(
-                            (colega) =>
-                                !(
-                                    yaEvaluoALider &&
-                                    liderArea &&
-                                    colega.id === liderArea.id
-                                )
-                        );
-
-                    const idsYaEvaluados =
-                        enviosPropios
-                            .filter((envio) => envio.formulario === slug)
-                            .map((envio) => envio.colega_objetivo_id);
-
-                    const colegas =
-                        colegasFiltrados.map((colega) => ({
-
-                            id: colega.id,
-
-                            nombre: colega.nombre,
-
-                            yaEvaluado:
-                                idsYaEvaluados.includes(colega.id)
-
-                        }));
-
-                    formularios[slug] = {
-
-                        visible: true,
-
-                        colegas,
-
-                        todosEvaluados:
-                            colegas.length > 0 &&
-                            colegas.every((colega) => colega.yaEvaluado)
-
-                    };
-
-                    continue;
-
-                }
-
-
-                if (definicion.objetivo === "lider_area") {
-
-                    formularios[slug] = {
-
-                        visible: true,
-
-                        liderNombre:
-                            liderArea?.nombre || null,
-
-                        yaRespondido:
-                            yaEvaluoALider
-
-                    };
-
-                    continue;
-
-                }
-
-
-                const yaRespondido =
-                    enviosPropios.some(
-                        (envio) => envio.formulario === slug
+            const evaluaciones =
+                filas
+                    .filter(
+                        (fila) =>
+                            administrador ||
+                            (
+                                Number(fila.vigente) === 1 &&
+                                parsearDestinatariosPersonalizada(fila.destinatarios).includes(usuarioSolicitante.rol)
+                            )
+                    )
+                    .map((fila) =>
+                        evaluacionPersonalizadaFormatear(
+                            fila,
+                            {
+                                totalRespuestas: Number(fila.total_respuestas),
+                                yaRespondido: Number(fila.ya_respondido) > 0
+                            }
+                        )
                     );
 
-                formularios[slug] = {
-
-                    visible: true,
-
-                    yaRespondido
-
-                };
-
-            }
-
-
             return res.json({
-
                 ok: true,
-
-                periodoActivo: {
-
-                    id: periodoActivo.id,
-
-                    nombre: periodoActivo.nombre,
-
-                    fechaInicio: periodoActivo.fecha_inicio,
-
-                    fechaFin: periodoActivo.fecha_fin
-
-                },
-
-                formularios
-
+                evaluaciones,
+                puedeVerResultados: puedeVerResultadosPersonalizadas(usuarioSolicitante),
+                puedeAdministrar: administrador
             });
 
         }
         catch (error) {
 
             console.error(
-                "ERROR AL OBTENER ESTADO DE EVALUACIONES:",
+                "ERROR AL LISTAR EVALUACIONES PERSONALIZADAS:",
                 error
             );
 
             return res
                 .status(500)
                 .json({
-
                     ok: false,
-
-                    mensaje:
-                        "No fue posible obtener el estado de las evaluaciones.",
-
-                    error:
-                        error.message
-
+                    mensaje: "No fue posible obtener las evaluaciones personalizadas.",
+                    error: error.message
                 });
 
         }
@@ -7585,11 +7596,306 @@ app.get(
 
 
 /* =========================================================
-   ENVIAR RESPUESTAS DE UN FORMULARIO
+   CREAR (SOLO ADMINISTRADOR)
    ========================================================= */
 
 app.post(
-    "/api/evaluaciones/respuestas",
+    "/api/evaluaciones/personalizadas",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!esAdmin(usuarioSolicitante)) {
+                return respuestaSinPermiso(res);
+            }
+
+            const titulo =
+                String(req.body.titulo || "").trim();
+
+            const descripcion =
+                String(req.body.descripcion || "").trim();
+
+            const fechaCierre =
+                req.body.fechaCierre || null;
+
+            if (!titulo) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: "El título de la evaluación es obligatorio."
+                    });
+
+            }
+
+            if (titulo.length > 200 || descripcion.length > 2000) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: "El título (máx. 200) o la descripción (máx. 2000) son demasiado largos."
+                    });
+
+            }
+
+            if (fechaCierre && !/^\d{4}-\d{2}-\d{2}$/.test(fechaCierre)) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: "La fecha de cierre no es válida."
+                    });
+
+            }
+
+            const destinatarios =
+                Array.isArray(req.body.destinatarios)
+                    ? DESTINATARIOS_PERSONALIZADA_VALIDOS.filter((rol) => req.body.destinatarios.includes(rol))
+                    : [];
+
+            if (destinatarios.length === 0) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: "Selecciona a quién se enviará la evaluación (líderes, operadores o ambos)."
+                    });
+
+            }
+
+            const validacion =
+                validarPreguntasPersonalizadas(req.body.preguntas);
+
+            if (validacion.error) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: validacion.error
+                    });
+
+            }
+
+            const [resultado] =
+                await db.execute(
+                    `
+                    INSERT INTO evaluacion_personalizada
+                        (titulo, descripcion, preguntas_json, destinatarios, activa, fecha_cierre, creado_por)
+                    VALUES (?, ?, ?, ?, 1, ?, ?)
+                    `,
+                    [
+                        titulo,
+                        descripcion || null,
+                        JSON.stringify(validacion.preguntas),
+                        destinatarios.join(","),
+                        fechaCierre,
+                        usuarioSolicitante.id
+                    ]
+                );
+
+            return res.json({
+                ok: true,
+                mensaje: "Evaluación creada correctamente.",
+                evaluacionId: resultado.insertId
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL CREAR EVALUACIÓN PERSONALIZADA:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+                    ok: false,
+                    mensaje: "No fue posible crear la evaluación.",
+                    error: error.message
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   ACTIVAR / CERRAR (SOLO ADMINISTRADOR)
+   ========================================================= */
+
+app.patch(
+    "/api/evaluaciones/personalizadas/:id",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!esAdmin(usuarioSolicitante)) {
+                return respuestaSinPermiso(res);
+            }
+
+            const id =
+                Number(req.params.id);
+
+            if (!id || typeof req.body.activa !== "boolean") {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: "Datos no válidos."
+                    });
+
+            }
+
+            const [resultado] =
+                await db.execute(
+                    `
+                    UPDATE evaluacion_personalizada
+                    SET activa = ?
+                    WHERE id = ?
+                    `,
+                    [
+                        req.body.activa ? 1 : 0,
+                        id
+                    ]
+                );
+
+            if (resultado.affectedRows === 0) {
+
+                return res
+                    .status(404)
+                    .json({
+                        ok: false,
+                        mensaje: "La evaluación no existe."
+                    });
+
+            }
+
+            return res.json({
+                ok: true,
+                mensaje: req.body.activa ? "Evaluación activada." : "Evaluación cerrada."
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL ACTUALIZAR EVALUACIÓN PERSONALIZADA:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+                    ok: false,
+                    mensaje: "No fue posible actualizar la evaluación.",
+                    error: error.message
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   ELIMINAR (SOLO ADMINISTRADOR)
+   ---------------------------------------------------------
+   Las respuestas y envíos se borran en cascada (FK).
+   ========================================================= */
+
+app.delete(
+    "/api/evaluaciones/personalizadas/:id",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!esAdmin(usuarioSolicitante)) {
+                return respuestaSinPermiso(res);
+            }
+
+            const id =
+                Number(req.params.id);
+
+            if (!id) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: "ID de evaluación no válido."
+                    });
+
+            }
+
+            const [resultado] =
+                await db.execute(
+                    `DELETE FROM evaluacion_personalizada WHERE id = ?`,
+                    [
+                        id
+                    ]
+                );
+
+            if (resultado.affectedRows === 0) {
+
+                return res
+                    .status(404)
+                    .json({
+                        ok: false,
+                        mensaje: "La evaluación no existe."
+                    });
+
+            }
+
+            return res.json({
+                ok: true,
+                mensaje: "Evaluación eliminada."
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL ELIMINAR EVALUACIÓN PERSONALIZADA:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+                    ok: false,
+                    mensaje: "No fue posible eliminar la evaluación.",
+                    error: error.message
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   RESPONDER (ANÓNIMO, UNA VEZ POR USUARIO)
+   ========================================================= */
+
+app.post(
+    "/api/evaluaciones/personalizadas/:id/respuestas",
     async (req, res) => {
 
         try {
@@ -7602,316 +7908,80 @@ app.post(
                 return res
                     .status(401)
                     .json({
-
                         ok: false,
-
-                        mensaje:
-                            "No fue posible identificar al usuario."
-
+                        mensaje: "No fue posible identificar al usuario."
                     });
 
             }
 
-
-            const {
-                formulario,
-                respuestas,
-                colegaObjetivoId
-            } = req.body;
-
-
-            if (!FORMULARIOS_VALIDOS.includes(formulario)) {
-
-                return res
-                    .status(400)
-                    .json({
-
-                        ok: false,
-
-                        mensaje:
-                            "Formulario de evaluación no válido."
-
-                    });
-
-            }
-
-
-            const definicion =
-                FORMULARIOS_EVALUACION[formulario];
-
-            if (!evaluacionFormularioVisible(definicion, usuarioSolicitante)) {
-
+            /*
+             * Igual que en las evaluaciones fijas, los
+             * administradores solo consultan resultados.
+             */
+            if (esAdmin(usuarioSolicitante)) {
                 return respuestaSinPermiso(res);
-
             }
 
+            const id =
+                Number(req.params.id);
 
-            const periodoActivo =
-                await obtenerPeriodoEvaluacionActivo();
-
-            if (!periodoActivo) {
-
-                return res
-                    .status(400)
-                    .json({
-
-                        ok: false,
-
-                        mensaje:
-                            "No hay un periodo de evaluación activo."
-
-                    });
-
-            }
-
-
-            if (!evaluacionFormularioHabilitadoEnPeriodo(periodoActivo, formulario)) {
-
-                return res
-                    .status(400)
-                    .json({
-
-                        ok: false,
-
-                        mensaje:
-                            "Este formulario no está habilitado en el periodo actual."
-
-                    });
-
-            }
-
-
-            if (
-                !respuestas ||
-                typeof respuestas !== "object"
-            ) {
-
-                return res
-                    .status(400)
-                    .json({
-
-                        ok: false,
-
-                        mensaje:
-                            "Las respuestas son obligatorias."
-
-                    });
-
-            }
-
-
-            const idsEsperados =
-                definicion.preguntaIds;
-
-            const idsRecibidos =
-                Object.keys(respuestas);
-
-            const respuestasCompletas =
-                idsEsperados.length === idsRecibidos.length &&
-                idsEsperados.every(
-                    (id) => VALORES_LIKERT_VALIDOS.includes(respuestas[id])
+            const [filas] =
+                await db.execute(
+                    `
+                    SELECT
+                        e.id, e.titulo, e.preguntas_json, e.destinatarios,
+                        ${SQL_VIGENTE_PERSONALIZADA} AS vigente
+                    FROM evaluacion_personalizada e
+                    WHERE e.id = ?
+                    LIMIT 1
+                    `,
+                    [
+                        id
+                    ]
                 );
 
-            if (!respuestasCompletas) {
+            if (filas.length === 0) {
 
                 return res
-                    .status(400)
+                    .status(404)
                     .json({
-
                         ok: false,
-
-                        mensaje:
-                            "Debes responder todas las preguntas del formulario."
-
+                        mensaje: "La evaluación no existe."
                     });
 
             }
 
+            if (Number(filas[0].vigente) !== 1) {
 
-            /* =============================================
-               RESOLVER DESTINATARIO SEGÚN EL TIPO DE FORMULARIO
-               ============================================= */
-
-            let areaObjetivo = null;
-            let departamentoObjetivo = null;
-            let colegaObjetivoIdFinal = 0;
-
-            if (definicion.objetivo === "area_fija") {
-
-                areaObjetivo =
-                    definicion.areaObjetivo;
-
-                const [subsidiariaObjetivo] =
-                    await db.execute(
-                        `
-                        SELECT s.SubsidiaryName
-                        FROM areas a
-                        INNER JOIN subsidiaries s ON s.SubsidiaryId = a.SubsidiaryId
-                        WHERE a.AreaName = ?
-                        LIMIT 1
-                        `,
-                        [
-                            definicion.areaObjetivo
-                        ]
-                    );
-
-                departamentoObjetivo =
-                    subsidiariaObjetivo[0]?.SubsidiaryName || null;
-
-            }
-            else if (definicion.objetivo === "lider_area") {
-
-                const [lideres] =
-                    await db.execute(
-                        `
-                        SELECT id
-                        FROM usuarios
-                        WHERE area = ? AND rol = 'lider' AND activo = 1
-                        LIMIT 1
-                        `,
-                        [
-                            usuarioSolicitante.area
-                        ]
-                    );
-
-                if (lideres.length === 0) {
-
-                    return res
-                        .status(400)
-                        .json({
-
-                            ok: false,
-
-                            mensaje:
-                                "Tu área no tiene un líder asignado."
-
-                        });
-
-                }
-
-                areaObjetivo =
-                    usuarioSolicitante.area;
-
-                departamentoObjetivo =
-                    usuarioSolicitante.departamento;
-
-            }
-            else if (definicion.objetivo === "colega_area") {
-
-                const idColega =
-                    Number(colegaObjetivoId);
-
-                if (!idColega || idColega === usuarioSolicitante.id) {
-
-                    return res
-                        .status(400)
-                        .json({
-
-                            ok: false,
-
-                            mensaje:
-                                "Selecciona a un compañero válido para evaluar."
-
-                        });
-
-                }
-
-                const [colegas] =
-                    await db.execute(
-                        `
-                        SELECT id, area
-                        FROM usuarios
-                        WHERE id = ? AND area = ? AND activo = 1
-                        LIMIT 1
-                        `,
-                        [
-                            idColega,
-                            usuarioSolicitante.area
-                        ]
-                    );
-
-                if (colegas.length === 0) {
-
-                    return res
-                        .status(400)
-                        .json({
-
-                            ok: false,
-
-                            mensaje:
-                                "El compañero seleccionado no es válido."
-
-                        });
-
-                }
-
-
-                /*
-                 * El líder ya tiene su propia encuesta dedicada:
-                 * en cuanto el usuario la respondió, no puede
-                 * volver a evaluarlo aquí como "compañero".
-                 */
-
-                const [enviosLiderPrevio] =
-                    await db.execute(
-                        `
-                        SELECT id
-                        FROM evaluacion_envios
-                        WHERE periodo_id = ? AND usuario_id = ? AND formulario = 'lider_dpto'
-                        LIMIT 1
-                        `,
-                        [
-                            periodoActivo.id,
-                            usuarioSolicitante.id
-                        ]
-                    );
-
-                const [lideresArea] =
-                    await db.execute(
-                        `
-                        SELECT id
-                        FROM usuarios
-                        WHERE area = ? AND rol = 'lider' AND activo = 1
-                        LIMIT 1
-                        `,
-                        [
-                            usuarioSolicitante.area
-                        ]
-                    );
-
-                if (
-                    enviosLiderPrevio.length > 0 &&
-                    lideresArea[0]?.id === idColega
-                ) {
-
-                    return res
-                        .status(400)
-                        .json({
-
-                            ok: false,
-
-                            mensaje:
-                                "Ya evaluaste a esta persona como líder de tu área."
-
-                        });
-
-                }
-
-                areaObjetivo =
-                    colegas[0].area;
-
-                departamentoObjetivo =
-                    usuarioSolicitante.departamento;
-
-                colegaObjetivoIdFinal =
-                    idColega;
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: "Esta evaluación ya no está disponible."
+                    });
 
             }
 
+            if (!parsearDestinatariosPersonalizada(filas[0].destinatarios).includes(usuarioSolicitante.rol)) {
+                return respuestaSinPermiso(res);
+            }
 
-            /* =============================================
-               GUARDAR (ENVÍO + RESPUESTA ANÓNIMA)
-               ============================================= */
+            const validacion =
+                validarRespuestasPersonalizadas(
+                    parsearJSONColumna(filas[0].preguntas_json, []),
+                    req.body.respuestas
+                );
+
+            if (validacion.error) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: validacion.error
+                    });
+
+            }
 
             const connection =
                 await db.getConnection();
@@ -7922,33 +7992,27 @@ app.post(
 
                 await connection.execute(
                     `
-                    INSERT INTO evaluacion_envios
-                        (periodo_id, usuario_id, formulario, colega_objetivo_id)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO evaluacion_personalizada_envios
+                        (evaluacion_id, usuario_id)
+                    VALUES (?, ?)
                     `,
                     [
-                        periodoActivo.id,
-                        usuarioSolicitante.id,
-                        formulario,
-                        colegaObjetivoIdFinal
+                        id,
+                        usuarioSolicitante.id
                     ]
                 );
 
                 await connection.execute(
                     `
-                    INSERT INTO evaluacion_respuestas
-                        (periodo_id, formulario, area_evaluador, area_objetivo, departamento_evaluador, departamento_objetivo, colega_objetivo_id, respuestas_json)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO evaluacion_personalizada_respuestas
+                        (evaluacion_id, area_evaluador, departamento_evaluador, respuestas_json)
+                    VALUES (?, ?, ?, ?)
                     `,
                     [
-                        periodoActivo.id,
-                        formulario,
-                        usuarioSolicitante.area,
-                        areaObjetivo,
-                        usuarioSolicitante.departamento,
-                        departamentoObjetivo,
-                        colegaObjetivoIdFinal || null,
-                        JSON.stringify(respuestas)
+                        id,
+                        usuarioSolicitante.area || null,
+                        usuarioSolicitante.departamento || null,
+                        JSON.stringify(validacion.respuestas)
                     ]
                 );
 
@@ -7964,12 +8028,8 @@ app.post(
                     return res
                         .status(409)
                         .json({
-
                             ok: false,
-
-                            mensaje:
-                                "Ya respondiste este formulario en el periodo actual."
-
+                            mensaje: "Ya respondiste esta evaluación."
                         });
 
                 }
@@ -7983,36 +8043,25 @@ app.post(
 
             }
 
-
             return res.json({
-
                 ok: true,
-
-                mensaje:
-                    "Evaluación registrada correctamente."
-
+                mensaje: "Evaluación registrada correctamente."
             });
 
         }
         catch (error) {
 
             console.error(
-                "ERROR AL GUARDAR RESPUESTAS DE EVALUACIÓN:",
+                "ERROR AL GUARDAR RESPUESTAS PERSONALIZADAS:",
                 error
             );
 
             return res
                 .status(500)
                 .json({
-
                     ok: false,
-
-                    mensaje:
-                        "No fue posible registrar la evaluación.",
-
-                    error:
-                        error.message
-
+                    mensaje: "No fue posible registrar la evaluación.",
+                    error: error.message
                 });
 
         }
@@ -8022,11 +8071,47 @@ app.post(
 
 
 /* =========================================================
-   PERIODOS DE EVALUACIÓN
+   RESULTADOS Y EXPORTACIÓN (SOLO ADMINISTRADORES)
    ========================================================= */
 
+async function cargarRespuestasPersonalizadas(evaluacionId, departamento, area) {
+
+    const condiciones = ["evaluacion_id = ?"];
+    const parametros = [evaluacionId];
+
+    if (departamento && departamento !== "todos") {
+        condiciones.push("departamento_evaluador = ?");
+        parametros.push(departamento);
+    }
+
+    if (area && area !== "todas") {
+        condiciones.push("area_evaluador = ?");
+        parametros.push(area);
+    }
+
+    const [filas] =
+        await db.execute(
+            `
+            SELECT area_evaluador, departamento_evaluador, respuestas_json, creado_en
+            FROM evaluacion_personalizada_respuestas
+            WHERE ${condiciones.join(" AND ")}
+            ORDER BY creado_en ASC
+            `,
+            parametros
+        );
+
+    return filas.map((fila) => ({
+        area: fila.area_evaluador,
+        departamento: fila.departamento_evaluador,
+        creadoEn: fila.creado_en,
+        respuestas: parsearJSONColumna(fila.respuestas_json, {})
+    }));
+
+}
+
+
 app.get(
-    "/api/evaluaciones/periodos",
+    "/api/evaluaciones/personalizadas/:id/resultados",
     async (req, res) => {
 
         try {
@@ -8034,534 +8119,186 @@ app.get(
             const usuarioSolicitante =
                 await obtenerUsuarioSolicitante(req);
 
-            if (
-                !usuarioSolicitante ||
-                (usuarioSolicitante.rol !== "administrador" && usuarioSolicitante.rol !== "lider")
-            ) {
-
+            if (!puedeVerResultadosPersonalizadas(usuarioSolicitante)) {
                 return respuestaSinPermiso(res);
-
             }
-
-
-            const [periodos] =
-                await db.execute(
-                    `
-                    SELECT id, nombre, fecha_inicio, fecha_fin, activo, formularios_habilitados
-                    FROM evaluacion_periodos
-                    ORDER BY creado_en DESC
-                    `
-                );
-
-
-            return res.json({
-
-                ok: true,
-
-                periodos:
-                    periodos.map((periodo) => ({
-
-                        ...periodo,
-
-                        formularios_habilitados:
-                            typeof periodo.formularios_habilitados === "string"
-                                ? JSON.parse(periodo.formularios_habilitados)
-                                : (periodo.formularios_habilitados || FORMULARIOS_VALIDOS)
-
-                    }))
-
-            });
-
-        }
-        catch (error) {
-
-            console.error(
-                "ERROR AL LISTAR PERIODOS DE EVALUACIÓN:",
-                error
-            );
-
-            return res
-                .status(500)
-                .json({
-
-                    ok: false,
-
-                    mensaje:
-                        "No fue posible obtener los periodos de evaluación.",
-
-                    error:
-                        error.message
-
-                });
-
-        }
-
-    }
-);
-
-
-app.post(
-    "/api/evaluaciones/periodos",
-    async (req, res) => {
-
-        try {
-
-            const usuarioSolicitante =
-                await obtenerUsuarioSolicitante(req);
-
-            if (!esAdmin(usuarioSolicitante)) {
-
-                return respuestaSinPermiso(res);
-
-            }
-
-
-            const {
-                nombre,
-                fechaInicio,
-                fechaFin,
-                formularios
-            } = req.body;
-
-
-            if (!nombre || !fechaInicio) {
-
-                return res
-                    .status(400)
-                    .json({
-
-                        ok: false,
-
-                        mensaje:
-                            "El nombre y la fecha de inicio son obligatorios."
-
-                    });
-
-            }
-
-
-            const formulariosSeleccionados =
-                Array.isArray(formularios)
-                    ? formularios.filter((slug) => FORMULARIOS_VALIDOS.includes(slug))
-                    : [];
-
-            if (formulariosSeleccionados.length === 0) {
-
-                return res
-                    .status(400)
-                    .json({
-
-                        ok: false,
-
-                        mensaje:
-                            "Selecciona al menos una encuesta para incluir en el periodo."
-
-                    });
-
-            }
-
-
-            const connection =
-                await db.getConnection();
-
-            try {
-
-                await connection.beginTransaction();
-
-                await connection.execute(
-                    `UPDATE evaluacion_periodos SET activo = 0 WHERE activo = 1`
-                );
-
-                const [resultado] =
-                    await connection.execute(
-                        `
-                        INSERT INTO evaluacion_periodos
-                            (nombre, fecha_inicio, fecha_fin, activo, creado_por, formularios_habilitados)
-                        VALUES (?, ?, ?, 1, ?, ?)
-                        `,
-                        [
-                            nombre,
-                            fechaInicio,
-                            fechaFin || null,
-                            usuarioSolicitante.id,
-                            JSON.stringify(formulariosSeleccionados)
-                        ]
-                    );
-
-                await connection.commit();
-
-                return res.json({
-
-                    ok: true,
-
-                    mensaje:
-                        "Periodo de evaluación creado y abierto.",
-
-                    periodoId:
-                        resultado.insertId
-
-                });
-
-            }
-            catch (errorTransaccion) {
-
-                await connection.rollback();
-
-                throw errorTransaccion;
-
-            }
-            finally {
-
-                connection.release();
-
-            }
-
-        }
-        catch (error) {
-
-            console.error(
-                "ERROR AL CREAR PERIODO DE EVALUACIÓN:",
-                error
-            );
-
-            return res
-                .status(500)
-                .json({
-
-                    ok: false,
-
-                    mensaje:
-                        "No fue posible crear el periodo de evaluación.",
-
-                    error:
-                        error.message
-
-                });
-
-        }
-
-    }
-);
-
-
-app.patch(
-    "/api/evaluaciones/periodos/:id",
-    async (req, res) => {
-
-        try {
-
-            const usuarioSolicitante =
-                await obtenerUsuarioSolicitante(req);
-
-            if (!esAdmin(usuarioSolicitante)) {
-
-                return respuestaSinPermiso(res);
-
-            }
-
 
             const id =
                 Number(req.params.id);
 
-            if (!id) {
-
-                return res
-                    .status(400)
-                    .json({
-
-                        ok: false,
-
-                        mensaje:
-                            "ID de periodo no válido."
-
-                    });
-
-            }
-
-
-            await db.execute(
-                `
-                UPDATE evaluacion_periodos
-                SET activo = 0
-                WHERE id = ?
-                `,
-                [
-                    id
-                ]
-            );
-
-
-            return res.json({
-
-                ok: true,
-
-                mensaje:
-                    "Periodo de evaluación cerrado."
-
-            });
-
-        }
-        catch (error) {
-
-            console.error(
-                "ERROR AL CERRAR PERIODO DE EVALUACIÓN:",
-                error
-            );
-
-            return res
-                .status(500)
-                .json({
-
-                    ok: false,
-
-                    mensaje:
-                        "No fue posible cerrar el periodo de evaluación.",
-
-                    error:
-                        error.message
-
-                });
-
-        }
-
-    }
-);
-
-
-/* =========================================================
-   RESULTADOS (SOLO LÍDERES Y ADMINISTRADORES)
-   ========================================================= */
-
-app.get(
-    "/api/evaluaciones/resultados",
-    async (req, res) => {
-
-        try {
-
-            const usuarioSolicitante =
-                await obtenerUsuarioSolicitante(req);
-
-            if (
-                !usuarioSolicitante ||
-                (usuarioSolicitante.rol !== "administrador" && usuarioSolicitante.rol !== "lider")
-            ) {
-
-                return respuestaSinPermiso(res);
-
-            }
-
-
-            const periodoId =
-                Number(req.query.periodoId);
-
-            const formulario =
-                req.query.formulario;
-
-            if (
-                !periodoId ||
-                !FORMULARIOS_VALIDOS.includes(formulario)
-            ) {
-
-                return res
-                    .status(400)
-                    .json({
-
-                        ok: false,
-
-                        mensaje:
-                            "Periodo y formulario son obligatorios."
-
-                    });
-
-            }
-
-
-            /*
-             * Formularios con destinatario (líder de dpto.,
-             * colaborador a colaborador, otros dptos a TI) se
-             * agrupan por el área/departamento del destinatario;
-             * los de opinión general (general, clima) se agrupan
-             * por el área/departamento de quien respondió.
-             */
-
-            const usaColumnaObjetivo =
-                [
-                    "lider_dpto",
-                    "colaborador_colaborador",
-                    "otros_dptos_ti"
-                ].includes(formulario);
-
-            const columnaArea =
-                usaColumnaObjetivo
-                    ? "area_objetivo"
-                    : "area_evaluador";
-
-            const columnaDepartamento =
-                usaColumnaObjetivo
-                    ? "departamento_objetivo"
-                    : "departamento_evaluador";
-
-
-            /*
-             * Un líder solo ve resultados relacionados con su
-             * propia área; un administrador ve todo.
-             */
-
-            let filtroArea =
-                "";
-
-            const parametrosFiltro =
-                [
-                    periodoId,
-                    formulario
-                ];
-
-            if (usuarioSolicitante.rol === "lider") {
-
-                if (
-                    formulario === "otros_dptos_ti" &&
-                    usuarioSolicitante.area !== "Tecnologías de la Información"
-                ) {
-
-                    return respuestaSinPermiso(res);
-
-                }
-
-                filtroArea =
-                    `AND ${columnaArea} = ?`;
-
-                parametrosFiltro.push(
-                    usuarioSolicitante.area
-                );
-
-            }
-
-
-            /*
-             * Filtro opcional por departamento (sucursal), para
-             * ver los resultados de un solo departamento a la
-             * vez. Disponible para administradores y líderes.
-             */
-
-            let filtroDepartamento =
-                "";
-
-            const departamento =
-                req.query.departamento;
-
-            if (departamento && departamento !== "todos") {
-
-                filtroDepartamento =
-                    `AND ${columnaDepartamento} = ?`;
-
-                parametrosFiltro.push(
-                    departamento
-                );
-
-            }
-
-
             const [filas] =
                 await db.execute(
                     `
-                    SELECT respuestas_json
-                    FROM evaluacion_respuestas
-                    WHERE periodo_id = ? AND formulario = ? ${filtroArea} ${filtroDepartamento}
+                    SELECT
+                        e.id, e.titulo, e.descripcion, e.preguntas_json, e.destinatarios,
+                        e.activa, e.fecha_cierre, e.creado_en,
+                        ${SQL_VIGENTE_PERSONALIZADA} AS vigente
+                    FROM evaluacion_personalizada e
+                    WHERE e.id = ?
+                    LIMIT 1
                     `,
-                    parametrosFiltro
+                    [
+                        id
+                    ]
                 );
 
+            if (filas.length === 0) {
 
-            const idsPregunta =
-                FORMULARIOS_EVALUACION[formulario].preguntaIds;
-
-            const acumulado = {};
-
-            for (const idPregunta of idsPregunta) {
-
-                acumulado[idPregunta] = {
-
-                    totalPuntaje: 0,
-
-                    totalRespuestas: 0,
-
-                    distribucion: {
-
-                        totalmente_acuerdo: 0,
-                        de_acuerdo: 0,
-                        neutral: 0,
-                        en_desacuerdo: 0,
-                        totalmente_desacuerdo: 0
-
-                    }
-
-                };
+                return res
+                    .status(404)
+                    .json({
+                        ok: false,
+                        mensaje: "La evaluación no existe."
+                    });
 
             }
 
-            for (const fila of filas) {
+            const evaluacion =
+                evaluacionPersonalizadaFormatear(filas[0]);
 
-                const respuestas =
-                    typeof fila.respuestas_json === "string"
-                        ? JSON.parse(fila.respuestas_json)
-                        : fila.respuestas_json;
+            const todas =
+                await cargarRespuestasPersonalizadas(id, null, null);
 
-                for (const idPregunta of idsPregunta) {
+            const filtradas =
+                await cargarRespuestasPersonalizadas(
+                    id,
+                    req.query.departamento,
+                    req.query.area
+                );
 
-                    const valor =
-                        respuestas[idPregunta];
-
-                    if (!VALORES_LIKERT_VALIDOS.includes(valor)) {
-                        continue;
-                    }
-
-                    acumulado[idPregunta].totalPuntaje +=
-                        PUNTAJE_LIKERT[valor];
-
-                    acumulado[idPregunta].totalRespuestas += 1;
-
-                    acumulado[idPregunta].distribucion[valor] += 1;
-
-                }
-
-            }
+            /*
+             * Participación: solo cuentan los usuarios activos de
+             * los roles a los que se dirige la evaluación.
+             */
+            const [[{ elegibles }]] =
+                await db.execute(
+                    `
+                    SELECT COUNT(*) AS elegibles
+                    FROM usuarios
+                    WHERE activo = 1 AND FIND_IN_SET(rol, ?) > 0
+                    `,
+                    [
+                        evaluacion.destinatarios.join(",")
+                    ]
+                );
 
             const preguntas =
-                idsPregunta.map(
-                    (idPregunta) => {
+                evaluacion.preguntas.map(
+                    (pregunta) => {
 
-                        const datos =
-                            acumulado[idPregunta];
+                        const contestadas =
+                            filtradas.filter(
+                                (fila) => fila.respuestas[pregunta.id] !== undefined
+                            );
 
-                        return {
-
-                            id: idPregunta,
-
-                            totalRespuestas:
-                                datos.totalRespuestas,
-
-                            promedio:
-                                datos.totalRespuestas > 0
-                                    ? Number(
-                                        (datos.totalPuntaje / datos.totalRespuestas).toFixed(2)
-                                    )
-                                    : null,
-
-                            distribucion:
-                                datos.distribucion
-
+                        const base = {
+                            id: pregunta.id,
+                            tipo: pregunta.tipo,
+                            texto: pregunta.texto,
+                            totalRespuestas: contestadas.length
                         };
+
+                        if (pregunta.tipo === "opcion_multiple" || pregunta.tipo === "casillas") {
+
+                            const conteo = {};
+
+                            contestadas.forEach(
+                                (fila) => {
+
+                                    const valor = fila.respuestas[pregunta.id];
+
+                                    (Array.isArray(valor) ? valor : [valor]).forEach(
+                                        (opcionId) => {
+                                            conteo[opcionId] = (conteo[opcionId] || 0) + 1;
+                                        }
+                                    );
+
+                                }
+                            );
+
+                            base.opciones =
+                                pregunta.opciones.map((opcion) => ({
+                                    id: opcion.id,
+                                    texto: opcion.texto,
+                                    cantidad: conteo[opcion.id] || 0
+                                }));
+
+                        }
+                        else if (pregunta.tipo === "likert") {
+
+                            const distribucion = {};
+                            let suma = 0;
+
+                            VALORES_LIKERT_VALIDOS.forEach((valor) => { distribucion[valor] = 0; });
+
+                            contestadas.forEach(
+                                (fila) => {
+
+                                    const valor = fila.respuestas[pregunta.id];
+
+                                    distribucion[valor] += 1;
+                                    suma += PUNTAJE_LIKERT[valor];
+
+                                }
+                            );
+
+                            base.distribucion = distribucion;
+
+                            base.promedio =
+                                contestadas.length
+                                    ? Math.round((suma / contestadas.length) * 100) / 100
+                                    : null;
+
+                        }
+                        else {
+
+                            base.comentarios =
+                                contestadas
+                                    .map((fila) => fila.respuestas[pregunta.id])
+                                    .slice(-200)
+                                    .reverse();
+
+                        }
+
+                        return base;
 
                     }
                 );
 
+            const promediosLikert =
+                preguntas
+                    .filter((pregunta) => pregunta.tipo === "likert" && pregunta.promedio !== null)
+                    .map((pregunta) => pregunta.promedio);
 
             return res.json({
 
                 ok: true,
 
-                total:
-                    filas.length,
+                evaluacion: {
+                    id: evaluacion.id,
+                    titulo: evaluacion.titulo,
+                    descripcion: evaluacion.descripcion,
+                    activa: evaluacion.activa,
+                    vigente: evaluacion.vigente,
+                    fechaCierre: evaluacion.fechaCierre,
+                    destinatarios: evaluacion.destinatarios
+                },
+
+                total: filtradas.length,
+
+                totalGeneral: todas.length,
+
+                elegibles: Number(elegibles),
+
+                promedioLikertGlobal:
+                    promediosLikert.length
+                        ? Math.round((promediosLikert.reduce((a, b) => a + b, 0) / promediosLikert.length) * 100) / 100
+                        : null,
+
+                filtros: {
+                    departamentos: [...new Set(todas.map((fila) => fila.departamento).filter(Boolean))].sort(),
+                    areas: [...new Set(todas.map((fila) => fila.area).filter(Boolean))].sort()
+                },
 
                 preguntas
 
@@ -8571,22 +8308,92 @@ app.get(
         catch (error) {
 
             console.error(
-                "ERROR AL OBTENER RESULTADOS DE EVALUACIONES:",
+                "ERROR AL OBTENER RESULTADOS PERSONALIZADOS:",
                 error
             );
 
             return res
                 .status(500)
                 .json({
-
                     ok: false,
+                    mensaje: "No fue posible obtener los resultados.",
+                    error: error.message
+                });
 
-                    mensaje:
-                        "No fue posible obtener los resultados de evaluaciones.",
+        }
 
-                    error:
-                        error.message
+    }
+);
 
+
+app.get(
+    "/api/evaluaciones/personalizadas/:id/exportar",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!puedeVerResultadosPersonalizadas(usuarioSolicitante)) {
+                return respuestaSinPermiso(res);
+            }
+
+            const id =
+                Number(req.params.id);
+
+            const [filas] =
+                await db.execute(
+                    `
+                    SELECT id, titulo, preguntas_json
+                    FROM evaluacion_personalizada
+                    WHERE id = ?
+                    LIMIT 1
+                    `,
+                    [
+                        id
+                    ]
+                );
+
+            if (filas.length === 0) {
+
+                return res
+                    .status(404)
+                    .json({
+                        ok: false,
+                        mensaje: "La evaluación no existe."
+                    });
+
+            }
+
+            const respuestas =
+                await cargarRespuestasPersonalizadas(
+                    id,
+                    req.query.departamento,
+                    req.query.area
+                );
+
+            return res.json({
+                ok: true,
+                titulo: filas[0].titulo,
+                preguntas: parsearJSONColumna(filas[0].preguntas_json, []),
+                respuestas
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL EXPORTAR EVALUACIÓN PERSONALIZADA:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+                    ok: false,
+                    mensaje: "No fue posible exportar las respuestas.",
+                    error: error.message
                 });
 
         }

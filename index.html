@@ -498,7 +498,7 @@
 
 
                         <span class="dashboard-card__description">
-                            Responde las evaluaciones del periodo y consulta resultados.
+                            Responde las evaluaciones activas y consulta sus resultados.
                         </span>
 
                     </button>
@@ -598,277 +598,15 @@
                 Evaluaciones
             </h1>
 
-            <p class="evaluations-view__subtitle">
-                Responde las evaluaciones del periodo actual (escala de Likert). Tus respuestas son anónimas.
-            </p>
-
-            <p
-                id="evaluaciones-periodo-aviso"
-                class="evaluations-periodo-aviso"
-                hidden
-            ></p>
-
         </header>
 
 
         <!-- =========================================
-             SUBMENÚ DE FORMULARIOS
+             EVALUACIONES (VISTA PRINCIPAL)
              ========================================= -->
 
-        <div
-            id="evaluaciones-submenu"
-            class="evaluations-submenu"
-            role="tablist"
-        >
+        <div id="evaluaciones-custom"></div>
 
-            <button
-                type="button"
-                class="evaluations-submenu__btn"
-                data-tab="general"
-                role="tab"
-            >
-                Evaluación General
-            </button>
-
-            <button
-                type="button"
-                class="evaluations-submenu__btn"
-                data-tab="otros_dptos_ti"
-                role="tab"
-            >
-                Otros dptos a TI
-            </button>
-
-            <button
-                type="button"
-                class="evaluations-submenu__btn"
-                data-tab="lider_dpto"
-                role="tab"
-            >
-                Líder de dpto.
-            </button>
-
-            <button
-                type="button"
-                class="evaluations-submenu__btn"
-                data-tab="clima_organizacional"
-                role="tab"
-            >
-                Clima organizacional
-            </button>
-
-            <button
-                type="button"
-                class="evaluations-submenu__btn"
-                data-tab="colaborador_colaborador"
-                role="tab"
-            >
-                Colaborador a colaborador
-            </button>
-
-        </div>
-
-
-        <div
-            id="evaluaciones-form-container"
-            class="evaluations-tab"
-        ></div>
-
-
-        <!-- =========================================
-             RESULTADOS (SOLO LÍDERES Y ADMINISTRADORES)
-             ========================================= -->
-
-        <section
-            id="evaluaciones-resultados"
-            class="evaluations-resultados"
-            hidden
-        >
-
-            <div class="evaluations-resultados__header">
-
-                <h2>Resultados</h2>
-
-                <span class="evaluations-resultados__badge">
-                    Líderes y administradores
-                </span>
-
-            </div>
-
-
-            <div
-                id="evaluaciones-periodos-admin"
-                class="evaluations-periodos-admin"
-                hidden
-            >
-
-                <div class="evaluations-resultados__campo">
-                    <label for="evaluaciones-periodo-nombre">Nombre del periodo</label>
-                    <input
-                        type="text"
-                        id="evaluaciones-periodo-nombre"
-                        placeholder="Ej. Evaluación Q3 2026"
-                    >
-                </div>
-
-                <div class="evaluations-resultados__campo">
-                    <label for="evaluaciones-periodo-inicio">Fecha de inicio</label>
-                    <input type="date" id="evaluaciones-periodo-inicio">
-                </div>
-
-                <div class="evaluations-resultados__campo">
-                    <label for="evaluaciones-periodo-fin">Fecha de cierre (opcional)</label>
-                    <input type="date" id="evaluaciones-periodo-fin">
-                </div>
-
-                <fieldset
-                    id="evaluaciones-periodo-formularios"
-                    class="evaluations-periodos-admin__fieldset"
-                >
-
-                    <legend>Encuestas a incluir</legend>
-
-                    <label>
-                        <input type="checkbox" value="general" checked>
-                        Evaluación General
-                    </label>
-
-                    <label>
-                        <input type="checkbox" value="otros_dptos_ti" checked>
-                        Otros dptos a TI
-                    </label>
-
-                    <label>
-                        <input type="checkbox" value="lider_dpto" checked>
-                        Líder de dpto.
-                    </label>
-
-                    <label>
-                        <input type="checkbox" value="clima_organizacional" checked>
-                        Clima organizacional
-                    </label>
-
-                    <label>
-                        <input type="checkbox" value="colaborador_colaborador" checked>
-                        Colaborador a colaborador
-                    </label>
-
-                </fieldset>
-
-                <button
-                    type="button"
-                    id="evaluaciones-periodo-abrir"
-                    class="evaluations-periodos-admin__btn"
-                >
-                    Abrir nuevo periodo
-                </button>
-
-                <button
-                    type="button"
-                    id="evaluaciones-periodo-cerrar"
-                    class="evaluations-periodos-admin__btn evaluations-periodos-admin__btn--cerrar"
-                    hidden
-                >
-                    Cerrar periodo activo
-                </button>
-
-            </div>
-
-
-            <div class="evaluations-resultados__controles">
-
-                <div class="evaluations-resultados__campo">
-                    <label for="evaluaciones-resultados-periodo">Periodo</label>
-                    <select id="evaluaciones-resultados-periodo"></select>
-                    <span
-                        id="evaluaciones-resultados-periodo-fechas"
-                        class="evaluations-resultados__periodo-fechas"
-                    ></span>
-                </div>
-
-                <div class="evaluations-resultados__campo">
-                    <label for="evaluaciones-resultados-formulario">Formulario</label>
-                    <select id="evaluaciones-resultados-formulario">
-                        <option value="general">Evaluación General</option>
-                        <option value="otros_dptos_ti">Otros dptos a TI</option>
-                        <option value="lider_dpto">Líder de dpto.</option>
-                        <option value="clima_organizacional">Clima organizacional</option>
-                        <option value="colaborador_colaborador">Colaborador a colaborador</option>
-                    </select>
-                </div>
-
-                <div class="evaluations-resultados__campo">
-                    <label for="evaluaciones-resultados-departamento">Departamento</label>
-                    <select id="evaluaciones-resultados-departamento">
-                        <option value="todos">Todos los departamentos</option>
-                    </select>
-                </div>
-
-            </div>
-
-
-            <div class="evaluations-resultados__leyenda">
-
-                <span class="evaluations-resultados__leyenda-item">
-                    <span class="evaluations-resultados__leyenda-punto" style="background: var(--color-success)"></span>
-                    Totalmente de acuerdo
-                </span>
-
-                <span class="evaluations-resultados__leyenda-item">
-                    <span class="evaluations-resultados__leyenda-punto" style="background: #8FB768"></span>
-                    De acuerdo
-                </span>
-
-                <span class="evaluations-resultados__leyenda-item">
-                    <span class="evaluations-resultados__leyenda-punto" style="background: var(--color-border-strong)"></span>
-                    Neutral
-                </span>
-
-                <span class="evaluations-resultados__leyenda-item">
-                    <span class="evaluations-resultados__leyenda-punto" style="background: var(--color-warning)"></span>
-                    En desacuerdo
-                </span>
-
-                <span class="evaluations-resultados__leyenda-item">
-                    <span class="evaluations-resultados__leyenda-punto" style="background: var(--color-danger)"></span>
-                    Totalmente en desacuerdo
-                </span>
-
-            </div>
-
-
-            <div class="evaluations-resultados__acciones">
-
-                <p
-                    id="evaluaciones-resultados-total"
-                    class="evaluations-form__intro"
-                ></p>
-
-                <button
-                    type="button"
-                    id="evaluaciones-resultados-pdf"
-                    class="evaluations-resultados__btn-pdf"
-                    disabled
-                >
-                    Descargar PDF
-                </button>
-
-            </div>
-
-            <div
-                id="evaluaciones-resultados-lista"
-                class="evaluations-resultados__lista"
-            ></div>
-
-            <p
-                id="evaluaciones-resultados-vacio"
-                class="evaluations-empty"
-                hidden
-            >
-                Aún no hay respuestas para este formulario en el periodo seleccionado.
-            </p>
-
-        </section>
 
     </div>
 
@@ -4298,7 +4036,6 @@
          LIBRERÍAS EXTERNAS
          ========================================================= -->
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 
     <!-- =========================================================

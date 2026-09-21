@@ -112,12 +112,8 @@ import {
 } from "./components/innovationReview.js";
 
 import {
-    initEvaluacionesForm
-} from "./components/evaluacionesForm.js";
-
-import {
-    initEvaluacionesResultados
-} from "./components/evaluacionesResultados.js";
+    initEvaluacionesPersonalizadas
+} from "./components/evaluacionesPersonalizadas.js";
 
 import {
     initLogin
@@ -266,9 +262,7 @@ function inicializarNavegacion() {
             vista === "evaluaciones"
         ) {
 
-            evaluacionesForm.render();
-
-            evaluacionesResultados.render();
+            evaluacionesPersonalizadas.render();
 
         }
 
@@ -1334,11 +1328,8 @@ const innovationsSubmenu =
    EVALUACIONES
    ========================================================= */
 
-const evaluacionesForm =
-    initEvaluacionesForm();
-
-const evaluacionesResultados =
-    initEvaluacionesResultados();
+const evaluacionesPersonalizadas =
+    initEvaluacionesPersonalizadas();
 
 
 /* =========================================================
