@@ -1,5 +1,6 @@
 import { loadData, saveData } from "../services/storage.service.js";
 import { API_URL } from "./config.js";
+import { confirmarEliminacion } from "../services/confirmDialog.js";
 
 export function createLinkList({ container, storageKey, reunionId }) {
   const list = container.querySelector(".link-list__list");
@@ -179,7 +180,16 @@ export function createLinkList({ container, storageKey, reunionId }) {
     if (!event.target.matches(".link-list__delete")) return;
 
     const item = event.target.closest(".link-list__item");
-    removeItem(item.dataset.id);
+    const id = item.dataset.id;
+    const esArchivo = items.find((data) => data.id === id)?.tipo === "archivo";
+
+    confirmarEliminacion(
+      esArchivo
+        ? "¿Eliminar este archivo? Se borrará del servidor y no se puede deshacer."
+        : "¿Eliminar este enlace? Esta acción no se puede deshacer."
+    ).then((confirmado) => {
+      if (confirmado) removeItem(id);
+    });
   });
 
   render();

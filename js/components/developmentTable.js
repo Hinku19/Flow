@@ -1,6 +1,7 @@
 import { loadData, saveData } from "../services/storage.service.js";
 import { capitalizar } from "../utils/capitalize.js";
 import { agruparPorPrioridad } from "../utils/agruparPorPrioridad.js";
+import { confirmarEliminacion } from "../services/confirmDialog.js";
 
 /*
  * "flow:compromiso-creado-desde-punto" es un evento global
@@ -488,6 +489,23 @@ function createInsertButton(tipo, label, index) {
     return puntos.every((punto) => (punto.avance ?? 0) === 100);
   }
 
+  function irAObjetivo(objetivoId) {
+    if (objetivosColapsados.has(objetivoId)) {
+      objetivosColapsados.delete(objetivoId);
+      render();
+    }
+
+    const row = table.querySelector(`.development__row[data-id="${CSS.escape(objetivoId)}"]`);
+    if (!row) return;
+
+    row.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    row.classList.remove("development__row--destacado");
+    void row.offsetWidth;
+    row.classList.add("development__row--destacado");
+    setTimeout(() => row.classList.remove("development__row--destacado"), 1600);
+  }
+
   table.addEventListener("click", (event) => {
     const row = event.target.closest(".development__row");
     if (!row) return;
@@ -518,7 +536,15 @@ function createInsertButton(tipo, label, index) {
 
     if (event.target.matches(".development-block__delete")) {
       const block = event.target.closest(".development-block");
-      removeBlock(objetivoId, block.dataset.blockId);
+      const blockId = block.dataset.blockId;
+
+      confirmarEliminacion(
+        "¿Eliminar este elemento de desarrollo? Esta acción no se puede deshacer."
+      ).then((confirmado) => {
+        if (confirmado) removeBlock(objetivoId, blockId);
+      });
+
+      return;
     }
 
     if(event.target.matches(".avance__complete")){
@@ -605,5 +631,5 @@ if (existente) existente.remove();
   topbar.append(createEditToggle(), createInfoIcon());
 
   container.insertBefore(topbar, table);
-  return { setObjetivos, refreshTextAreas, todosLosPuntosCompletados };
+  return { setObjetivos, refreshTextAreas, todosLosPuntosCompletados, irAObjetivo };
 }

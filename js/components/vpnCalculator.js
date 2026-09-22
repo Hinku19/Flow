@@ -11,6 +11,10 @@ import {
     calcularVPN
 } from "../utils/calcularVPN.js";
 
+import {
+    confirmarEliminacion
+} from "../services/confirmDialog.js";
+
 
 const MESES_PROYECCION =
     36;
@@ -473,7 +477,14 @@ export function createVpnCalculator({
 
         quitarBtn.addEventListener(
             "click",
-            () => {
+            async () => {
+
+                const confirmado =
+                    await confirmarEliminacion(
+                        "¿Eliminar esta fila? Esta acción no se puede deshacer."
+                    );
+
+                if (!confirmado) return;
 
                 quitarFila(
                     nombreLista,

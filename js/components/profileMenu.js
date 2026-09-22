@@ -7,6 +7,10 @@ import {
 } from "./config.js";
 
 import {
+    confirmarEliminacion
+} from "../services/confirmDialog.js";
+
+import {
     getUsuarioActual,
     headerUsuario
 } from "../services/auth.service.js";
@@ -318,13 +322,43 @@ export function initProfileMenu() {
                         compromiso.usuarioAsignadoId === usuario.id
                 );
 
+            const ahora =
+                new Date();
+
+            const enMesActual =
+                (fecha) => {
+
+                    if (!fecha) return false;
+
+                    const d =
+                        new Date(fecha);
+
+                    return (
+                        !Number.isNaN(d.getTime()) &&
+                        d.getFullYear() === ahora.getFullYear() &&
+                        d.getMonth() === ahora.getMonth()
+                    );
+
+                };
+
             const completados =
                 propios.filter(
-                    (compromiso) => compromiso.estado === "completado"
+                    (compromiso) =>
+                        compromiso.estado === "completado" &&
+                        enMesActual(
+                            compromiso.fechaCompletado ||
+                            compromiso.fechaLimite
+                        )
                 ).length;
 
             const pendientes =
-                propios.length - completados;
+                propios.filter(
+                    (compromiso) =>
+                        compromiso.estado !== "completado" &&
+                        enMesActual(
+                            compromiso.fechaLimite
+                        )
+                ).length;
 
             if (elPendientes) elPendientes.textContent = String(pendientes);
             if (elCompletados) elCompletados.textContent = String(completados);
@@ -534,6 +568,13 @@ export function initProfileMenu() {
         btnQuitarFoto.addEventListener(
             "click",
             async () => {
+
+                const confirmado =
+                    await confirmarEliminacion(
+                        "¿Eliminar tu foto de perfil?"
+                    );
+
+                if (!confirmado) return;
 
                 try {
 

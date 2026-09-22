@@ -14,7 +14,7 @@ function formatearFechaCompletado(fechaISO){
     return `${dia}/${mes}/${d.getFullYear()}`;
 }
 
-export function createEditableList({container, itemName, storageKey, onChange, showCheckbox = true, checkCompletado}){
+export function createEditableList({container, itemName, storageKey, onChange, showCheckbox = true, checkCompletado, onNavigate}){
     const list = container.querySelector(".editable-list__list")
     const input = container.querySelector(".editable-list__input")
     const addBtn = container.querySelector(".editable-list__add")
@@ -27,7 +27,9 @@ export function createEditableList({container, itemName, storageKey, onChange, s
         const label = document.createElement("span");
         label.classList.add("editable-list__text");
         label.textContent = data.texto;
-        label.title = "Doble clic para editar"
+        label.title = typeof onNavigate === "function"
+            ? "Doble clic para ir al desarrollo"
+            : "Doble clic para editar"
         return label;
     }
    
@@ -85,6 +87,18 @@ export function createEditableList({container, itemName, storageKey, onChange, s
         deleteBtn.setAttribute("aria-label",`Eliminar ${itemName}`)
 
         if (check) item.append(check);
+
+        if (typeof onNavigate === "function" && data.id !== editingId) {
+            const editBtn = document.createElement("button");
+            editBtn.type = "button";
+            editBtn.classList.add("editable-list__edit-btn");
+            editBtn.textContent = "✎";
+            editBtn.title = `Editar ${itemName}`;
+            editBtn.setAttribute("aria-label", `Editar ${itemName}`);
+            item.append(contentWrapper, editBtn, deleteBtn);
+            return item;
+        }
+
         item.append(contentWrapper, deleteBtn);
         return item;
     }
@@ -223,6 +237,10 @@ export function createEditableList({container, itemName, storageKey, onChange, s
             removeItem(id);
             return
         }
+        if(event.target.matches(".editable-list__edit-btn")){
+            startEditing(id);
+            return
+        }
         if (event.target.matches(".editable-list__check")){
             toggleItem(id);
         }
@@ -233,10 +251,15 @@ export function createEditableList({container, itemName, storageKey, onChange, s
     })
 
     list.addEventListener("dblclick", (event)=>{
-        console.log('doble clic detectado');
         if (!event.target.matches(".editable-list__text")) return;
 
         const item = event.target.closest(".editable-list__item");
+
+        if (typeof onNavigate === "function") {
+            onNavigate(item.dataset.id);
+            return;
+        }
+
         startEditing(item.dataset.id);
     })
 

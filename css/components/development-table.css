@@ -426,3 +426,15 @@
   opacity: 1;
   filter: none;
 }
+.development__row--destacado {
+  animation: development-row-destacado 1.6s ease-out;
+}
+
+@keyframes development-row-destacado {
+  0%, 30% {
+    box-shadow: 0 0 0 3px var(--color-accent);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}

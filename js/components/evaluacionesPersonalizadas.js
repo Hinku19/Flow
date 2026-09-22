@@ -17,7 +17,8 @@ import {
 } from "../services/auth.service.js";
 
 import {
-    confirmDialog
+    confirmDialog,
+    confirmarEliminacion
 } from "../services/confirmDialog.js";
 
 import {
@@ -666,7 +667,7 @@ export function initEvaluacionesPersonalizadas() {
     }
 
 
-    function accionEditor(accion, boton) {
+    async function accionEditor(accion, boton) {
 
         const contexto =
             preguntaDesdeElemento(boton);
@@ -690,6 +691,13 @@ export function initEvaluacionesPersonalizadas() {
 
         }
         else if (accion === "eliminar-pregunta" && borrador.preguntas.length > 1) {
+
+            const confirmado =
+                await confirmarEliminacion(
+                    "¿Eliminar esta pregunta y sus opciones? Esta acción no se puede deshacer."
+                );
+
+            if (!confirmado) return;
 
             borrador.preguntas.splice(indice, 1);
 
@@ -746,6 +754,13 @@ export function initEvaluacionesPersonalizadas() {
             const { pregunta } = contexto;
 
             if (pregunta.opciones.length > 2) {
+
+                const confirmado =
+                    await confirmarEliminacion(
+                        "¿Eliminar esta opción?"
+                    );
+
+                if (!confirmado) return;
 
                 pregunta.opciones.splice(Number(boton.dataset.o), 1);
 

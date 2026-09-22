@@ -518,6 +518,15 @@ function montarReunion() {
                     id
                 ),
 
+        onNavigate:
+            (id) => {
+
+                developmentTable.irAObjetivo(
+                    id
+                );
+
+            },
+
         onChange:
             (objetivos) => {
 

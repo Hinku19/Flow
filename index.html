@@ -2051,6 +2051,15 @@
 
                     </div>
 
+                    <button
+                        type="button"
+                        id="compromisos-nuevo"
+                        class="commitment-list__add"
+                        hidden
+                    >
+                        + Nuevo compromiso
+                    </button>
+
                 </header>
 
 
@@ -2131,6 +2140,155 @@
                     </p>
 
                 </div>
+
+
+                <dialog
+                    id="compromisos-dialog"
+                    class="commitment-list__dialog"
+                >
+
+                    <form
+                        id="compromisos-form"
+                        class="commitment-list__form"
+                        novalidate
+                    >
+
+                        <h3 class="commitment-list__form-title">
+                            Nuevo compromiso
+                        </h3>
+
+
+                        <label class="field">
+
+                            <span class="field__label">
+                                Responsable
+                            </span>
+
+                            <select
+                                name="usuarioAsignadoId"
+                                class="field__input"
+                                required
+                            >
+
+                                <option value="">
+                                    Seleccione un responsable
+                                </option>
+
+                            </select>
+
+                        </label>
+
+
+                        <label class="field">
+
+                            <span class="field__label">
+                                Descripción
+                            </span>
+
+                            <input
+                                type="text"
+                                name="descripcion"
+                                class="field__input"
+                                maxlength="2000"
+                                required
+                            >
+
+                        </label>
+
+
+                        <div class="field-row">
+
+                            <label class="field">
+
+                                <span class="field__label">
+                                    Fecha de inicio
+                                </span>
+
+                                <input
+                                    type="date"
+                                    name="fechaInicio"
+                                    class="field__input"
+                                    required
+                                >
+
+                            </label>
+
+
+                            <label class="field">
+
+                                <span class="field__label">
+                                    Fecha límite
+                                </span>
+
+                                <input
+                                    type="date"
+                                    name="fechaLimite"
+                                    class="field__input"
+                                    required
+                                >
+
+                            </label>
+
+                        </div>
+
+
+                        <label class="field">
+
+                            <span class="field__label">
+                                Prioridad
+                            </span>
+
+                            <select
+                                name="prioridad"
+                                class="field__input"
+                            >
+
+                                <option value="alta">
+                                    Alta
+                                </option>
+
+                                <option value="media" selected>
+                                    Media
+                                </option>
+
+                                <option value="baja">
+                                    Baja
+                                </option>
+
+                            </select>
+
+                        </label>
+
+
+                        <p
+                            id="compromisos-form-error"
+                            class="commitments-view__form-error"
+                            hidden
+                        ></p>
+
+
+                        <div class="commitment-list__form-actions">
+
+                            <button
+                                type="button"
+                                id="compromisos-cancelar"
+                                class="commitment-list__cancel"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                type="submit"
+                                class="commitment-list__save"
+                            >
+                                Guardar
+                            </button>
+
+                        </div>
+
+                    </form>
+
+                </dialog>
 
             </div>
 
@@ -3619,7 +3777,7 @@
         <div class="profile-info__resumen">
 
             <h3 class="profile-info__subtitulo">
-                Resumen de actividad
+                Resumen de actividad (este mes)
             </h3>
 
             <div class="profile-info__stats">
@@ -3630,7 +3788,7 @@
                         id="perfil-stat-pendientes"
                     >0</span>
                     <span class="profile-info__stat-label">
-                        Pendientes
+                        Pendientes del mes
                     </span>
                 </div>
 
@@ -3640,7 +3798,7 @@
                         id="perfil-stat-completados"
                     >0</span>
                     <span class="profile-info__stat-label">
-                        Completados
+                        Completados del mes
                     </span>
                 </div>
 

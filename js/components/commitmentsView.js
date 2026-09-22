@@ -70,6 +70,26 @@ export function initCommitmentsView() {
             "#compromisos-filtro-estado"
         );
 
+    const botonNuevo =
+        document.querySelector(
+            "#compromisos-nuevo"
+        );
+
+    const dialogNuevo =
+        document.querySelector(
+            "#compromisos-dialog"
+        );
+
+    const formNuevo =
+        document.querySelector(
+            "#compromisos-form"
+        );
+
+    const errorNuevo =
+        document.querySelector(
+            "#compromisos-form-error"
+        );
+
 
     if (!list) {
 
@@ -103,6 +123,24 @@ export function initCommitmentsView() {
         return estadoReal === "en-revision"
             ? "completado"
             : estadoReal;
+
+    }
+
+
+    /*
+     * Solo el responsable del compromiso o un líder pueden
+     * marcarlo como completado (el servidor valida además que
+     * el líder sea de la misma área).
+     */
+    function puedeCompletar(data) {
+
+        const usuario =
+            getUsuarioActual();
+
+        return (
+            usuario?.rol === "lider" ||
+            Number(usuario?.id) === Number(data.usuarioAsignadoId)
+        );
 
     }
 
@@ -422,6 +460,311 @@ export function initCommitmentsView() {
 
 
     /* =====================================================
+       CREAR COMPROMISO (SOLO ADMINISTRADOR / LÍDER)
+       ---------------------------------------------------------
+       Compromiso independiente: no pertenece a ninguna
+       reunión. El líder solo puede asignarlo a usuarios de su
+       misma área (el servidor lo valida también).
+       ===================================================== */
+
+    function puedeCrear() {
+
+        const usuario =
+            getUsuarioActual();
+
+        return (
+            usuario?.rol === "administrador" ||
+            usuario?.rol === "lider"
+        );
+
+    }
+
+
+    function fechaHoyInput() {
+
+        return aValorInputFecha(
+            new Date()
+        );
+
+    }
+
+
+    function mostrarErrorNuevo(
+        mensaje
+    ) {
+
+        if (!errorNuevo) {
+
+            alert(mensaje);
+
+            return;
+
+        }
+
+        errorNuevo.hidden =
+            !mensaje;
+
+        errorNuevo.textContent =
+            mensaje || "";
+
+    }
+
+
+    async function poblarResponsables() {
+
+        const select =
+            formNuevo.elements.usuarioAsignadoId;
+
+        const usuarioActual =
+            getUsuarioActual();
+
+        try {
+
+            const response =
+                await fetch(
+                    `${API_URL}/usuarios`
+                );
+
+            const data =
+                await response.json();
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.mensaje ||
+                    data.error ||
+                    "No fue posible cargar los usuarios."
+                );
+
+            }
+
+
+            const usuarios =
+                (data.usuarios || [])
+                    .filter(
+                        (usuario) =>
+                            Number(usuario.activo) === 1 &&
+                            (
+                                usuarioActual?.rol === "administrador" ||
+                                usuario.area === usuarioActual?.area
+                            )
+                    )
+                    .sort(
+                        (a, b) =>
+                            a.nombre.localeCompare(b.nombre)
+                    );
+
+
+            select.innerHTML =
+                `<option value="">Seleccione un responsable</option>`;
+
+            usuarios.forEach(
+                (usuario) => {
+
+                    const option =
+                        document.createElement("option");
+
+                    option.value =
+                        usuario.id;
+
+                    option.textContent =
+                        usuario.nombre;
+
+                    select.appendChild(
+                        option
+                    );
+
+                }
+            );
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR CARGANDO USUARIOS PARA COMPROMISOS:",
+                error
+            );
+
+            mostrarErrorNuevo(
+                error.message
+            );
+
+        }
+
+    }
+
+
+    async function abrirFormularioNuevo() {
+
+        formNuevo.reset();
+
+        formNuevo.elements.fechaInicio.value =
+            fechaHoyInput();
+
+        mostrarErrorNuevo("");
+
+        dialogNuevo.showModal();
+
+        await poblarResponsables();
+
+    }
+
+
+    async function crearCompromiso() {
+
+        const campos =
+            formNuevo.elements;
+
+        if (
+            !campos.usuarioAsignadoId.value ||
+            !campos.descripcion.value.trim() ||
+            !campos.fechaInicio.value ||
+            !campos.fechaLimite.value
+        ) {
+
+            mostrarErrorNuevo(
+                "Completa responsable, descripción y fechas."
+            );
+
+            return;
+
+        }
+
+        if (campos.fechaLimite.value < campos.fechaInicio.value) {
+
+            mostrarErrorNuevo(
+                "La fecha límite no puede ser anterior a la fecha de inicio."
+            );
+
+            return;
+
+        }
+
+
+        const botonGuardar =
+            formNuevo.querySelector(
+                ".commitment-list__save"
+            );
+
+        try {
+
+            botonGuardar.disabled =
+                true;
+
+            const response =
+                await fetch(
+                    `${API_URL}/compromisos`,
+                    {
+
+                        method:
+                            "POST",
+
+                        headers: {
+
+                            "Content-Type":
+                                "application/json",
+
+                            ...headerUsuario()
+
+                        },
+
+                        body:
+                            JSON.stringify({
+
+                                usuarioAsignadoId:
+                                    Number(campos.usuarioAsignadoId.value),
+
+                                descripcion:
+                                    campos.descripcion.value.trim(),
+
+                                prioridad:
+                                    campos.prioridad.value,
+
+                                fechaInicio:
+                                    campos.fechaInicio.value,
+
+                                fechaLimite:
+                                    campos.fechaLimite.value
+
+                            })
+
+                    }
+                );
+
+            const data =
+                await response.json();
+
+            if (!response.ok || !data.ok) {
+
+                throw new Error(
+                    data.mensaje ||
+                    data.error ||
+                    "No fue posible crear el compromiso."
+                );
+
+            }
+
+            dialogNuevo.close();
+
+            await render();
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR CREANDO COMPROMISO:",
+                error
+            );
+
+            mostrarErrorNuevo(
+                error.message ||
+                "No fue posible crear el compromiso."
+            );
+
+        }
+        finally {
+
+            botonGuardar.disabled =
+                false;
+
+        }
+
+    }
+
+
+    if (
+        botonNuevo &&
+        dialogNuevo &&
+        formNuevo
+    ) {
+
+        botonNuevo.addEventListener(
+            "click",
+            abrirFormularioNuevo
+        );
+
+        formNuevo.addEventListener(
+            "submit",
+            (event) => {
+
+                event.preventDefault();
+
+                crearCompromiso();
+
+            }
+        );
+
+        document
+            .querySelector("#compromisos-cancelar")
+            ?.addEventListener(
+                "click",
+                () => dialogNuevo.close()
+            );
+
+    }
+
+
+    /* =====================================================
        CARGAR COMPROMISOS DESDE LA API
        ===================================================== */
 
@@ -674,7 +1017,9 @@ export function initCommitmentsView() {
         );
 
         origen.textContent =
-            `${data.reunionTitulo || "Reunión Flow"} · ${formatearFecha(data.reunionFecha)}`;
+            data.reunionId
+                ? `${data.reunionTitulo || "Reunión Flow"} · ${formatearFecha(data.reunionFecha)}`
+                : "Creado desde Compromisos";
 
 
         /* ---------------------------------------------
@@ -722,6 +1067,18 @@ export function initCommitmentsView() {
 
                 option.textContent =
                     ESTADO_LABEL[valor];
+
+                if (
+                    valor === "completado" &&
+                    data.estadoReal !== "completado" &&
+                    data.estadoReal !== "en-revision" &&
+                    !puedeCompletar(data)
+                ) {
+
+                    option.disabled =
+                        true;
+
+                }
 
                 if (valor === estadoEditable(data.estadoReal)) {
 
@@ -788,6 +1145,37 @@ export function initCommitmentsView() {
             origen,
             edicion
         );
+
+
+        if (
+            puedeCompletar(data) &&
+            (
+                data.estadoReal === "pendiente" ||
+                data.estadoReal === "en-progreso"
+            )
+        ) {
+
+            const completarBtn =
+                document.createElement("button");
+
+            completarBtn.type =
+                "button";
+
+            completarBtn.classList.add(
+                "commitment-card__complete-vencido"
+            );
+
+            completarBtn.textContent =
+                "Marcar como completado";
+
+            completarBtn.dataset.id =
+                data.id;
+
+            card.append(
+                completarBtn
+            );
+
+        }
 
 
         if (
@@ -934,6 +1322,13 @@ export function initCommitmentsView() {
 
     async function render() {
 
+        if (botonNuevo) {
+
+            botonNuevo.hidden =
+                !puedeCrear();
+
+        }
+
         await cargarCompromisos();
 
         poblarFiltroUsuarios();
@@ -1038,6 +1433,56 @@ export function initCommitmentsView() {
 
             eliminarCompromiso(
                 boton.dataset.id
+            );
+
+        }
+    );
+
+
+    /* =====================================================
+       MARCAR COMO COMPLETADO (CLIC)
+       ===================================================== */
+
+    list.addEventListener(
+        "click",
+        (event) => {
+
+            const boton =
+                event.target.closest(
+                    ".commitment-card__complete-vencido"
+                );
+
+            if (!boton) {
+
+                return;
+
+            }
+
+
+            const item =
+                compromisos.find(
+                    (c) =>
+                        String(c.id) === String(boton.dataset.id)
+                );
+
+            if (!item) {
+
+                return;
+
+            }
+
+
+            guardarEdicion(
+                boton.dataset.id,
+                {
+
+                    estado:
+                        "completado",
+
+                    fechaLimite:
+                        aValorInputFecha(item.fechaLimite)
+
+                }
             );
 
         }

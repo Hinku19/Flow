@@ -1,6 +1,8 @@
 import { loadData, saveData } from "../services/storage.service.js";
 import { API_URL } from "./config.js";
 import { capitalizar } from "../utils/capitalize.js";
+import { confirmarEliminacion } from "../services/confirmDialog.js";
+import { getUsuarioActual } from "../services/auth.service.js";
 
 export const ESTADO_LABEL = {
   "pendiente": "Pendiente",
@@ -80,6 +82,19 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     }
   }
 
+  /*
+   * Solo el responsable del compromiso o un líder pueden marcarlo
+   * como completado.
+   */
+  function puedeCompletar(data) {
+    const usuario = getUsuarioActual();
+
+    return (
+      usuario?.rol === "lider" ||
+      Number(usuario?.id) === Number(data.usuarioAsignadoId)
+    );
+  }
+
   function createCard(data) {
     const card = document.createElement("li");
     card.classList.add("commitment-card");
@@ -121,7 +136,10 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     header.append(title, actions);
     card.append(header);
 
-    if (data.vencidoInformativo) {
+    if (
+      (data.vencidoInformativo || data.estado !== "completado") &&
+      puedeCompletar(data)
+    ) {
       const completeBtn = document.createElement("button");
       completeBtn.type = "button";
       completeBtn.classList.add("commitment-card__complete-vencido");
@@ -313,6 +331,21 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     event.preventDefault();
     const data = readForm();
 
+    const original = items.find((item) => item.id === editingId);
+    const seCompleta =
+      data.estado === "completado" &&
+      original?.estado !== "completado";
+
+    if (seCompleta && !puedeCompletar({ ...original, ...data })) {
+      alert("Solo el responsable del compromiso o un líder pueden marcarlo como completado.");
+      return;
+    }
+
+    if (editingId === null && data.estado === "completado" && !puedeCompletar(data)) {
+      alert("Solo el responsable del compromiso o un líder pueden marcarlo como completado.");
+      return;
+    }
+
     if (editingId === null) {
       addCommitment(data);
 
@@ -335,7 +368,14 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     if (!card) return;
 
     if (event.target.matches(".commitment-card__delete")) {
-      removeCommitment(card.dataset.id);
+      const id = card.dataset.id;
+
+      confirmarEliminacion(
+        "¿Eliminar este compromiso? Esta acción no se puede deshacer."
+      ).then((confirmado) => {
+        if (confirmado) removeCommitment(id);
+      });
+
       return;
     }
 

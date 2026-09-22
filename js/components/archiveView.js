@@ -624,6 +624,15 @@ export function createArchiveView() {
                         id
                     ),
 
+            onNavigate:
+                (id) => {
+
+                    developmentTable.irAObjetivo(
+                        id
+                    );
+
+                },
+
             onChange:
                 (objetivos) => {
 

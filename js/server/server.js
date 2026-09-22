@@ -2153,12 +2153,12 @@ app.get(
                             ELSE c.Status
                         END AS StatusEfectivo
                     FROM compromisos c
-                    INNER JOIN reuniones r
+                    LEFT JOIN reuniones r
                         ON r.ReunionId = c.ReunionId
                     INNER JOIN usuarios u
                         ON u.id = c.UsuarioAsignadoId
                     WHERE
-                        r.Estado <> 'Cancelada'
+                        (r.ReunionId IS NULL OR r.Estado <> 'Cancelada')
                         ${filtroRol}
                     ORDER BY
                         c.FechaFinEstimada ASC
@@ -2257,6 +2257,199 @@ app.get(
                     error:
                         error.message
 
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   CREAR COMPROMISO DESDE EL MÓDULO (SIN REUNIÓN)
+   ========================================================= */
+
+/*
+ * Solo administrador y líder. El líder solo puede asignar a
+ * usuarios de su misma área (mismo criterio con el que solo ve
+ * los compromisos de su área). El compromiso no pertenece a
+ * ninguna reunión (ReunionId NULL), así que las resincronizaciones
+ * de compromisos de reuniones nunca lo tocan.
+ */
+
+function fechaISOValida(valor) {
+
+    if (typeof valor !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+        return false;
+    }
+
+    const fecha =
+        new Date(`${valor}T00:00:00Z`);
+
+    return (
+        !Number.isNaN(fecha.getTime()) &&
+        fecha.toISOString().slice(0, 10) === valor
+    );
+
+}
+
+
+app.post(
+    "/api/compromisos",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (
+                !usuarioSolicitante ||
+                (usuarioSolicitante.rol !== "administrador" && usuarioSolicitante.rol !== "lider")
+            ) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            const descripcion =
+                String(req.body.descripcion || "").trim();
+
+            const usuarioAsignadoId =
+                Number(req.body.usuarioAsignadoId);
+
+            const prioridad =
+                req.body.prioridad || "media";
+
+            const hoy = (() => {
+
+                const ahora = new Date();
+
+                return [
+                    ahora.getFullYear(),
+                    String(ahora.getMonth() + 1).padStart(2, "0"),
+                    String(ahora.getDate()).padStart(2, "0")
+                ].join("-");
+
+            })();
+
+            const fechaInicio =
+                req.body.fechaInicio || hoy;
+
+            const fechaLimite =
+                req.body.fechaLimite;
+
+
+            const error =
+                !descripcion
+                    ? "La descripción es obligatoria."
+                    : descripcion.length > 2000
+                        ? "La descripción es demasiado larga (máx. 2000 caracteres)."
+                        : !usuarioAsignadoId
+                            ? "Selecciona un responsable."
+                            : !["alta", "media", "baja"].includes(prioridad)
+                                ? "Prioridad no válida."
+                                : !fechaISOValida(fechaInicio) || !fechaISOValida(fechaLimite)
+                                    ? "Las fechas de inicio y límite son obligatorias y deben ser válidas."
+                                    : fechaLimite < fechaInicio
+                                        ? "La fecha límite no puede ser anterior a la fecha de inicio."
+                                        : null;
+
+            if (error) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: error
+                    });
+
+            }
+
+
+            const [responsables] =
+                await db.execute(
+                    `
+                    SELECT id, area
+                    FROM usuarios
+                    WHERE id = ? AND activo = 1
+                    LIMIT 1
+                    `,
+                    [
+                        usuarioAsignadoId
+                    ]
+                );
+
+            if (responsables.length === 0) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: "El responsable seleccionado no es válido."
+                    });
+
+            }
+
+            if (
+                usuarioSolicitante.rol === "lider" &&
+                responsables[0].area !== usuarioSolicitante.area
+            ) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            const insertado =
+                await insertarCompromiso(
+                    db,
+                    null,
+                    {
+                        descripcion,
+                        usuarioAsignadoId,
+                        prioridad,
+                        fechaInicio,
+                        fechaLimite,
+                        estado: "pendiente"
+                    }
+                );
+
+            if (!insertado) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: "No fue posible determinar el departamento o área del responsable."
+                    });
+
+            }
+
+
+            return res.json({
+                ok: true,
+                mensaje: "Compromiso creado correctamente."
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL CREAR COMPROMISO:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+                    ok: false,
+                    mensaje:
+                        error.code === "ER_BAD_NULL_ERROR"
+                            ? "La base de datos aún no permite compromisos sin reunión. Ejecuta js/server/sql/compromisos_sin_reunion.sql."
+                            : "No fue posible crear el compromiso.",
+                    error: error.message
                 });
 
         }
@@ -2425,6 +2618,39 @@ app.patch(
             const seMantieneCompletado =
                 nuevoStatus === 3 &&
                 Number(compromisoActual[0].Status) === 3;
+
+            /*
+             * Solo el responsable del compromiso o el líder de su
+             * área pueden marcarlo como completado (el visto bueno
+             * sigue siendo aparte: POST /api/compromisos/:id/aprobar).
+             */
+
+            const esResponsable =
+                usuarioSolicitante.id === compromisoActual[0].UsuarioAsignadoId;
+
+            const esLiderDelArea =
+                usuarioSolicitante.rol === "lider" &&
+                usuarioSolicitante.area === compromisoActual[0].area;
+
+            if (
+                nuevoStatus === 3 &&
+                !seMantieneCompletado &&
+                !esResponsable &&
+                !esLiderDelArea
+            ) {
+
+                return res
+                    .status(403)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Solo el responsable del compromiso o el líder de su área pueden marcarlo como completado."
+
+                    });
+
+            }
 
             const aprobado =
                 seMantieneCompletado
