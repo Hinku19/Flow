@@ -24,6 +24,9 @@
    COMPONENTES
    ========================================================= */
 
+/* Ficha de avatar (foto o iniciales) */
+@import "components/avatar-ficha.css";
+
 /* Dashboard */
 @import "components/dashboard.css";
 

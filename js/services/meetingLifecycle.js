@@ -29,6 +29,11 @@ import {
 } from "../components/config.js";
 
 
+import {
+    crearFichaAvatar
+} from "../utils/avatarFicha.js";
+
+
 /* =========================================================
    OBTENER USUARIO DE SESIÓN
    ========================================================= */
@@ -998,6 +1003,24 @@ export function initMeetingLifecycle({
             tipo;
 
 
+        const avatar =
+            crearFichaAvatar({
+
+                id:
+                    usuario.id,
+
+                nombre:
+                    usuario.nombre,
+
+                tieneFoto:
+                    usuario.tieneFoto,
+
+                className:
+                    "avatar-ficha--sm"
+
+            });
+
+
         const info =
             document.createElement(
                 "span"
@@ -1049,6 +1072,11 @@ export function initMeetingLifecycle({
 
         label.appendChild(
             checkbox
+        );
+
+
+        label.appendChild(
+            avatar
         );
 
 
@@ -2520,6 +2548,31 @@ async function iniciarReunionProgramada(
                         Number(
                             participante.UsuarioId
                         )
+                ),
+
+            /*
+             * Participantes con foto, para pintar
+             * las fichas de avatar del encabezado.
+             */
+
+            participantesInfo:
+                participantes.map(
+                    participante => ({
+
+                        id:
+                            Number(
+                                participante.UsuarioId
+                            ),
+
+                        nombre:
+                            participante.nombre,
+
+                        tieneFoto:
+                            Boolean(
+                                participante.tieneFoto
+                            )
+
+                    })
                 ),
 
             /*

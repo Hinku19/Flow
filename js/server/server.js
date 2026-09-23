@@ -693,7 +693,8 @@ app.get(
                         correo_electronico,
                         activo,
                         fecha_registro,
-                        fecha_actualizacion
+                        fecha_actualizacion,
+                        (foto_contenido IS NOT NULL) AS tieneFoto
                     FROM usuarios
                     ORDER BY nombre
                     `
@@ -3669,7 +3670,8 @@ app.get(
                         rp.UsuarioId,
                         rp.Asistio,
                         u.nombre,
-                        u.correo_electronico
+                        u.correo_electronico,
+                        (u.foto_contenido IS NOT NULL) AS tieneFoto
 
                     FROM reunion_participantes rp
 

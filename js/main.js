@@ -64,6 +64,10 @@ import {
 } from "./utils/capitalize.js";
 
 import {
+    crearGrupoAvatares
+} from "./utils/avatarFicha.js";
+
+import {
     createArchiveView
 } from "./components/archiveView.js";
 
@@ -784,13 +788,47 @@ function llenarEncabezado(
 
     if (miembrosElemento) {
 
-        miembrosElemento.textContent =
-            (
-                reunion.participantes ||
-                []
-            ).join(
-                ", "
+        miembrosElemento.innerHTML =
+            "";
+
+
+        /*
+         * Si ya tenemos id/foto de cada participante
+         * (reunión recién iniciada) usamos eso; si no,
+         * caemos de vuelta a solo los nombres.
+         */
+
+        const participantesInfo =
+            Array.isArray(
+                reunion.participantesInfo
+            ) &&
+            reunion.participantesInfo.length > 0
+                ? reunion.participantesInfo
+                : (
+                    reunion.participantes ||
+                    []
+                ).map(
+                    nombre => ({
+                        nombre
+                    })
+                );
+
+
+        if (participantesInfo.length === 0) {
+
+            miembrosElemento.textContent =
+                "-";
+
+        }
+        else {
+
+            miembrosElemento.appendChild(
+                crearGrupoAvatares(
+                    participantesInfo
+                )
             );
+
+        }
 
     }
 

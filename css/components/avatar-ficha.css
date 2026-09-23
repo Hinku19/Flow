@@ -1,0 +1,115 @@
+/* =========================================================
+   FICHA DE AVATAR (FOTO O INICIALES)
+   ---------------------------------------------------------
+   Compartida por el encabezado de la reunión y la lista de
+   participantes al programarla.
+   ========================================================= */
+
+.avatar-ficha {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 34px;
+
+    height: 34px;
+
+    flex-shrink: 0;
+
+    box-sizing: border-box;
+
+    border-radius: 50%;
+
+    overflow: hidden;
+
+    border: 2px solid var(--color-surface);
+
+    background-color: var(--color-accent);
+
+    color: var(--color-on-accent);
+
+    font-size: var(--text-xs);
+
+    font-weight: var(--weight-bold);
+
+    line-height: 1;
+
+    user-select: none;
+}
+
+
+.avatar-ficha__img {
+
+    width: 100%;
+
+    height: 100%;
+
+    display: block;
+
+    object-fit: cover;
+}
+
+
+/* =========================================================
+   TAMAÑO PEQUEÑO (LISTAS DE SELECCIÓN)
+   ========================================================= */
+
+.avatar-ficha--sm {
+
+    width: 28px;
+
+    height: 28px;
+
+    border-width: 1px;
+
+    font-size: 10px;
+}
+
+
+/* =========================================================
+   GRUPO DE FICHAS SUPERPUESTAS
+   ========================================================= */
+
+.avatar-group {
+
+    display: flex;
+
+    align-items: center;
+}
+
+
+.avatar-group .avatar-ficha {
+
+    margin-left: -10px;
+
+    transition: transform var(--transition-fast);
+}
+
+
+.avatar-group .avatar-ficha:first-child {
+
+    margin-left: 0;
+}
+
+
+.avatar-group .avatar-ficha:hover {
+
+    transform: translateY(-3px);
+
+    z-index: 1;
+
+    position: relative;
+}
+
+
+.avatar-group__overflow {
+
+    background-color: var(--color-surface-alt);
+
+    color: var(--color-text-subtle);
+}
+
+
