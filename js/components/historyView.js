@@ -18,6 +18,14 @@ import {
     getReunionActivaId
 } from "../services/session.js";
 
+import {
+    crearGrupoAvatares
+} from "../utils/avatarFicha.js";
+
+import {
+    esAdmin
+} from "../services/auth.service.js";
+
 
 /* =========================================================
    CREAR VISTA DE HISTORIAL
@@ -50,6 +58,406 @@ export function createHistoryView({
                 () => {}
 
         };
+
+    }
+
+
+    /* =========================================================
+       FILTROS (SOLO ADMINISTRADORES)
+       ========================================================= */
+
+    const filtrosContenedor =
+        container.querySelector(
+            "#historial-filtros"
+        );
+
+
+    const filtroNombreInput =
+        container.querySelector(
+            "#historial-filtro-nombre"
+        );
+
+
+    const filtroDepartamentoSelect =
+        container.querySelector(
+            "#historial-filtro-departamento"
+        );
+
+
+    const filtroAreaSelect =
+        container.querySelector(
+            "#historial-filtro-area"
+        );
+
+
+    const btnLimpiarFiltrosHistorial =
+        container.querySelector(
+            "#historial-filtro-limpiar"
+        );
+
+
+    /*
+     * Últimas reuniones obtenidas de la API, sin filtrar.
+     * Se guardan para poder re-filtrar sin volver a pedirlas
+     * al servidor cada vez que cambia un filtro.
+     */
+
+    let historialCompleto =
+        [];
+
+
+    let programadasCompleto =
+        [];
+
+
+    /*
+     * Claves "YYYY-MM" de los meses que el usuario dejó
+     * expandidos, para que no se vuelvan a cerrar solos cada
+     * vez que se repinta la lista (filtro, borrar, etc.).
+     */
+
+    const mesesAbiertosProgramadas =
+        new Set();
+
+
+    const mesesAbiertosHistorial =
+        new Set();
+
+
+    /* =========================================================
+       QUITAR ACENTOS (BÚSQUEDA MÁS TOLERANTE)
+       ========================================================= */
+
+    function normalizarTexto(
+        texto
+    ) {
+
+        return String(
+            texto ||
+            ""
+        )
+            .normalize("NFD")
+            .replace(
+                /[\u0300-\u036f]/g,
+                ""
+            )
+            .toLowerCase()
+            .trim();
+
+    }
+
+
+    /* =========================================================
+       ¿LA REUNIÓN CUMPLE LOS FILTROS ACTUALES?
+       ========================================================= */
+
+    function cumpleFiltros(
+        reunion
+    ) {
+
+        if (!filtrosContenedor) {
+
+            return true;
+
+        }
+
+
+        const departamentoId =
+            filtroDepartamentoSelect
+                ? filtroDepartamentoSelect.value
+                : "";
+
+
+        const areaId =
+            filtroAreaSelect
+                ? filtroAreaSelect.value
+                : "";
+
+
+        const nombreBuscado =
+            filtroNombreInput
+                ? normalizarTexto(
+                    filtroNombreInput.value
+                )
+                : "";
+
+
+        if (
+            departamentoId &&
+            Number(
+                reunion.DepartamentoId
+            ) !==
+            Number(
+                departamentoId
+            )
+        ) {
+
+            return false;
+
+        }
+
+
+        if (
+            areaId &&
+            Number(
+                reunion.AreaId
+            ) !==
+            Number(
+                areaId
+            )
+        ) {
+
+            return false;
+
+        }
+
+
+        if (nombreBuscado) {
+
+            const participantes =
+                Array.isArray(
+                    reunion.Participantes
+                )
+                    ? reunion.Participantes
+                    : [];
+
+
+            const candidatos =
+                [
+                    reunion.Titulo,
+                    reunion.CreadorNombre,
+                    ...participantes.map(
+                        participante =>
+                            participante.nombre
+                    )
+                ];
+
+
+            const coincide =
+                candidatos.some(
+                    candidato =>
+                        normalizarTexto(
+                            candidato
+                        ).includes(
+                            nombreBuscado
+                        )
+                );
+
+
+            if (!coincide) {
+
+                return false;
+
+            }
+
+        }
+
+
+        return true;
+
+    }
+
+
+    /* =========================================================
+       CARGAR DEPARTAMENTOS DEL FILTRO
+       ========================================================= */
+
+    async function cargarDepartamentosFiltro() {
+
+        if (!filtroDepartamentoSelect) {
+            return;
+        }
+
+
+        try {
+
+            const response =
+                await fetch(
+                    `${API_URL}/subsidiaries`
+                );
+
+
+            const data =
+                await response.json();
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.mensaje ||
+                    data.error ||
+                    "No fue posible cargar los departamentos."
+                );
+
+            }
+
+
+            filtroDepartamentoSelect.innerHTML = `
+                <option value="">
+                    Todos los departamentos
+                </option>
+            `;
+
+
+            (data.datos || []).forEach(
+                departamento => {
+
+                    const option =
+                        document.createElement(
+                            "option"
+                        );
+
+
+                    option.value =
+                        departamento.SubsidiaryId;
+
+
+                    option.textContent =
+                        departamento.SubsidiaryName;
+
+
+                    filtroDepartamentoSelect.appendChild(
+                        option
+                    );
+
+                }
+            );
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR CARGANDO DEPARTAMENTOS DEL FILTRO:",
+                error
+            );
+
+        }
+
+    }
+
+
+    /* =========================================================
+       CARGAR ÁREAS DEL FILTRO
+       ========================================================= */
+
+    async function cargarAreasFiltro(
+        subsidiaryId
+    ) {
+
+        if (!filtroAreaSelect) {
+            return;
+        }
+
+
+        if (!subsidiaryId) {
+
+            filtroAreaSelect.innerHTML = `
+                <option value="">
+                    Todas las áreas
+                </option>
+            `;
+
+
+            filtroAreaSelect.disabled =
+                true;
+
+
+            return;
+
+        }
+
+
+        try {
+
+            filtroAreaSelect.disabled =
+                true;
+
+
+            filtroAreaSelect.innerHTML = `
+                <option value="">
+                    Cargando áreas...
+                </option>
+            `;
+
+
+            const response =
+                await fetch(
+                    `${API_URL}/areas?subsidiaryId=${encodeURIComponent(
+                        subsidiaryId
+                    )}`
+                );
+
+
+            const data =
+                await response.json();
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.mensaje ||
+                    data.error ||
+                    "No fue posible cargar las áreas."
+                );
+
+            }
+
+
+            filtroAreaSelect.innerHTML = `
+                <option value="">
+                    Todas las áreas
+                </option>
+            `;
+
+
+            (data.datos || []).forEach(
+                area => {
+
+                    const option =
+                        document.createElement(
+                            "option"
+                        );
+
+
+                    option.value =
+                        area.AreaId;
+
+
+                    option.textContent =
+                        area.AreaName;
+
+
+                    filtroAreaSelect.appendChild(
+                        option
+                    );
+
+                }
+            );
+
+
+            filtroAreaSelect.disabled =
+                (data.datos || []).length === 0;
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR CARGANDO ÁREAS DEL FILTRO:",
+                error
+            );
+
+
+            filtroAreaSelect.innerHTML = `
+                <option value="">
+                    Error al cargar áreas
+                </option>
+            `;
+
+
+            filtroAreaSelect.disabled =
+                true;
+
+        }
 
     }
 
@@ -552,12 +960,32 @@ export function createHistoryView({
             ) || 0;
 
 
-        parts.textContent =
+        parts.appendChild(
+            crearGrupoAvatares(
+                reunion.Participantes,
+                5,
+                "avatar-ficha--sm"
+            )
+        );
+
+
+        const partsTexto =
+            document.createElement(
+                "span"
+            );
+
+
+        partsTexto.textContent =
             `${numParticipantes} participante${
                 numParticipantes !== 1
                     ? "s"
                     : ""
             }`;
+
+
+        parts.appendChild(
+            partsTexto
+        );
 
 
         /* ---------------------------------------------
@@ -781,12 +1209,32 @@ export function createHistoryView({
             ) || 0;
 
 
-        parts.textContent =
+        parts.appendChild(
+            crearGrupoAvatares(
+                reunion.Participantes,
+                5,
+                "avatar-ficha--sm"
+            )
+        );
+
+
+        const partsTexto =
+            document.createElement(
+                "span"
+            );
+
+
+        partsTexto.textContent =
             `${totalParticipantes} participante${
                 totalParticipantes !== 1
                     ? "s"
                     : ""
             }`;
+
+
+        parts.appendChild(
+            partsTexto
+        );
 
 
         /* ---------------------------------------------
@@ -848,13 +1296,97 @@ export function createHistoryView({
 
 
     /* =========================================================
-       CREAR SECCIÓN
+       AGRUPAR REUNIONES POR MES
+       ---------------------------------------------------------
+       Recibe las reuniones ya ordenadas (por fecha) y las junta
+       en grupos "YYYY-MM", conservando ese mismo orden entre
+       los grupos (el primero que aparece es el primer grupo).
+       ========================================================= */
+
+    function agruparPorMes(
+        reuniones
+    ) {
+
+        const grupos =
+            new Map();
+
+
+        reuniones.forEach(
+            reunion => {
+
+                const fecha =
+                    new Date(
+                        reunion.FechaInicio
+                    );
+
+
+                const fechaValida =
+                    !Number.isNaN(
+                        fecha.getTime()
+                    );
+
+
+                const clave =
+                    fechaValida
+                        ? `${fecha.getFullYear()}-${String(
+                            fecha.getMonth() + 1
+                        ).padStart(2, "0")}`
+                        : "sin-fecha";
+
+
+                if (!grupos.has(clave)) {
+
+                    const etiqueta =
+                        fechaValida
+                            ? capitalizar(
+                                fecha.toLocaleDateString(
+                                    "es-MX",
+                                    {
+                                        month: "long",
+                                        year: "numeric"
+                                    }
+                                )
+                            )
+                            : "Sin fecha";
+
+
+                    grupos.set(
+                        clave,
+                        {
+                            clave,
+                            etiqueta,
+                            reuniones: []
+                        }
+                    );
+
+                }
+
+
+                grupos.get(clave).reuniones.push(
+                    reunion
+                );
+
+            }
+        );
+
+
+        return Array.from(
+            grupos.values()
+        );
+
+    }
+
+
+    /* =========================================================
+       CREAR SECCIÓN (AGRUPADA POR MES, EN DESPLEGABLES)
        ========================================================= */
 
     function crearSeccion(
         tituloTexto,
         clase,
-        tarjetas
+        reunionesOrdenadas,
+        crearTarjetaFn,
+        mesesAbiertos
     ) {
 
         const section =
@@ -889,42 +1421,181 @@ export function createHistoryView({
 
 
         /* ---------------------------------------------
-           CONTENEDOR DE TARJETAS
+           GRUPOS POR MES
            --------------------------------------------- */
 
-        const tarjetasContainer =
+        const claseTarjetas =
+            clase ===
+            "history-view__section--programadas"
+                ? "history-view__programadas"
+                : "history-view__historial";
+
+
+        const meses =
+            agruparPorMes(
+                reunionesOrdenadas
+            );
+
+
+        /*
+         * La primera vez que se pinta esta sección dejamos
+         * abierto el primer mes (el más próximo o el más
+         * reciente, según la sección); después de eso se
+         * respeta lo que el usuario haya expandido/cerrado.
+         */
+
+        if (
+            mesesAbiertos.size === 0 &&
+            meses.length > 0
+        ) {
+
+            mesesAbiertos.add(
+                meses[0].clave
+            );
+
+        }
+
+
+        const gruposContainer =
             document.createElement(
                 "div"
             );
 
 
-        if (
-            clase ===
-            "history-view__section--programadas"
-        ) {
-
-            tarjetasContainer.classList.add(
-                "history-view__programadas"
-            );
-
-        }
-        else {
-
-            tarjetasContainer.classList.add(
-                "history-view__historial"
-            );
-
-        }
+        gruposContainer.classList.add(
+            "history-view__meses"
+        );
 
 
-        tarjetasContainer.append(
-            ...tarjetas
+        meses.forEach(
+            grupo => {
+
+                const details =
+                    document.createElement(
+                        "details"
+                    );
+
+
+                details.classList.add(
+                    "history-month"
+                );
+
+
+                details.open =
+                    mesesAbiertos.has(
+                        grupo.clave
+                    );
+
+
+                details.addEventListener(
+                    "toggle",
+                    () => {
+
+                        if (details.open) {
+
+                            mesesAbiertos.add(
+                                grupo.clave
+                            );
+
+                        }
+                        else {
+
+                            mesesAbiertos.delete(
+                                grupo.clave
+                            );
+
+                        }
+
+                    }
+                );
+
+
+                const summary =
+                    document.createElement(
+                        "summary"
+                    );
+
+
+                summary.classList.add(
+                    "history-month__summary"
+                );
+
+
+                const etiqueta =
+                    document.createElement(
+                        "span"
+                    );
+
+
+                etiqueta.classList.add(
+                    "history-month__label"
+                );
+
+
+                etiqueta.textContent =
+                    grupo.etiqueta;
+
+
+                const contador =
+                    document.createElement(
+                        "span"
+                    );
+
+
+                contador.classList.add(
+                    "history-month__count"
+                );
+
+
+                contador.textContent =
+                    `${grupo.reuniones.length} reunión${
+                        grupo.reuniones.length !== 1
+                            ? "es"
+                            : ""
+                    }`;
+
+
+                summary.append(
+                    etiqueta,
+                    contador
+                );
+
+
+                const tarjetasContainer =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                tarjetasContainer.classList.add(
+                    claseTarjetas
+                );
+
+
+                tarjetasContainer.append(
+                    ...grupo.reuniones.map(
+                        crearTarjetaFn
+                    )
+                );
+
+
+                details.append(
+                    summary,
+                    tarjetasContainer
+                );
+
+
+                gruposContainer.appendChild(
+                    details
+                );
+
+            }
         );
 
 
         section.append(
             titulo,
-            tarjetasContainer
+            gruposContainer
         );
 
 
@@ -934,33 +1605,24 @@ export function createHistoryView({
 
 
     /* =========================================================
-       RENDER
+       PINTAR TARJETAS (A PARTIR DE LO YA CARGADO)
+       ---------------------------------------------------------
+       Separado de render() para poder re-filtrar sin volver a
+       pedir el historial/programadas al servidor.
        ========================================================= */
 
-    async function render() {
+    function renderTarjetas() {
 
-        let historial =
-            [];
-
-
-        let programadas =
-            [];
+        const historial =
+            historialCompleto.filter(
+                cumpleFiltros
+            );
 
 
-        /* ---------------------------------------------
-           HISTORIAL
-           --------------------------------------------- */
-
-        historial =
-            await obtenerHistorial();
-
-
-        /* ---------------------------------------------
-           PROGRAMADAS
-           --------------------------------------------- */
-
-        programadas =
-            await obtenerReunionesProgramadas();
+        const programadas =
+            programadasCompleto.filter(
+                cumpleFiltros
+            );
 
 
         /* ---------------------------------------------
@@ -993,23 +1655,25 @@ export function createHistoryView({
             programadas.length > 0
         ) {
 
-            const tarjetasProgramadas =
-                [...programadas]
-                    .sort(
-                        (a, b) =>
-                            b.ReunionId -
-                            a.ReunionId
-                    )
-                    .map(
-                        crearTarjetaProgramada
-                    );
+            const programadasOrdenadas =
+                [...programadas].sort(
+                    (a, b) =>
+                        new Date(
+                            a.FechaInicio
+                        ) -
+                        new Date(
+                            b.FechaInicio
+                        )
+                );
 
 
             layout.appendChild(
                 crearSeccion(
                     "Próximas reuniones",
                     "history-view__section--programadas",
-                    tarjetasProgramadas
+                    programadasOrdenadas,
+                    crearTarjetaProgramada,
+                    mesesAbiertosProgramadas
                 )
             );
 
@@ -1024,27 +1688,25 @@ export function createHistoryView({
             historial.length > 0
         ) {
 
-            const tarjetasHistorial =
-                [...historial]
-                    .sort(
-                        (a, b) =>
-                            new Date(
-                                b.FechaInicio
-                            ) -
-                            new Date(
-                                a.FechaInicio
-                            )
-                    )
-                    .map(
-                        crearTarjetaHistorial
-                    );
+            const historialOrdenado =
+                [...historial].sort(
+                    (a, b) =>
+                        new Date(
+                            b.FechaInicio
+                        ) -
+                        new Date(
+                            a.FechaInicio
+                        )
+                );
 
 
             layout.appendChild(
                 crearSeccion(
                     "Historial de reuniones",
                     "history-view__section--historial",
-                    tarjetasHistorial
+                    historialOrdenado,
+                    crearTarjetaHistorial,
+                    mesesAbiertosHistorial
                 )
             );
 
@@ -1077,12 +1739,128 @@ export function createHistoryView({
             );
 
 
+            const hayDatosSinFiltrar =
+                historialCompleto.length > 0 ||
+                programadasCompleto.length > 0;
+
+
             empty.textContent =
-                "Aún no hay reuniones guardadas.";
+                hayDatosSinFiltrar
+                    ? "No se encontraron reuniones con esos filtros."
+                    : "Aún no hay reuniones guardadas.";
 
 
             list.appendChild(
                 empty
+            );
+
+        }
+
+    }
+
+
+    /* =========================================================
+       OBTENER DATOS Y PINTAR
+       ========================================================= */
+
+    async function render() {
+
+        historialCompleto =
+            await obtenerHistorial();
+
+
+        programadasCompleto =
+            await obtenerReunionesProgramadas();
+
+
+        renderTarjetas();
+
+    }
+
+
+    /* =========================================================
+       EVENTOS DE FILTROS (SOLO ADMINISTRADORES)
+       ========================================================= */
+
+    if (
+        filtrosContenedor &&
+        esAdmin()
+    ) {
+
+        filtrosContenedor.hidden =
+            false;
+
+
+        cargarDepartamentosFiltro();
+
+
+        if (filtroNombreInput) {
+
+            filtroNombreInput.addEventListener(
+                "input",
+                renderTarjetas
+            );
+
+        }
+
+
+        if (filtroDepartamentoSelect) {
+
+            filtroDepartamentoSelect.addEventListener(
+                "change",
+                () => {
+
+                    cargarAreasFiltro(
+                        filtroDepartamentoSelect.value
+                    ).then(
+                        renderTarjetas
+                    );
+
+                }
+            );
+
+        }
+
+
+        if (filtroAreaSelect) {
+
+            filtroAreaSelect.addEventListener(
+                "change",
+                renderTarjetas
+            );
+
+        }
+
+
+        if (btnLimpiarFiltrosHistorial) {
+
+            btnLimpiarFiltrosHistorial.addEventListener(
+                "click",
+                () => {
+
+                    if (filtroNombreInput) {
+
+                        filtroNombreInput.value =
+                            "";
+
+                    }
+
+
+                    if (filtroDepartamentoSelect) {
+
+                        filtroDepartamentoSelect.value =
+                            "";
+
+                    }
+
+
+                    cargarAreasFiltro(
+                        ""
+                    ).then(
+                        renderTarjetas
+                    );
+
+                }
             );
 
         }

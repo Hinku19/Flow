@@ -1939,6 +1939,117 @@ const [
    OBTENER REUNIONES PROGRAMADAS
    ========================================================= */
 
+/* =========================================================
+   ADJUNTAR PARTICIPANTES (CON FOTO) A UNA LISTA DE REUNIONES
+   ---------------------------------------------------------
+   Usado por /api/reuniones/programadas y /historial para
+   poder pintar las fichas de avatar de cada tarjeta y para
+   filtrar por nombre de participante.
+   ========================================================= */
+
+async function adjuntarParticipantesAReuniones(
+    reuniones
+) {
+
+    const reunionIds =
+        reuniones.map(
+            reunion =>
+                reunion.ReunionId
+        );
+
+
+    if (reunionIds.length === 0) {
+
+        return reuniones;
+
+    }
+
+
+    const placeholders =
+        reunionIds
+            .map(() => "?")
+            .join(",");
+
+
+    const [
+        filas
+    ] =
+        await db.execute(
+            `
+            SELECT
+                rp.ReunionId,
+                rp.UsuarioId,
+                u.nombre,
+                (u.foto_contenido IS NOT NULL) AS tieneFoto
+
+            FROM reunion_participantes rp
+
+            INNER JOIN usuarios u
+                ON u.id =
+                   rp.UsuarioId
+
+            WHERE
+                rp.ReunionId IN (${placeholders})
+
+            ORDER BY
+                u.nombre
+            `,
+            reunionIds
+        );
+
+
+    const porReunion =
+        {};
+
+
+    filas.forEach(
+        fila => {
+
+            if (!porReunion[fila.ReunionId]) {
+
+                porReunion[fila.ReunionId] =
+                    [];
+
+            }
+
+
+            porReunion[fila.ReunionId].push({
+
+                id:
+                    Number(
+                        fila.UsuarioId
+                    ),
+
+                nombre:
+                    fila.nombre,
+
+                tieneFoto:
+                    Boolean(
+                        fila.tieneFoto
+                    )
+
+            });
+
+        }
+    );
+
+
+    reuniones.forEach(
+        reunion => {
+
+            reunion.Participantes =
+                porReunion[reunion.ReunionId] ||
+                [];
+
+        }
+    );
+
+
+    return reuniones;
+
+}
+
+
 app.get(
     "/api/reuniones/programadas",
     async (req, res) => {
@@ -1961,8 +2072,16 @@ app.get(
                         r.UsuarioCreadorId,
                         r.FechaRegistro,
 
+                        r.DepartamentoId,
+                        s.SubsidiaryName AS Departamento,
+
+                        r.AreaId,
+                        a.AreaName AS Area,
+
+                        u.nombre AS CreadorNombre,
+
                         COUNT(
-                            rp.ReunionParticipanteId
+                            DISTINCT rp.ReunionParticipanteId
                         ) AS TotalParticipantes
 
                     FROM reuniones r
@@ -1970,6 +2089,18 @@ app.get(
                     LEFT JOIN reunion_participantes rp
                         ON rp.ReunionId =
                            r.ReunionId
+
+                    LEFT JOIN subsidiaries s
+                        ON s.SubsidiaryId =
+                           r.DepartamentoId
+
+                    LEFT JOIN areas a
+                        ON a.AreaId =
+                           r.AreaId
+
+                    LEFT JOIN usuarios u
+                        ON u.id =
+                           r.UsuarioCreadorId
 
                     WHERE
                         r.Estado IN ('Programada', 'En curso')
@@ -1983,12 +2114,22 @@ app.get(
                         r.Lugar,
                         r.Estado,
                         r.UsuarioCreadorId,
-                        r.FechaRegistro
+                        r.FechaRegistro,
+                        r.DepartamentoId,
+                        s.SubsidiaryName,
+                        r.AreaId,
+                        a.AreaName,
+                        u.nombre
 
                     ORDER BY
                         r.FechaInicio ASC
                     `
                 );
+
+
+            await adjuntarParticipantesAReuniones(
+                reuniones
+            );
 
 
             return res.json({
@@ -3446,6 +3587,14 @@ app.get(
                         r.FechaRegistro,
                         r.FechaActualizacion,
 
+                        r.DepartamentoId,
+                        s.SubsidiaryName AS Departamento,
+
+                        r.AreaId,
+                        a.AreaName AS Area,
+
+                        u.nombre AS CreadorNombre,
+
                         COUNT(
                             DISTINCT rp.ReunionParticipanteId
                         ) AS TotalParticipantes,
@@ -3490,6 +3639,18 @@ app.get(
                         ON rp.ReunionId =
                            r.ReunionId
 
+                    LEFT JOIN subsidiaries s
+                        ON s.SubsidiaryId =
+                           r.DepartamentoId
+
+                    LEFT JOIN areas a
+                        ON a.AreaId =
+                           r.AreaId
+
+                    LEFT JOIN usuarios u
+                        ON u.id =
+                           r.UsuarioCreadorId
+
                     WHERE
                         r.Estado IN (
                             'Finalizada',
@@ -3506,12 +3667,22 @@ app.get(
                         r.Estado,
                         r.UsuarioCreadorId,
                         r.FechaRegistro,
-                        r.FechaActualizacion
+                        r.FechaActualizacion,
+                        r.DepartamentoId,
+                        s.SubsidiaryName,
+                        r.AreaId,
+                        a.AreaName,
+                        u.nombre
 
                     ORDER BY
                         r.FechaInicio DESC
                     `
                 );
+
+
+            await adjuntarParticipantesAReuniones(
+                reuniones
+            );
 
 
             return res.json({

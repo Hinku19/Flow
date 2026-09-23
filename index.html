@@ -557,6 +557,84 @@
     </header>
 
 
+    <!-- =====================================================
+         FILTROS (SOLO ADMINISTRADORES)
+         ===================================================== -->
+
+    <div
+        class="history-filters"
+        id="historial-filtros"
+        hidden
+    >
+
+        <div class="history-filter">
+
+            <label for="historial-filtro-nombre">
+                Nombre
+            </label>
+
+            <input
+                type="text"
+                id="historial-filtro-nombre"
+                class="history-filter__input"
+                placeholder="Título, participante o creador"
+            >
+
+        </div>
+
+
+        <div class="history-filter">
+
+            <label for="historial-filtro-departamento">
+                Departamento
+            </label>
+
+            <select
+                id="historial-filtro-departamento"
+                class="history-filter__select"
+            >
+
+                <option value="">
+                    Todos los departamentos
+                </option>
+
+            </select>
+
+        </div>
+
+
+        <div class="history-filter">
+
+            <label for="historial-filtro-area">
+                Área
+            </label>
+
+            <select
+                id="historial-filtro-area"
+                class="history-filter__select"
+                disabled
+            >
+
+                <option value="">
+                    Todas las áreas
+                </option>
+
+            </select>
+
+        </div>
+
+
+        <button
+            type="button"
+            id="historial-filtro-limpiar"
+            class="history-filter__clear"
+        >
+            Limpiar filtros
+        </button>
+
+    </div>
+
+
     <div class="historial__list">
 
         <p class="historial__empty">

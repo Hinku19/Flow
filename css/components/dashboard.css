@@ -617,6 +617,21 @@
 
 
 /* =========================================================
+   SECCIÓN MÁS ANCHA QUE EL RESTO DE LAS VISTAS
+   ---------------------------------------------------------
+   El contenedor global (.meeting) limita todas las vistas a
+   900px, pero la tabla de usuarios necesita más espacio
+   horizontal (7 columnas) para no depender del scroll
+   lateral. Cuando la vista visible es "Control de Usuarios",
+   ensanchamos ese contenedor solo para ella.
+   ========================================================= */
+
+.meeting:has(> #vista-usuarios:not(.view--hidden)) {
+    max-width: 1400px;
+}
+
+
+/* =========================================================
    ENCABEZADO DE USUARIOS
    ========================================================= */
 

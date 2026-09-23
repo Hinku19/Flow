@@ -219,7 +219,8 @@ export function crearFichaAvatar({
 
 export function crearGrupoAvatares(
     participantes,
-    maxVisibles = 6
+    maxVisibles = 6,
+    claseFicha = ""
 ) {
 
     const grupo =
@@ -261,9 +262,14 @@ export function crearGrupoAvatares(
         participante => {
 
             grupo.appendChild(
-                crearFichaAvatar(
-                    participante
-                )
+                crearFichaAvatar({
+
+                    ...participante,
+
+                    className:
+                        claseFicha
+
+                })
             );
 
         }
@@ -279,7 +285,7 @@ export function crearGrupoAvatares(
 
 
         extra.className =
-            "avatar-ficha avatar-group__overflow";
+            `avatar-ficha avatar-group__overflow ${claseFicha}`.trim();
 
 
         extra.title =
