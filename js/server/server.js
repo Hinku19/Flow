@@ -237,6 +237,148 @@ function respuestaSinPermiso(res) {
 
 
 /* =========================================================
+   ALCANCE DE REUNIONES POR DEPARTAMENTO
+   ---------------------------------------------------------
+   administrador ve todas (y usa los filtros del historial
+   para acotar). lider y operador solo ven reuniones de su
+   propio departamento, más las que ellos crearon o en las
+   que están como participantes (aunque sean de otro
+   departamento, si los invitaron). Las reuniones viejas sin
+   DepartamentoId se asignan al departamento de su creador.
+   ========================================================= */
+
+function filtroAlcanceReuniones(usuarioSolicitante) {
+
+    if (esAdmin(usuarioSolicitante)) {
+
+        return {
+            sql: "",
+            parametros: []
+        };
+
+    }
+
+
+    return {
+
+        sql: `
+            AND (
+                r.DepartamentoId = (
+                    SELECT sAlcance.SubsidiaryId
+                    FROM subsidiaries sAlcance
+                    WHERE TRIM(sAlcance.SubsidiaryName) = TRIM(?)
+                    LIMIT 1
+                )
+                OR (
+                    r.DepartamentoId IS NULL
+                    AND EXISTS (
+                        SELECT 1
+                        FROM usuarios uAlcance
+                        WHERE
+                            uAlcance.id = r.UsuarioCreadorId
+                            AND TRIM(uAlcance.departamento) = TRIM(?)
+                    )
+                )
+                OR r.UsuarioCreadorId = ?
+                OR EXISTS (
+                    SELECT 1
+                    FROM reunion_participantes rpAlcance
+                    WHERE
+                        rpAlcance.ReunionId = r.ReunionId
+                        AND rpAlcance.UsuarioId = ?
+                )
+            )
+        `,
+
+        parametros: [
+            usuarioSolicitante.departamento || "",
+            usuarioSolicitante.departamento || "",
+            usuarioSolicitante.id,
+            usuarioSolicitante.id
+        ]
+
+    };
+
+}
+
+
+/*
+ * Para rutas de una reunión específica (/api/reuniones/:id/...).
+ * Responde 401/403 por su cuenta y regresa false si no hay
+ * acceso; el handler solo debe hacer "return". Una reunión
+ * inexistente también da 403 a quien no es administrador,
+ * para no revelar qué IDs existen en otros departamentos.
+ */
+async function validarAccesoReunion(
+    req,
+    res,
+    reunionId
+) {
+
+    const usuarioSolicitante =
+        await obtenerUsuarioSolicitante(req);
+
+    if (!usuarioSolicitante) {
+
+        res
+            .status(401)
+            .json({
+
+                ok: false,
+
+                mensaje:
+                    "No fue posible identificar al usuario."
+
+            });
+
+        return false;
+
+    }
+
+
+    if (esAdmin(usuarioSolicitante)) {
+
+        return true;
+
+    }
+
+
+    const filtro =
+        filtroAlcanceReuniones(
+            usuarioSolicitante
+        );
+
+    const [rows] =
+        await db.execute(
+            `
+            SELECT r.ReunionId
+            FROM reuniones r
+            WHERE r.ReunionId = ?
+            ${filtro.sql}
+            LIMIT 1
+            `,
+            [
+                reunionId,
+                ...filtro.parametros
+            ]
+        );
+
+
+    if (rows.length === 0) {
+
+        respuestaSinPermiso(res);
+
+        return false;
+
+    }
+
+
+    return true;
+
+}
+
+
+/* =========================================================
    PRUEBA DEL SERVIDOR
    ========================================================= */
 
@@ -2056,6 +2198,31 @@ app.get(
 
         try {
 
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
+            const alcance =
+                filtroAlcanceReuniones(
+                    usuarioSolicitante
+                );
+
+
             const [
                 reuniones
             ] =
@@ -2105,6 +2272,8 @@ app.get(
                     WHERE
                         r.Estado IN ('Programada', 'En curso')
 
+                        ${alcance.sql}
+
                     GROUP BY
                         r.ReunionId,
                         r.Titulo,
@@ -2123,7 +2292,8 @@ app.get(
 
                     ORDER BY
                         r.FechaInicio ASC
-                    `
+                    `,
+                    alcance.parametros
                 );
 
 
@@ -3263,6 +3433,19 @@ app.get(
             }
 
 
+            if (
+                !await validarAccesoReunion(
+                    req,
+                    res,
+                    reunionId
+                )
+            ) {
+
+                return;
+
+            }
+
+
             const [rows] =
                 await db.execute(
                     `
@@ -3413,6 +3596,19 @@ app.put(
                             "ID de reunión no válido."
 
                     });
+
+            }
+
+
+            if (
+                !await validarAccesoReunion(
+                    req,
+                    res,
+                    reunionId
+                )
+            ) {
+
+                return;
 
             }
 
@@ -3570,6 +3766,31 @@ app.get(
 
         try {
 
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
+            const alcance =
+                filtroAlcanceReuniones(
+                    usuarioSolicitante
+                );
+
+
             const [
                 reuniones
             ] =
@@ -3657,6 +3878,8 @@ app.get(
                             'Cancelada'
                         )
 
+                        ${alcance.sql}
+
                     GROUP BY
                         r.ReunionId,
                         r.Titulo,
@@ -3676,7 +3899,8 @@ app.get(
 
                     ORDER BY
                         r.FechaInicio DESC
-                    `
+                    `,
+                    alcance.parametros
                 );
 
 
@@ -3751,6 +3975,19 @@ app.get(
                             "ID de reunión no válido."
 
                     });
+
+            }
+
+
+            if (
+                !await validarAccesoReunion(
+                    req,
+                    res,
+                    reunionId
+                )
+            ) {
+
+                return;
 
             }
 
@@ -4082,6 +4319,56 @@ async function insertarCompromiso(
 }
 
 
+/*
+ * Inserta un compromiso de reunión en la tabla y, si venía
+ * heredado del módulo de compromisos (compromisoModuloId, ver
+ * heredar-pendientes), borra la fila original sin reunión: a
+ * partir de aquí el compromiso vive como parte de esta reunión
+ * y dejarla causaría un duplicado en la vista global. Solo se
+ * borra si la inserción funcionó, para no perder el compromiso.
+ */
+async function insertarCompromisoDeReunion(
+    connection,
+    reunionId,
+    compromiso
+) {
+
+    const insertado =
+        await insertarCompromiso(
+            connection,
+            reunionId,
+            compromiso
+        );
+
+
+    const compromisoModuloId =
+        Number(
+            compromiso.compromisoModuloId
+        );
+
+
+    if (
+        insertado &&
+        compromisoModuloId
+    ) {
+
+        await connection.execute(
+            `
+            DELETE FROM compromisos
+            WHERE
+                CompromisoId = ?
+                AND ReunionId IS NULL
+            `,
+            [
+                compromisoModuloId
+            ]
+        );
+
+    }
+
+}
+
+
 async function resincronizarCompromisos(
     connection,
     reunionId,
@@ -4101,7 +4388,7 @@ async function resincronizarCompromisos(
 
     for (const compromiso of compromisos) {
 
-        await insertarCompromiso(
+        await insertarCompromisoDeReunion(
             connection,
             reunionId,
             compromiso
@@ -4196,7 +4483,7 @@ async function migrarCompromisosATabla(
 
     for (const compromiso of contenido) {
 
-        await insertarCompromiso(
+        await insertarCompromisoDeReunion(
             connection,
             reunionId,
             compromiso
@@ -4254,6 +4541,19 @@ app.patch(
                             "ID de reunión no válido."
 
                     });
+
+            }
+
+
+            if (
+                !await validarAccesoReunion(
+                    req,
+                    res,
+                    reunionId
+                )
+            ) {
+
+                return;
 
             }
 
@@ -4599,6 +4899,141 @@ const NOMBRE_LEGACY_A_USUARIO_ID = {
 };
 
 
+/*
+ * Compromisos creados desde el módulo (ReunionId NULL) que
+ * siguen abiertos (pendiente / en progreso) y cuyo responsable
+ * es del mismo equipo (departamento y área) que el creador de
+ * la reunión destino: el mismo criterio de "equipo" con el que
+ * se elige la reunión de origen.
+ *
+ * Se convierten al formato JSON de la sección de compromisos,
+ * guardando compromisoModuloId para que al finalizar la reunión
+ * se borre la fila original (ver insertarCompromisoDeReunion).
+ */
+async function obtenerCompromisosModuloPendientes(
+    connection,
+    usuarioCreadorId
+) {
+
+    const [rows] =
+        await connection.execute(
+            `
+            SELECT
+                c.CompromisoId,
+                c.Titulo,
+                c.Descripcion,
+                c.Prioridad,
+                c.Status,
+                DATE_FORMAT(c.FechaInicioEstimada, '%Y-%m-%d') AS FechaInicio,
+                DATE_FORMAT(c.FechaFinEstimada, '%Y-%m-%d') AS FechaLimite,
+                u.id AS UsuarioAsignadoId,
+                u.nombre AS ResponsableNombre
+            FROM compromisos c
+            INNER JOIN usuarios u
+                ON u.id = c.UsuarioAsignadoId
+            INNER JOIN usuarios uDestino
+                ON uDestino.id = ?
+            WHERE
+                c.ReunionId IS NULL
+                AND c.Status IN (1, 2)
+                AND u.departamento = uDestino.departamento
+                AND u.area = uDestino.area
+            ORDER BY
+                c.FechaFinEstimada ASC
+            `,
+            [
+                usuarioCreadorId
+            ]
+        );
+
+
+    return rows.map(
+        (row) => {
+
+            const vencido =
+                row.FechaLimite &&
+                row.FechaLimite < hoyLocalISO();
+
+            return {
+
+                id:
+                    crypto.randomUUID(),
+
+                compromisoModuloId:
+                    row.CompromisoId,
+
+                descripcion:
+                    row.Descripcion ||
+                    row.Titulo,
+
+                usuarioAsignadoId:
+                    row.UsuarioAsignadoId,
+
+                usuarioAsignadoNombre:
+                    row.ResponsableNombre,
+
+                fechaInicio:
+                    row.FechaInicio,
+
+                fechaLimite:
+                    row.FechaLimite,
+
+                estado:
+                    STATUS_A_ESTADO[row.Status] ||
+                    "pendiente",
+
+                prioridad:
+                    row.Prioridad ||
+                    "media",
+
+                ...(
+                    vencido
+                        ? { vencidoInformativo: true }
+                        : {}
+                )
+
+            };
+
+        }
+    );
+
+}
+
+
+/*
+ * Agrega los compromisos del módulo a la lista de la reunión,
+ * saltando los que ya estén (mismo compromisoModuloId) para que
+ * llamar dos veces a heredar-pendientes no los duplique.
+ */
+function agregarCompromisosModulo(
+    compromisos,
+    compromisosModulo
+) {
+
+    const yaIncluidos =
+        new Set(
+            compromisos
+                .map(
+                    (compromiso) =>
+                        Number(compromiso.compromisoModuloId)
+                )
+                .filter(Boolean)
+        );
+
+
+    return [
+        ...compromisos,
+        ...compromisosModulo.filter(
+            (compromiso) =>
+                !yaIncluidos.has(
+                    Number(compromiso.compromisoModuloId)
+                )
+        )
+    ];
+
+}
+
+
 app.post(
     "/api/reuniones/:id/heredar-pendientes",
     async (req, res) => {
@@ -4625,6 +5060,19 @@ app.post(
                             "ID de reunión no válido."
 
                     });
+
+            }
+
+
+            if (
+                !await validarAccesoReunion(
+                    req,
+                    res,
+                    reunionId
+                )
+            ) {
+
+                return;
 
             }
 
@@ -4726,7 +5174,80 @@ app.post(
                 );
 
 
+            const compromisosModulo =
+                heredarCompromisos
+                    ? await obtenerCompromisosModuloPendientes(
+                        connection,
+                        usuarioCreadorId
+                    )
+                    : [];
+
+
             if (origenRows.length === 0) {
+
+                if (compromisosModulo.length === 0) {
+
+                    await connection.commit();
+
+                    return res.json({
+
+                        ok: true,
+
+                        aplicado:
+                            false
+
+                    });
+
+                }
+
+
+                /*
+                 * Sin reunión anterior de la cual heredar, solo
+                 * se agregan los compromisos del módulo a los que
+                 * la reunión destino ya tenga (no se sobreescribe).
+                 */
+
+                const [
+                    destinoSeccionRows
+                ] =
+                    await connection.execute(
+                        `
+                        SELECT Seccion, Contenido
+                        FROM reunion_secciones
+                        WHERE
+                            ReunionId = ?
+                            AND Seccion = 'compromisos'
+                        `,
+                        [
+                            reunionId
+                        ]
+                    );
+
+
+                const compromisosActuales =
+                    contenidoDeSeccion(
+                        destinoSeccionRows,
+                        "compromisos",
+                        []
+                    );
+
+
+                const compromisosCombinados =
+                    agregarCompromisosModulo(
+                        Array.isArray(compromisosActuales)
+                            ? compromisosActuales
+                            : [],
+                        compromisosModulo
+                    );
+
+
+                await guardarSeccionReunion(
+                    connection,
+                    reunionId,
+                    "compromisos",
+                    compromisosCombinados
+                );
+
 
                 await connection.commit();
 
@@ -4735,7 +5256,16 @@ app.post(
                     ok: true,
 
                     aplicado:
-                        false
+                        true,
+
+                    reunionOrigenId:
+                        null,
+
+                    objetivos:
+                        0,
+
+                    compromisos:
+                        compromisosCombinados.length
 
                 });
 
@@ -4837,7 +5367,7 @@ app.post(
                COMPROMISOS PENDIENTES (con id nuevo)
                ================================================= */
 
-            const compromisosNuevos =
+            let compromisosNuevos =
                 [];
 
             /*
@@ -4938,6 +5468,19 @@ app.post(
                 });
 
             }
+
+
+            /*
+             * Compromisos del módulo (sin reunión) del mismo
+             * equipo. Si alguno ya venía heredado de la reunión
+             * de origen, no se vuelve a agregar.
+             */
+
+            compromisosNuevos =
+                agregarCompromisosModulo(
+                    compromisosNuevos,
+                    compromisosModulo
+                );
 
 
             /* =================================================
@@ -5166,6 +5709,19 @@ app.put(
             }
 
 
+            if (
+                !await validarAccesoReunion(
+                    req,
+                    res,
+                    reunionId
+                )
+            ) {
+
+                return;
+
+            }
+
+
             const compromisos =
                 Array.isArray(
                     req.body.compromisos
@@ -5350,6 +5906,19 @@ app.post(
             }
 
 
+            if (
+                !await validarAccesoReunion(
+                    req,
+                    res,
+                    reunionId
+                )
+            ) {
+
+                return;
+
+            }
+
+
             /* =============================================
                VALIDAR PARTICIPANTES
                ============================================= */
@@ -5522,6 +6091,19 @@ app.delete(
                             "ID de reunión no válido."
 
                     });
+
+            }
+
+
+            if (
+                !await validarAccesoReunion(
+                    req,
+                    res,
+                    reunionId
+                )
+            ) {
+
+                return;
 
             }
 
@@ -7213,6 +7795,19 @@ app.post(
                                     "ID de reunión no válido."
 
                             });
+
+                    }
+
+
+                    if (
+                        !await validarAccesoReunion(
+                            req,
+                            res,
+                            reunionId
+                        )
+                    ) {
+
+                        return;
 
                     }
 

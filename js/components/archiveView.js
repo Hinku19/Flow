@@ -15,6 +15,10 @@ import {
 } from "./config.js";
 
 import {
+    headerUsuario
+} from "../services/auth.service.js";
+
+import {
     cargarSeccionesDesdeBD
 } from "../services/storage.service.js";
 
@@ -424,7 +428,13 @@ export function createArchiveView() {
 
         const response =
             await fetch(
-                `${API_URL}/reuniones/${reunionId}`
+                `${API_URL}/reuniones/${reunionId}`,
+                {
+
+                    headers:
+                        headerUsuario()
+
+                }
             );
 
 
@@ -460,7 +470,13 @@ export function createArchiveView() {
 
         const response =
             await fetch(
-                `${API_URL}/reuniones/${reunionId}/secciones`
+                `${API_URL}/reuniones/${reunionId}/secciones`,
+                {
+
+                    headers:
+                        headerUsuario()
+
+                }
             );
 
 

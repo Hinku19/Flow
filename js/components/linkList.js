@@ -1,6 +1,7 @@
 import { loadData, saveData } from "../services/storage.service.js";
 import { API_URL } from "./config.js";
 import { confirmarEliminacion } from "../services/confirmDialog.js";
+import { headerUsuario } from "../services/auth.service.js";
 
 export function createLinkList({ container, storageKey, reunionId }) {
   const list = container.querySelector(".link-list__list");
@@ -115,6 +116,7 @@ export function createLinkList({ container, storageKey, reunionId }) {
         `${API_URL}/reuniones/${reunionId}/enlaces/archivo`,
         {
           method: "POST",
+          headers: headerUsuario(),
           body: formData,
         }
       );

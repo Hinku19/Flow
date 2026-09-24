@@ -28,6 +28,10 @@ import {
     API_URL
 } from "../components/config.js";
 
+import {
+    headerUsuario
+} from "./auth.service.js";
+
 
 import {
     crearFichaAvatar
@@ -2357,7 +2361,8 @@ async function guardarParticipantesBD(
 
                 headers: {
                     "Content-Type":
-                        "application/json"
+                        "application/json",
+                    ...headerUsuario()
                 },
 
                 body:
@@ -2434,7 +2439,13 @@ async function iniciarReunionProgramada(
 
         const response =
             await fetch(
-                `${API_URL}/reuniones/${reunionId}`
+                `${API_URL}/reuniones/${reunionId}`,
+                {
+
+                    headers:
+                        headerUsuario()
+
+                }
             );
 
 
@@ -2659,7 +2670,10 @@ async function iniciarReunionProgramada(
                 {
 
                     method:
-                        "POST"
+                        "POST",
+
+                    headers:
+                        headerUsuario()
 
                 }
             );
@@ -2796,7 +2810,9 @@ async function actualizarEstadoReunionBD(
                 headers: {
 
                     "Content-Type":
-                        "application/json"
+                        "application/json",
+
+                    ...headerUsuario()
 
                 },
 
@@ -2851,7 +2867,9 @@ async function actualizarEstadoReunionBD(
                 headers: {
 
                     "Content-Type":
-                        "application/json"
+                        "application/json",
+
+                    ...headerUsuario()
 
                 },
 

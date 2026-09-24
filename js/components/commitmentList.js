@@ -2,7 +2,7 @@ import { loadData, saveData } from "../services/storage.service.js";
 import { API_URL } from "./config.js";
 import { capitalizar } from "../utils/capitalize.js";
 import { confirmarEliminacion } from "../services/confirmDialog.js";
-import { getUsuarioActual } from "../services/auth.service.js";
+import { getUsuarioActual, headerUsuario } from "../services/auth.service.js";
 
 export const ESTADO_LABEL = {
   "pendiente": "Pendiente",
@@ -178,7 +178,7 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
         `${API_URL}/reuniones/${sincronizarTabla.reunionId}/compromisos`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...headerUsuario() },
           body: JSON.stringify({ compromisos: items }),
         }
       );

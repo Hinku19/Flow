@@ -23,7 +23,8 @@ import {
 } from "../utils/avatarFicha.js";
 
 import {
-    esAdmin
+    esAdmin,
+    headerUsuario
 } from "../services/auth.service.js";
 
 
@@ -586,7 +587,13 @@ export function createHistoryView({
 
             const response =
                 await fetch(
-                    `${API_URL}/reuniones/programadas`
+                    `${API_URL}/reuniones/programadas`,
+                    {
+
+                        headers:
+                            headerUsuario()
+
+                    }
                 );
 
 
@@ -638,7 +645,13 @@ export function createHistoryView({
 
             const response =
                 await fetch(
-                    `${API_URL}/reuniones/historial`
+                    `${API_URL}/reuniones/historial`,
+                    {
+
+                        headers:
+                            headerUsuario()
+
+                    }
                 );
 
 
@@ -723,7 +736,10 @@ export function createHistoryView({
                     {
 
                         method:
-                            "DELETE"
+                            "DELETE",
+
+                        headers:
+                            headerUsuario()
 
                     }
                 );

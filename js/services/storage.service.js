@@ -5,6 +5,10 @@ import {
     API_URL
 } from "../components/config.js";
 
+import {
+    headerUsuario
+} from "./auth.service.js";
+
 
 /*
  * Caché de datos cargados desde MySQL.
@@ -96,7 +100,13 @@ export async function cargarSeccionesDesdeBD(
 
     const response =
         await fetch(
-            `${API_URL}/reuniones/${reunionId}/secciones`
+            `${API_URL}/reuniones/${reunionId}/secciones`,
+            {
+
+                headers:
+                    headerUsuario()
+
+            }
         );
 
 
@@ -394,7 +404,9 @@ async function guardarSeccionBD(
                 headers: {
 
                     "Content-Type":
-                        "application/json"
+                        "application/json",
+
+                    ...headerUsuario()
 
                 },
 
