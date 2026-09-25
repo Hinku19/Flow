@@ -2586,7 +2586,16 @@ async function iniciarReunionProgramada(
                         tieneFoto:
                             Boolean(
                                 participante.tieneFoto
-                            )
+                            ),
+
+                        asistio:
+                            Boolean(
+                                participante.asistio
+                            ),
+
+                        rol:
+                            participante.rol ||
+                            ""
 
                     })
                 ),

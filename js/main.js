@@ -77,7 +77,8 @@ import {
 } from "./utils/capitalize.js";
 
 import {
-    crearGrupoAvatares
+    crearGrupoAvatares,
+    crearFichaAvatar
 } from "./utils/avatarFicha.js";
 
 import {
@@ -933,63 +934,464 @@ function llenarEncabezado(
     }
 
 
+/*
+ * =====================================================
+ * PARTICIPANTES
+ * =====================================================
+ */
+
+const miembrosElemento =
+    document.getElementById(
+        "meetingMembersList"
+    );
+
+
+if (miembrosElemento) {
+
+    miembrosElemento.innerHTML =
+        "";
+
+
     /*
-     * =====================================================
-     * PARTICIPANTES
-     * =====================================================
+     * Si ya tenemos id/foto de cada participante
+     * (reunión recién iniciada) usamos eso; si no,
+     * caemos de vuelta a solo los nombres.
      */
 
-    const miembrosElemento =
-        meta.querySelector(
-            '[data-campo="miembros"]'
+    const participantesInfo =
+        Array.isArray(
+            reunion.participantesInfo
+        ) &&
+        reunion.participantesInfo.length > 0
+            ? reunion.participantesInfo
+            : (
+                reunion.participantes ||
+                []
+            ).map(
+                nombre => ({
+                    nombre
+                })
+            );
+
+
+    if (
+        participantesInfo.length === 0
+    ) {
+
+        miembrosElemento.innerHTML =
+            `
+            <div class="meeting-members__empty">
+                No hay miembros registrados.
+            </div>
+            `;
+
+    }
+    else {
+
+        renderMiembrosReunion(
+            participantesInfo
+        );
+
+    }
+
+}
+
+function renderMiembrosReunion(
+    participantes
+) {
+
+    const contenedor =
+        document.getElementById(
+            "meetingMembersList"
         );
 
 
-    if (miembrosElemento) {
+    if (!contenedor) {
+        return;
+    }
 
-        miembrosElemento.innerHTML =
-            "";
+
+    contenedor.innerHTML =
+        "";
 
 
-        /*
-         * Si ya tenemos id/foto de cada participante
-         * (reunión recién iniciada) usamos eso; si no,
-         * caemos de vuelta a solo los nombres.
-         */
+    if (
+        !Array.isArray(participantes) ||
+        participantes.length === 0
+    ) {
 
-        const participantesInfo =
-            Array.isArray(
-                reunion.participantesInfo
-            ) &&
-            reunion.participantesInfo.length > 0
-                ? reunion.participantesInfo
-                : (
-                    reunion.participantes ||
-                    []
-                ).map(
-                    nombre => ({
-                        nombre
-                    })
+        contenedor.innerHTML =
+            `
+            <div class="meeting-members__empty">
+                No hay miembros registrados.
+            </div>
+            `;
+
+        return;
+    }
+
+
+    participantes.forEach(
+        participante => {
+
+            const tarjeta =
+                document.createElement(
+                    "div"
+                );
+
+            tarjeta.className =
+                "meeting-member";
+
+
+            /*
+             * =========================================
+             * AVATAR
+             * =========================================
+             */
+
+            const avatar =
+                crearFichaAvatar({
+                    id:
+                        participante.id,
+                    nombre:
+                        participante.nombre,
+                    tieneFoto:
+                        participante.tieneFoto,
+                    className:
+                        "avatar-ficha--sm"
+                });
+
+
+            /*
+             * =========================================
+             * CONTENIDO
+             * =========================================
+             */
+
+            const contenido =
+                document.createElement(
+                    "div"
+                );
+
+            contenido.className =
+                "meeting-member__content";
+
+
+            /*
+             * =========================================
+             * NOMBRE
+             * =========================================
+             */
+
+            const nombre =
+                document.createElement(
+                    "div"
+                );
+
+            nombre.className =
+                "meeting-member__name";
+
+            nombre.textContent =
+                participante.nombre ||
+                "";
+
+
+            /*
+             * =========================================
+             * CONTROLES
+             * =========================================
+             */
+
+            const controles =
+                document.createElement(
+                    "div"
+                );
+
+            controles.className =
+                "meeting-member__controls";
+
+
+            /*
+             * =========================================
+             * ASISTENCIA
+             * =========================================
+             */
+
+            const asistencia =
+                document.createElement(
+                    "label"
+                );
+
+            asistencia.className =
+                "meeting-member__attendance";
+
+
+            const checkbox =
+                document.createElement(
+                    "input"
+                );
+
+            checkbox.type =
+                "checkbox";
+
+            checkbox.checked =
+                Boolean(
+                    participante.asistio
                 );
 
 
-        if (participantesInfo.length === 0) {
+            const textoAsistencia =
+                document.createElement(
+                    "span"
+                );
 
-            miembrosElemento.textContent =
-                "-";
+            textoAsistencia.textContent =
+                checkbox.checked
+                    ? "Asistió"
+                    : "Ausente";
+
+
+            /*
+             * =========================================
+             * ROL
+             * =========================================
+             */
+
+            const labelRol =
+                document.createElement(
+                    "span"
+                );
+
+            labelRol.className =
+                "meeting-member__role-label";
+
+            labelRol.textContent =
+                "Rol:";
+
+
+            const selectRol =
+                document.createElement(
+                    "select"
+                );
+
+            selectRol.className =
+                "meeting-member__role";
+
+
+            selectRol.innerHTML =
+                `
+                <option value="">
+                    Seleccionar
+                </option>
+
+                <option value="Moderador">
+                    Moderador
+                </option>
+
+                <option value="Secretario">
+                    Secretario
+                </option>
+
+                <option value="Participante">
+                    Participante
+                </option>
+
+                <option value="Presentador">
+                    Presentador
+                </option>
+
+                <option value="Invitado">
+                    Invitado
+                </option>
+                `;
+
+
+            selectRol.value =
+                participante.rol ||
+                "";
+
+
+            /*
+             * =========================================
+             * CAMBIO DE ASISTENCIA
+             * =========================================
+             */
+
+            checkbox.addEventListener(
+                "change",
+                async () => {
+
+                    textoAsistencia.textContent =
+                        checkbox.checked
+                            ? "Asistió"
+                            : "Ausente";
+
+
+                    await actualizarParticipanteReunion(
+                        participante.id,
+                        checkbox.checked,
+                        selectRol.value
+                    );
+
+                }
+            );
+
+
+            /*
+             * =========================================
+             * CAMBIO DE ROL
+             * =========================================
+             */
+
+            selectRol.addEventListener(
+                "change",
+                async () => {
+
+                    await actualizarParticipanteReunion(
+                        participante.id,
+                        checkbox.checked,
+                        selectRol.value
+                    );
+
+                }
+            );
+
+
+            asistencia.appendChild(
+                checkbox
+            );
+
+            asistencia.appendChild(
+                textoAsistencia
+            );
+
+
+            controles.appendChild(
+                asistencia
+            );
+
+            controles.appendChild(
+                labelRol
+            );
+
+            controles.appendChild(
+                selectRol
+            );
+
+
+            contenido.appendChild(
+                nombre
+            );
+
+            contenido.appendChild(
+                controles
+            );
+
+
+            tarjeta.appendChild(
+                avatar
+            );
+
+            tarjeta.appendChild(
+                contenido
+            );
+
+
+            contenedor.appendChild(
+                tarjeta
+            );
 
         }
-        else {
+    );
 
-            miembrosElemento.appendChild(
-                crearGrupoAvatares(
-                    participantesInfo
-                )
+}
+
+async function actualizarParticipanteReunion(
+    usuarioId,
+    asistio,
+    rol
+) {
+
+    const reunionId =
+        getReunionActivaId();
+
+
+    if (!reunionId) {
+
+        console.error(
+            "No existe una reunión activa."
+        );
+
+        return;
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/reuniones/${reunionId}/participantes/${usuarioId}`,
+                {
+                    method: "PUT",
+
+                    headers: {
+                        ...headerUsuario(),
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify({
+                            asistio:
+                                Boolean(
+                                    asistio
+                                ),
+
+                            rol:
+                                rol ||
+                                null
+                        })
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.mensaje ||
+                data.error ||
+                "No fue posible actualizar el participante."
             );
 
         }
 
+
+        console.log(
+            "PARTICIPANTE ACTUALIZADO:",
+            data
+        );
+
     }
+    catch (error) {
+
+        console.error(
+            "ERROR ACTUALIZANDO PARTICIPANTE:",
+            error
+        );
+
+
+        avisoDialog(
+            error.message ||
+            "No fue posible actualizar el participante."
+        );
+
+    }
+
+}
 
 
     /*

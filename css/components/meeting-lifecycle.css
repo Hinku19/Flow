@@ -1067,3 +1067,399 @@
     }
 
 }
+
+/* =========================================================
+   MIEMBROS DE LA REUNIÓN
+   ========================================================= */
+
+.meeting-members {
+
+    width: 100%;
+
+    box-sizing: border-box;
+
+    margin-top: 18px;
+
+    margin-bottom: 24px;
+
+    padding-bottom: 18px;
+
+    border-bottom: 1px solid #dfe4e8;
+
+}
+
+
+/* =========================================================
+   ENCABEZADO
+   ========================================================= */
+
+.meeting-members__header {
+
+    display: flex;
+
+    align-items: center;
+
+    width: 100%;
+
+    margin-bottom: 14px;
+
+    padding-bottom: 8px;
+
+    border-bottom: 1px solid #e3e7ea;
+
+}
+
+
+.meeting-members__header h2 {
+
+    margin: 0;
+
+    font-size: 17px;
+
+    line-height: 1.3;
+
+    font-weight: 600;
+
+    color: #003b5c;
+
+}
+
+
+/* =========================================================
+   LISTA
+   ========================================================= */
+
+.meeting-members__list {
+
+    display: flex;
+
+    flex-wrap: wrap;
+
+    align-items: stretch;
+
+    gap: 12px;
+
+    width: 100%;
+
+}
+
+
+/* =========================================================
+   TARJETA
+   ========================================================= */
+
+.meeting-member {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+
+    box-sizing: border-box;
+
+    min-width: 280px;
+
+    flex: 1 1 320px;
+
+    padding: 10px 12px;
+
+    background: #ffffff;
+
+    border: 1px solid #dfe4e8;
+
+    border-radius: 10px;
+
+}
+
+
+.meeting-member:hover {
+
+    border-color: #c8d2d9;
+
+    box-shadow:
+        0 2px 7px rgba(
+            0,
+            0,
+            0,
+            0.05
+        );
+
+}
+
+
+/* =========================================================
+   CONTENIDO
+   ========================================================= */
+
+.meeting-member__content {
+
+    min-width: 0;
+
+    flex: 1;
+
+}
+
+
+.meeting-member__name {
+
+    overflow: hidden;
+
+    margin-bottom: 7px;
+
+    font-size: 14px;
+
+    line-height: 1.25;
+
+    font-weight: 600;
+
+    color: #003b5c;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+
+}
+
+
+/* =========================================================
+   CONTROLES
+   ========================================================= */
+
+.meeting-member__controls {
+
+    display: flex;
+
+    align-items: center;
+
+    flex-wrap: wrap;
+
+    gap: 8px;
+
+    font-size: 12px;
+
+    line-height: 1.3;
+
+}
+
+
+/* =========================================================
+   ASISTENCIA
+   ========================================================= */
+
+.meeting-member__attendance {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 5px;
+
+    cursor: pointer;
+
+    color: #4b6475;
+
+    user-select: none;
+
+}
+
+
+.meeting-member__attendance input {
+
+    width: 14px;
+
+    height: 14px;
+
+    margin: 0;
+
+    cursor: pointer;
+
+}
+
+
+/* =========================================================
+   ROL
+   ========================================================= */
+
+.meeting-member__role-label {
+
+    color: #71808c;
+
+}
+
+
+.meeting-member__role {
+
+    min-width: 115px;
+
+    box-sizing: border-box;
+
+    padding: 4px 8px;
+
+    border: 1px solid #d7dee3;
+
+    border-radius: 7px;
+
+    outline: none;
+
+    background: #ffffff;
+
+    color: #34495e;
+
+    font-family: inherit;
+
+    font-size: 12px;
+
+    cursor: pointer;
+
+}
+
+
+.meeting-member__role:focus {
+
+    border-color: #8ca8b8;
+
+    box-shadow:
+        0 0 0 2px rgba(
+            0,
+            59,
+            92,
+            0.08
+        );
+
+}
+
+
+/* =========================================================
+   SIN MIEMBROS
+   ========================================================= */
+
+.meeting-members__empty {
+
+    width: 100%;
+
+    padding: 10px 0;
+
+    color: #8997a1;
+
+    font-size: 13px;
+
+}
+
+
+/* =========================================================
+   MODO HORIZONTAL
+   ========================================================= */
+
+.meeting-members--horizontal
+.meeting-members__list {
+
+    flex-wrap: nowrap;
+
+    overflow-x: auto;
+
+    padding-bottom: 5px;
+
+}
+
+
+.meeting-members--horizontal
+.meeting-member {
+
+    flex: 0 0 300px;
+
+}
+
+
+/* =========================================================
+   SCROLL HORIZONTAL
+   ========================================================= */
+
+.meeting-members--horizontal
+.meeting-members__list::-webkit-scrollbar {
+
+    height: 6px;
+
+}
+
+
+.meeting-members--horizontal
+.meeting-members__list::-webkit-scrollbar-thumb {
+
+    background: #c8d2d9;
+
+    border-radius: 10px;
+
+}
+
+
+/* =========================================================
+   PANTALLAS MEDIANAS
+   ========================================================= */
+
+@media (max-width: 900px) {
+
+    .meeting-member {
+
+        min-width: 250px;
+
+        flex-basis: 280px;
+
+    }
+
+}
+
+
+/* =========================================================
+   MÓVIL
+   ========================================================= */
+
+@media (max-width: 600px) {
+
+    .meeting-members {
+
+        margin-top: 14px;
+
+        margin-bottom: 18px;
+
+    }
+
+
+    .meeting-members__list {
+
+        flex-direction: column;
+
+    }
+
+
+    .meeting-member {
+
+        width: 100%;
+
+        min-width: 0;
+
+        flex: 1 1 auto;
+
+    }
+
+
+    .meeting-members--horizontal
+    .meeting-members__list {
+
+        flex-direction: row;
+
+    }
+
+
+    .meeting-members--horizontal
+    .meeting-member {
+
+        width: auto;
+
+        min-width: 270px;
+
+        flex: 0 0 270px;
+
+    }
+
+}

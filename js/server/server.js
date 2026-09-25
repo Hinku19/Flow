@@ -4446,6 +4446,7 @@ app.get(
                     SELECT
                         rp.UsuarioId,
                         rp.Asistio,
+                        rp.Rol,
                         u.nombre,
                         u.correo_electronico,
                         (u.foto_contenido IS NOT NULL) AS tieneFoto
@@ -6802,6 +6803,298 @@ app.post(
 
                     mensaje:
                         "No fue posible guardar los participantes.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+        finally {
+
+            if (connection) {
+
+                connection.release();
+
+            }
+
+        }
+
+    }
+);
+
+/* =========================================================
+   ACTUALIZAR ASISTENCIA Y ROL DE PARTICIPANTE
+   ========================================================= */
+
+app.put(
+    "/api/reuniones/:id/participantes/:usuarioId",
+    async (req, res) => {
+
+        let connection;
+
+        try {
+
+            const reunionId =
+                Number(
+                    req.params.id
+                );
+
+            const usuarioId =
+                Number(
+                    req.params.usuarioId
+                );
+
+
+            /* =====================================================
+               VALIDAR IDS
+               ===================================================== */
+
+            if (!reunionId) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje:
+                            "ID de reunión no válido."
+                    });
+
+            }
+
+
+            if (!usuarioId) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje:
+                            "ID de usuario no válido."
+                    });
+
+            }
+
+
+            /* =====================================================
+               VALIDAR ACCESO
+               ===================================================== */
+
+            if (
+                !await validarAccesoReunion(
+                    req,
+                    res,
+                    reunionId
+                )
+            ) {
+
+                return;
+
+            }
+
+
+            /* =====================================================
+               LEER DATOS
+               ===================================================== */
+
+            const asistio =
+                req.body.asistio === true ||
+                req.body.asistio === 1 ||
+                req.body.asistio === "1"
+                    ? 1
+                    : 0;
+
+
+            let rol =
+                req.body.rol;
+
+
+            if (
+                rol === undefined ||
+                rol === null
+            ) {
+
+                rol = null;
+
+            }
+            else {
+
+                rol =
+                    String(
+                        rol
+                    ).trim();
+
+                if (!rol) {
+
+                    rol = null;
+
+                }
+
+            }
+
+
+            /* =====================================================
+               VALIDAR ROL
+               ===================================================== */
+
+            const rolesPermitidos = [
+
+                "Moderador",
+
+                "Secretario",
+
+                "Participante",
+
+                "Presentador",
+
+                "Invitado"
+
+            ];
+
+
+            if (
+                rol !== null &&
+                !rolesPermitidos.includes(
+                    rol
+                )
+            ) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "El rol seleccionado no es válido."
+
+                    });
+
+            }
+
+
+            /* =====================================================
+               CONEXIÓN
+               ===================================================== */
+
+            connection =
+                await db.getConnection();
+
+
+            /* =====================================================
+               VERIFICAR PARTICIPANTE
+               ===================================================== */
+
+            const [
+                participantes
+            ] =
+                await connection.execute(
+                    `
+                    SELECT
+                        ReunionParticipanteId
+
+                    FROM reunion_participantes
+
+                    WHERE
+                        ReunionId = ?
+                        AND UsuarioId = ?
+
+                    LIMIT 1
+                    `,
+                    [
+                        reunionId,
+                        usuarioId
+                    ]
+                );
+
+
+            if (
+                participantes.length === 0
+            ) {
+
+                return res
+                    .status(404)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "El usuario no pertenece a esta reunión."
+
+                    });
+
+            }
+
+
+            /* =====================================================
+               ACTUALIZAR
+               ===================================================== */
+
+            await connection.execute(
+                `
+                UPDATE reunion_participantes
+
+                SET
+                    Asistio = ?,
+                    Rol = ?,
+                    FechaActualizacion = NOW()
+
+                WHERE
+                    ReunionId = ?
+                    AND UsuarioId = ?
+                `,
+                [
+                    asistio,
+                    rol,
+                    reunionId,
+                    usuarioId
+                ]
+            );
+
+
+            /* =====================================================
+               RESPUESTA
+               ===================================================== */
+
+            return res.json({
+
+                ok: true,
+
+                mensaje:
+                    "Participante actualizado correctamente.",
+
+                participante: {
+
+                    UsuarioId:
+                        usuarioId,
+
+                    Asistio:
+                        asistio,
+
+                    Rol:
+                        rol
+
+                }
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL ACTUALIZAR PARTICIPANTE:",
+                error
+            );
+
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible actualizar el participante.",
 
                     error:
                         error.message
