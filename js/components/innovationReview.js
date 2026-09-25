@@ -17,7 +17,8 @@ import {
 } from "../services/auth.service.js";
 
 import {
-    confirmDialog
+    confirmDialog,
+    avisoDialog
 } from "../services/confirmDialog.js";
 
 import {
@@ -279,7 +280,7 @@ export function initInnovationReview() {
                         error
                     );
 
-                    alert(
+                    avisoDialog(
                         error.message ||
                         "No fue posible dar el visto bueno."
                     );

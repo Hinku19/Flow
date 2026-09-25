@@ -7,6 +7,10 @@ import {
 } from "./config.js";
 
 import {
+    normalizarImagen
+} from "../utils/normalizarImagen.js";
+
+import {
     getUsuarioActual
 } from "../services/auth.service.js";
 
@@ -324,7 +328,7 @@ export function initInnovationForm() {
        CONSTRUIR FormData A PARTIR DEL FORMULARIO
        ===================================================== */
 
-    function construirFormData() {
+    async function construirFormData() {
 
         const usuario =
             getUsuarioActual();
@@ -430,18 +434,22 @@ export function initInnovationForm() {
                 "#innovacion-evidencia-imagenes"
             ).files;
 
-        Array.from(
-            evidenciaImagenes
-        ).forEach(
-            (archivo) => {
+        /*
+         * Se reducen y pasan a WebP antes de subirlas (ver
+         * normalizarImagen). Si alguna no se puede leer, el error
+         * llega al catch del envío y se muestra en el formulario.
+         */
 
-                formData.append(
-                    "evidenciaImagenes",
+        for (const archivo of Array.from(evidenciaImagenes)) {
+
+            formData.append(
+                "evidenciaImagenes",
+                await normalizarImagen(
                     archivo
-                );
+                )
+            );
 
-            }
-        );
+        }
 
 
         return formData;
@@ -491,7 +499,7 @@ export function initInnovationForm() {
                                 "POST",
 
                             body:
-                                construirFormData()
+                                await construirFormData()
 
                         }
                     );

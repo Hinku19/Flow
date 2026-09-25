@@ -607,6 +607,25 @@
 }
 
 
+/* ---------------------------------------------------------
+   MIS ACTIVIDADES
+   --------------------------------------------------------- */
+
+.dashboard-card--activities {
+    background:
+        linear-gradient(
+            135deg,
+            var(--color-actividades-light) 0%,
+            var(--color-actividades) 100%
+        );
+}
+
+.dashboard-card--activities
+.dashboard-card__icon {
+    color: var(--color-actividades);
+}
+
+
 /* =========================================================
    VISTA DE USUARIOS
    ========================================================= */

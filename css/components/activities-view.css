@@ -1,0 +1,343 @@
+/* =========================================================
+   FLOW - VISOR DE ACTIVIDADES POR USUARIO
+   ========================================================= */
+
+
+/* =========================================================
+   TÍTULO
+   ========================================================= */
+
+.activities-view .view__title {
+    padding-left: var(--space-sm);
+
+    border-left: 4px solid var(--color-actividades);
+}
+
+
+.activities-view__subtitle {
+    margin: 8px 0 var(--space-lg);
+
+    font-size: 15px;
+
+    line-height: 1.5;
+
+    color: var(--color-text-subtle);
+}
+
+
+/* =========================================================
+   FILTRO DE USUARIO (ADMINISTRADOR / LÍDER)
+   ========================================================= */
+
+.activities-view__filtros {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+
+    margin-bottom: var(--space-lg);
+    padding: 18px 20px;
+
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-actividades);
+    border-radius: var(--radius-md);
+
+    background-color: var(--color-surface-alt);
+}
+
+
+.activities-view__filtros[hidden] {
+    display: none;
+}
+
+
+.activities-view__label {
+    font-size: 13px;
+    font-weight: var(--weight-bold);
+
+    color: var(--color-text);
+}
+
+
+.activities-view__select {
+    max-width: 320px;
+    height: 40px;
+
+    padding: 0 12px;
+
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+
+    background-color: var(--color-surface);
+
+    color: var(--color-text);
+
+    font-family: inherit;
+    font-size: 14px;
+}
+
+
+.activities-view__select:focus {
+    outline: none;
+
+    border-color: var(--color-actividades);
+
+    box-shadow:
+        0 0 0 3px rgba(176, 74, 130, 0.18);
+}
+
+
+/* =========================================================
+   MENSAJE DE ESTADO (CARGANDO / VACÍO / ERROR)
+   ========================================================= */
+
+.activities-view__estado {
+    padding: var(--space-xl);
+
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-md);
+
+    text-align: center;
+
+    color: var(--color-text-subtle);
+}
+
+
+/* =========================================================
+   GRUPO POR REUNIÓN
+   ========================================================= */
+
+.activities-view__lista {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+
+.activities-group {
+    padding: var(--space-md) var(--space-lg);
+
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+
+    background-color: var(--color-surface);
+
+    box-shadow: var(--shadow-sm);
+}
+
+
+.activities-group__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-xs);
+
+    margin-bottom: var(--space-sm);
+    padding-bottom: var(--space-sm);
+
+    border-bottom: 1px solid var(--color-border);
+}
+
+
+.activities-group__titulo {
+    margin: 0;
+
+    font-size: var(--text-lg);
+    font-weight: var(--weight-bold);
+
+    color: var(--color-text);
+}
+
+
+.activities-group__meta {
+    font-size: var(--text-xs);
+
+    color: var(--color-text-subtle);
+}
+
+
+.activities-group__badge {
+    margin-left: var(--space-xs);
+    padding: 2px var(--space-xs);
+
+    border-radius: var(--radius-lg);
+
+    background-color: var(--color-actividades-bg);
+
+    font-weight: var(--weight-medium);
+
+    color: var(--color-actividades);
+}
+
+
+/* =========================================================
+   ACTIVIDAD (OBJETIVO)
+   ========================================================= */
+
+.activities-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+
+    margin: 0;
+    padding: 0;
+
+    list-style: none;
+}
+
+
+.activity {
+    padding: var(--space-sm) var(--space-md);
+
+    border-left: 3px solid var(--color-actividades);
+    border-radius: var(--radius-sm);
+
+    background-color: var(--color-surface-alt);
+}
+
+
+.activity--completada {
+    border-left-color: var(--color-success);
+}
+
+
+.activity__cabecera {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+
+.activity__texto {
+    flex: 1;
+    min-width: 0;
+
+    font-weight: var(--weight-medium);
+
+    color: var(--color-text);
+
+    overflow-wrap: anywhere;
+}
+
+
+.activity--completada .activity__texto {
+    color: var(--color-succes-text);
+}
+
+
+.activity__compartido {
+    margin: var(--space-2xs) 0 0;
+
+    font-size: var(--text-xs);
+
+    color: var(--color-actividades);
+}
+
+
+/* =========================================================
+   BARRA DE AVANCE
+   ========================================================= */
+
+.activity__avance {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+
+    flex-shrink: 0;
+}
+
+
+.activity__track {
+    width: 120px;
+    height: 6px;
+
+    border-radius: var(--radius-lg);
+
+    background-color: var(--color-border);
+
+    overflow: hidden;
+}
+
+
+.activity__bar {
+    height: 100%;
+}
+
+
+.activity__bar--bajo { background-color: var(--color-danger); }
+.activity__bar--medio { background-color: var(--color-progress); }
+.activity__bar--alto { background-color: var(--color-warning); }
+.activity__bar--completo { background-color: var(--color-success); }
+
+
+.activity__porcentaje {
+    width: 38px;
+
+    font-size: var(--text-xs);
+    font-weight: var(--weight-bold);
+
+    text-align: right;
+
+    color: var(--color-text-second);
+}
+
+
+/* =========================================================
+   PUNTOS DE DESARROLLO
+   ========================================================= */
+
+.activity__puntos {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+
+    margin: var(--space-xs) 0 0;
+    padding: 0 0 0 var(--space-md);
+
+    list-style: disc;
+
+    font-size: var(--text-sm);
+
+    color: var(--color-text-second);
+}
+
+
+.activity__punto-avance {
+    margin-left: var(--space-xs);
+
+    font-size: var(--text-xs);
+
+    color: var(--color-text-subtle);
+}
+
+
+.activity__sin-puntos {
+    margin: var(--space-xs) 0 0;
+
+    font-size: var(--text-xs);
+
+    color: var(--color-text-subtle);
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 600px) {
+
+    .activities-group {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .activity__cabecera {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-xs);
+    }
+
+    .activity__track {
+        width: 100px;
+    }
+
+}

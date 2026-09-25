@@ -6,6 +6,10 @@ import {
     headerUsuario
 } from "../services/auth.service.js";
 
+import {
+    avisoDialog
+} from "../services/confirmDialog.js";
+
 
 /* =========================================================
    INICIALIZAR REGISTRO
@@ -138,7 +142,7 @@ export function initUserRegistration() {
                 !password
             ) {
 
-                alert(
+                avisoDialog(
                     "Todos los campos son obligatorios."
                 );
 
@@ -200,7 +204,7 @@ export function initUserRegistration() {
                 }
 
 
-                alert(
+                avisoDialog(
                     "Usuario registrado correctamente."
                 );
 
@@ -233,7 +237,7 @@ export function initUserRegistration() {
                 );
 
 
-                alert(
+                avisoDialog(
                     error.message ||
                     "Ocurrió un error al registrar el usuario."
                 );

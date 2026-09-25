@@ -21,6 +21,9 @@ const vistas = {
     compromisos:
         document.querySelector("#vista-compromisos"),
 
+    actividades:
+        document.querySelector("#vista-actividades"),
+
     innovaciones:
         document.querySelector("#vista-innovaciones"),
 
@@ -51,6 +54,7 @@ const VISTAS_CON_HISTORIAL = [
     "usuarios",
     "reunion",
     "compromisos",
+    "actividades",
     "innovaciones",
     "evaluaciones",
     "archivo",
@@ -108,6 +112,7 @@ function aplicarVista(nombre) {
  * editarUsuario
  * reunion
  * compromisos
+ * actividades
  * innovaciones
  * evaluaciones
  * archivo

@@ -1,5 +1,6 @@
 import { API_URL } from "./config.js";
 import { headerUsuario } from "../services/auth.service.js";
+import { avisoDialog } from "../services/confirmDialog.js";
 
 
 export function initUserEdit() {
@@ -540,8 +541,10 @@ export function initUserEdit() {
                 }
 
 
-                alert(
-                    "Usuario actualizado correctamente."
+                await avisoDialog(
+                    datos.password
+                        ? "Contraseña y datos del usuario actualizados correctamente."
+                        : "Usuario actualizado correctamente."
                 );
 
 

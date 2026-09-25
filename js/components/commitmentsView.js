@@ -21,7 +21,8 @@ import {
 } from "../services/auth.service.js";
 
 import {
-    confirmDialog
+    confirmDialog,
+    avisoDialog
 } from "../services/confirmDialog.js";
 
 
@@ -318,7 +319,7 @@ export function initCommitmentsView() {
                 error
             );
 
-            alert(
+            avisoDialog(
                 error.message ||
                 "No fue posible actualizar el compromiso."
             );
@@ -378,7 +379,7 @@ export function initCommitmentsView() {
                 error
             );
 
-            alert(
+            avisoDialog(
                 error.message ||
                 "No fue posible aprobar el compromiso."
             );
@@ -449,7 +450,7 @@ export function initCommitmentsView() {
                 error
             );
 
-            alert(
+            avisoDialog(
                 error.message ||
                 "No fue posible eliminar el compromiso."
             );
@@ -495,7 +496,7 @@ export function initCommitmentsView() {
 
         if (!errorNuevo) {
 
-            alert(mensaje);
+            avisoDialog(mensaje);
 
             return;
 

@@ -415,6 +415,61 @@
 
                     </button>
 
+                    <!-- =========================================
+                         MIS ACTIVIDADES
+                         ========================================= -->
+
+                    <button
+                        type="button"
+                        class="dashboard-card dashboard-card--activities"
+                        data-view="actividades"
+                    >
+
+                        <span class="dashboard-card__icon">
+
+                            <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+
+                                <circle
+                                    cx="8"
+                                    cy="7"
+                                    r="3"
+                                ></circle>
+
+                                <path
+                                    d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6"
+                                ></path>
+
+                                <polyline
+                                    points="15,9 17,11 21,7"
+                                ></polyline>
+
+                                <line
+                                    x1="16"
+                                    y1="15"
+                                    x2="22"
+                                    y2="15"
+                                ></line>
+
+                            </svg>
+
+                        </span>
+
+
+                        <span class="dashboard-card__title">
+                            Mis actividades
+                        </span>
+
+
+                        <span class="dashboard-card__description">
+                            Consulta los objetivos que te asignaron en las reuniones.
+                        </span>
+
+                    </button>
+
+
 
                     <!-- =========================================
                          INNOVACIONES
@@ -2027,7 +2082,7 @@
                                     <input
                                         type="file"
                                         class="link-list__file"
-                                        accept="image/*,application/pdf"
+                                        accept=".jpg,.jpeg,.png,.webp,.pdf"
                                         aria-label="Subir imagen o PDF"
                                     >
                                     Subir imagen o PDF
@@ -2367,6 +2422,76 @@
                     </form>
 
                 </dialog>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             VISOR DE ACTIVIDADES POR USUARIO
+             ===================================================== -->
+
+        <section
+            id="vista-actividades"
+            class="view view--hidden"
+        >
+
+            <div class="view__navigation">
+
+                <button
+                    type="button"
+                    class="view__back"
+                    data-view="dashboard"
+                >
+                    ← Volver al inicio
+                </button>
+
+            </div>
+
+
+            <div class="activities-view">
+
+                <header class="activities-view__header">
+
+                    <h1 class="view__title">
+                        Mis actividades
+                    </h1>
+
+                    <p class="activities-view__subtitle">
+                        Objetivos asignados en las reuniones y el avance de sus puntos de desarrollo
+                    </p>
+
+                </header>
+
+
+                <div
+                    class="activities-view__filtros"
+                    hidden
+                >
+
+                    <label
+                        class="activities-view__label"
+                        for="actividades-filtro-usuario"
+                    >
+                        Usuario
+                    </label>
+
+                    <select
+                        id="actividades-filtro-usuario"
+                        class="activities-view__select"
+                    ></select>
+
+                </div>
+
+
+                <p
+                    class="activities-view__estado"
+                    hidden
+                ></p>
+
+
+                <div class="activities-view__lista"></div>
 
             </div>
 
@@ -3073,12 +3198,12 @@
                             <input
                                 id="innovacion-evidencia-imagenes"
                                 type="file"
-                                accept=".jpg,.jpeg,.png,.gif"
+                                accept=".jpg,.jpeg,.png,.webp"
                                 multiple
                             >
 
                             <p class="innovation-form__hint">
-                                Adjuntar imágenes que respalden la innovación (JPG, JPEG, PNG, GIF)
+                                Adjuntar imágenes que respalden la innovación (JPG, PNG o WebP; se optimizan automáticamente)
                             </p>
 
                         </div>
@@ -3672,7 +3797,7 @@
                                     <input
                                         type="file"
                                         class="link-list__file"
-                                        accept="image/*,application/pdf"
+                                        accept=".jpg,.jpeg,.png,.webp,.pdf"
                                         aria-label="Subir imagen o PDF"
                                     >
                                     Subir imagen o PDF
@@ -3762,6 +3887,66 @@
 
 
     <!-- =========================================================
+         DIÁLOGO PARA ASIGNAR RESPONSABLE A UN OBJETIVO
+         ========================================================= -->
+
+    <dialog class="asignar-dialog">
+
+        <form
+            class="asignar-dialog__form"
+            method="dialog"
+        >
+
+            <h2 class="asignar-dialog__titulo">
+                Asignar objetivo
+            </h2>
+
+            <p class="asignar-dialog__objetivo"></p>
+
+
+            <fieldset class="asignar-dialog__grupo">
+
+                <legend class="asignar-dialog__label">
+                    Responsables
+                </legend>
+
+                <div class="asignar-dialog__opciones"></div>
+
+            </fieldset>
+
+
+            <p
+                class="asignar-dialog__error"
+                hidden
+            >
+                Selecciona al menos un responsable.
+            </p>
+
+
+            <div class="confirm-dialog__actions">
+
+                <button
+                    type="button"
+                    class="confirm-dialog__cancel asignar-dialog__cancelar"
+                >
+                    Cancelar
+                </button>
+
+                <button
+                    type="submit"
+                    class="confirm-dialog__accept asignar-dialog__aceptar"
+                >
+                    Asignar
+                </button>
+
+            </div>
+
+        </form>
+
+    </dialog>
+
+
+    <!-- =========================================================
          DIÁLOGO DE INFORMACIÓN DE PERFIL
          ========================================================= -->
 
@@ -3815,7 +4000,7 @@
                 <input
                     type="file"
                     id="perfil-foto-input"
-                    accept="image/*"
+                    accept=".jpg,.jpeg,.png,.webp"
                     hidden
                 >
 
@@ -3921,6 +4106,14 @@
                 data-view="compromisos"
             >
                 Mis compromisos
+            </button>
+
+            <button
+                type="button"
+                class="profile-info__acceso-btn"
+                data-view="actividades"
+            >
+                Mis actividades
             </button>
 
             <button

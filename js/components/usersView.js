@@ -1,3 +1,5 @@
+import { avisoDialog } from "../services/confirmDialog.js";
+
 const API_URL =
     "http://localhost:3000/api";
 
@@ -226,7 +228,7 @@ async function cargarUsuarios(
                                 !nuevoEstado;
 
 
-                            alert(
+                            avisoDialog(
                                 error.message
                             );
 

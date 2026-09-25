@@ -18,7 +18,8 @@ import {
 
 import {
     confirmDialog,
-    confirmarEliminacion
+    confirmarEliminacion,
+    avisoDialog
 } from "../services/confirmDialog.js";
 
 import {
@@ -160,7 +161,7 @@ export function initEvaluacionesPersonalizadas() {
 
         if (!aviso) {
 
-            alert(mensaje);
+            avisoDialog(mensaje);
 
             return;
 
