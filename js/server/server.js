@@ -3,6 +3,8 @@ const cors = require("cors");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const multer = require("multer");
+const nodemailer = require("nodemailer");
+const puppeteer = require("puppeteer");
 
 const db = require("./db");
 
@@ -45,6 +47,58 @@ const PORT =
 
 
 /* =========================================================
+   CORREO ELECTRÓNICO
+   ========================================================= */
+
+function crearTransportadorCorreo() {
+
+    const host =
+        String(process.env.SMTP_HOST || "").trim();
+
+    const port =
+        Number(process.env.SMTP_PORT || 465);
+
+    const secure =
+        String(process.env.SMTP_SECURE || "true").toLowerCase() === "true";
+
+    const user =
+        String(process.env.SMTP_USER || "").trim();
+
+    const password =
+        String(process.env.SMTP_PASSWORD || "");
+
+    if (!host || !user || !password) {
+        throw new Error(
+            "El servicio de correo no está configurado. Revisa SMTP_HOST, SMTP_USER y SMTP_PASSWORD en .env."
+        );
+    }
+
+    return nodemailer.createTransport({
+        host,
+        port,
+        secure,
+        auth: {
+            user,
+            pass: password
+        }
+    });
+
+}
+
+
+function nombreArchivoSeguro(valor) {
+
+    return String(valor || "reunion-flow")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_-]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .substring(0, 100) || "reunion-flow";
+
+}
+
+
+/* =========================================================
    MIDDLEWARE
    ========================================================= */
 
@@ -53,7 +107,9 @@ app.use(
 );
 
 app.use(
-    express.json()
+    express.json({
+        limit: "5mb"
+    })
 );
 
 
@@ -6055,6 +6111,507 @@ app.post(
 
 
 /* =========================================================
+   ENVIAR REPORTE PDF DE REUNIÓN POR CORREO
+   ---------------------------------------------------------
+   Recibe el mismo HTML utilizado por Exportar PDF, lo
+   convierte a PDF mediante Chromium y lo envía a todos
+   los participantes registrados en MySQL.
+   ========================================================= */
+
+/* =========================================================
+   ENVIAR REPORTE PDF DE REUNIÓN POR CORREO
+   ========================================================= */
+
+app.post(
+    "/api/reuniones/:id/enviar-reporte",
+    async (
+        req,
+        res
+    ) => {
+
+        let browser =
+            null;
+
+
+        try {
+
+            const reunionId =
+                Number(
+                    req.params.id
+                );
+
+
+            const html =
+                typeof req.body.html === "string"
+                    ? req.body.html
+                    : "";
+
+
+            if (
+                !reunionId
+            ) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "ID de reunión no válido."
+
+                    });
+
+            }
+
+
+            if (
+                !html.trim()
+            ) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No se recibió el contenido del reporte PDF."
+
+                    });
+
+            }
+
+
+            if (
+                !await validarAccesoReunion(
+                    req,
+                    res,
+                    reunionId
+                )
+            ) {
+
+                return;
+
+            }
+
+
+            /*
+             * =================================================
+             * OBTENER REUNIÓN
+             * =================================================
+             */
+
+            const [
+                reuniones
+            ] =
+                await db.execute(
+                    `
+                    SELECT
+                        ReunionId,
+                        Titulo,
+                        Estado
+                    FROM reuniones
+                    WHERE ReunionId = ?
+                    LIMIT 1
+                    `,
+                    [
+                        reunionId
+                    ]
+                );
+
+
+            if (
+                reuniones.length === 0
+            ) {
+
+                return res
+                    .status(404)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Reunión no encontrada."
+
+                    });
+
+            }
+
+
+            const reunion =
+                reuniones[0];
+
+
+            if (
+                reunion.Estado !==
+                "Finalizada"
+            ) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "El reporte solo puede enviarse cuando la reunión está finalizada."
+
+                    });
+
+            }
+
+
+            /*
+             * =================================================
+             * OBTENER PARTICIPANTES
+             * =================================================
+             */
+
+            const [
+                participantes
+            ] =
+                await db.execute(
+                    `
+                    SELECT DISTINCT
+                        u.correo_electronico
+                    FROM reunion_participantes rp
+                    INNER JOIN usuarios u
+                        ON u.id =
+                           rp.UsuarioId
+                    WHERE
+                        rp.ReunionId = ?
+                        AND u.correo_electronico IS NOT NULL
+                        AND TRIM(
+                            u.correo_electronico
+                        ) <> ''
+                    ORDER BY
+                        u.correo_electronico
+                    `,
+                    [
+                        reunionId
+                    ]
+                );
+
+
+            const destinatarios =
+                participantes
+                    .map(
+                        item =>
+                            String(
+                                item.correo_electronico
+                            ).trim()
+                    )
+                    .filter(
+                        Boolean
+                    );
+
+
+            if (
+                destinatarios.length === 0
+            ) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "La reunión no tiene participantes con correo electrónico registrado."
+
+                    });
+
+            }
+
+
+            /*
+             * =================================================
+             * GENERAR PDF
+             * =================================================
+             */
+
+            browser =
+                await puppeteer.launch({
+
+                    headless:
+                        true,
+
+                    args: [
+
+                        "--no-sandbox",
+
+                        "--disable-setuid-sandbox"
+
+                    ]
+
+                });
+
+
+            const page =
+                await browser.newPage();
+
+
+            await page.setContent(
+                html,
+                {
+
+                    waitUntil:
+                        "networkidle0"
+
+                }
+            );
+
+
+            await page.emulateMediaType(
+                "print"
+            );
+
+
+            const pdf =
+                await page.pdf({
+
+                    format:
+                        "Letter",
+
+                    printBackground:
+                        true,
+
+                    preferCSSPageSize:
+                        true
+
+                });
+
+
+            /*
+             * =================================================
+             * CONFIGURAR CORREO
+             * =================================================
+             */
+
+            const transporter =
+                crearTransportadorCorreo();
+
+
+            const from =
+                String(
+                    process.env.SMTP_FROM ||
+                    process.env.SMTP_USER
+                ).trim();
+
+
+            const titulo =
+                String(
+                    reunion.Titulo ||
+                    "Reunión Flow"
+                ).trim();
+
+
+            const filename =
+                `${nombreArchivoSeguro(
+                    titulo
+                )}.pdf`;
+
+
+            /*
+             * =================================================
+             * ENVIAR INDIVIDUALMENTE
+             * =================================================
+             *
+             * Esto es importante.
+             *
+             * Si mandamos:
+             *
+             * to: "a@x.com,b@y.com,c@z.com"
+             *
+             * no podemos determinar fácilmente cuál
+             * destinatario fue rechazado.
+             *
+             * Al enviar uno por uno podemos regresar
+             * exactamente los que fallaron.
+             */
+
+            const resultados =
+                await Promise.all(
+
+                    destinatarios.map(
+                        async correo => {
+
+                            try {
+
+                                await transporter.sendMail({
+
+                                    from,
+
+                                    to:
+                                        correo,
+
+                                    subject:
+                                        `Reporte de reunión: ${titulo}`,
+
+                                    text:
+                                        `Se adjunta el reporte PDF de la reunión ${titulo}.\n\n` +
+                                        `Este mensaje fue generado automáticamente por FLOW.`,
+
+                                    attachments: [
+
+                                        {
+
+                                            filename,
+
+                                            content:
+                                                pdf,
+
+                                            contentType:
+                                                "application/pdf"
+
+                                        }
+
+                                    ]
+
+                                });
+
+
+                                return {
+
+                                    correo,
+
+                                    enviado:
+                                        true
+
+                                };
+
+                            }
+                            catch (error) {
+
+                                console.error(
+                                    `ERROR ENVIANDO A ${correo}:`,
+                                    error
+                                );
+
+
+                                return {
+
+                                    correo,
+
+                                    enviado:
+                                        false,
+
+                                    error:
+                                        error.message
+
+                                };
+
+                            }
+
+                        }
+                    )
+
+                );
+
+
+            const fallidos =
+                resultados
+                    .filter(
+                        resultado =>
+                            !resultado.enviado
+                    )
+                    .map(
+                        resultado =>
+                            resultado.correo
+                    );
+
+
+            const enviados =
+                resultados
+                    .filter(
+                        resultado =>
+                            resultado.enviado
+                    )
+                    .map(
+                        resultado =>
+                            resultado.correo
+                    );
+
+
+            /*
+             * =================================================
+             * RESPUESTA
+             * =================================================
+             */
+
+            return res.json({
+
+                ok:
+                    true,
+
+                mensaje:
+                    fallidos.length === 0
+                        ? "Envío realizado correctamente."
+                        : "La minuta se envió parcialmente.",
+
+                enviados,
+
+                fallidos,
+
+                total:
+                    destinatarios.length
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR ENVIANDO REPORTE DE REUNIÓN:",
+                error
+            );
+
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible generar o enviar el reporte de la reunión.",
+
+                    error:
+                        error.message
+
+                });
+
+        }
+        finally {
+
+            if (
+                browser
+            ) {
+
+                try {
+
+                    await browser.close();
+
+                }
+                catch (error) {
+
+                    console.error(
+                        "ERROR CERRANDO CHROMIUM:",
+                        error
+                    );
+
+                }
+
+            }
+
+        }
+
+    }
+);
+
+
+/* =========================================================
    ELIMINAR REUNIÓN
    ---------------------------------------------------------
    Borra la reunión y todo lo que depende de ella
@@ -9451,6 +10008,10 @@ app.listen(
 
         console.log(
             `API local: http://localhost:${PORT}/api`
+        );
+
+        console.log(
+            `API red: http://10.130.10.200:${PORT}/api`
         );
 
         console.log(

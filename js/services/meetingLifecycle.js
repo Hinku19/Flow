@@ -32,6 +32,10 @@ import {
     headerUsuario
 } from "./auth.service.js";
 
+import {
+    enviarReporteReunionPorCorreo
+} from "./pdfReportService.js";
+
 
 import {
     crearFichaAvatar
@@ -2847,208 +2851,611 @@ async function actualizarEstadoReunionBD(
 
 }
 
-/* =========================================================
-   ACTUALIZAR ESTADO DE REUNIÓN
+
+ /* =========================================================
+   ENVIAR REPORTE DE REUNIÓN POR CORREO
    ========================================================= */
 
-async function actualizarEstadoReunionBD(
-    reunionId,
-    estado
+async function enviarReporteAlFinalizar(
+    reunionId
 ) {
 
-    const response =
+    const reunionResponse =
         await fetch(
-            `${API_URL}/reuniones/${reunionId}/estado`,
+            `${API_URL}/reuniones/${reunionId}`,
             {
+                headers: headerUsuario()
+            }
+        );
 
-                method:
-                    "PATCH",
+    const reunionData =
+        await reunionResponse.json();
 
-                headers: {
+    if (!reunionResponse.ok) {
 
-                    "Content-Type":
-                        "application/json",
+        throw new Error(
+            reunionData.mensaje ||
+            reunionData.error ||
+            "No fue posible obtener la reunión para enviar el reporte."
+        );
 
-                    ...headerUsuario()
+    }
 
-                },
 
-                body:
-                    JSON.stringify({
+    const seccionesResponse =
+        await fetch(
+            `${API_URL}/reuniones/${reunionId}/secciones`,
+            {
+                headers: headerUsuario()
+            }
+        );
 
-                        estado:
-                            estado
+    const seccionesData =
+        await seccionesResponse.json();
 
-                    })
+    if (!seccionesResponse.ok) {
+
+        throw new Error(
+            seccionesData.mensaje ||
+            seccionesData.error ||
+            "No fue posible obtener las secciones para enviar el reporte."
+        );
+
+    }
+
+
+    const secciones = {};
+
+
+    (seccionesData.secciones || [])
+        .forEach(
+            seccion => {
+
+                secciones[
+                    seccion.Seccion
+                ] =
+                    seccion.Contenido;
 
             }
         );
 
 
-    const data =
-        await response.json();
+    const reunion =
+        reunionData.reunion ||
+        {};
 
 
-    if (!response.ok) {
+    const participantes =
+        Array.isArray(
+            reunionData.participantes
+        )
+            ? reunionData.participantes
+            : [];
 
-        throw new Error(
-            data.mensaje ||
-            data.error ||
-            "No fue posible actualizar el estado de la reunión."
-        );
+
+    return await enviarReporteReunionPorCorreo(
+        reunionId,
+        reunion,
+        secciones,
+        participantes
+    );
+
+}
+
+/* =========================================================
+   AVISOS DE ENVÍO DE MINUTA
+   ========================================================= */
+
+function escaparHTMLAviso(
+    valor
+) {
+
+    if (
+        valor === null ||
+        valor === undefined
+    ) {
+
+        return "";
 
     }
 
 
-    return data;
+    return String(valor)
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
 
 }
 
 
-    /* =========================================================
-       TERMINAR REUNIÓN
-       ========================================================= */
+function obtenerDialogoAvisoMinuta() {
 
-    async function terminar() {
-
-        if (
-            terminandoReunion
-        ) {
-
-            return;
-
-        }
+    let dialog =
+        document.querySelector(
+            "#minuta-status-dialog"
+        );
 
 
-        const confirmado =
-            await confirmDialog(
-                "¿Seguro que quieres terminar la reunión? Se guardará en el historial y no podrás editarla."
+    if (
+        dialog
+    ) {
+
+        return dialog;
+
+    }
+
+
+    dialog =
+        document.createElement(
+            "dialog"
+        );
+
+
+    dialog.id =
+        "minuta-status-dialog";
+
+
+    dialog.className =
+        "minuta-status-dialog";
+
+
+    dialog.innerHTML = `
+        <div class="minuta-status-dialog__content">
+
+            <div
+                class="minuta-status-dialog__message"
+            ></div>
+
+            <div
+                class="minuta-status-dialog__actions"
+            >
+
+                <button
+                    type="button"
+                    class="minuta-status-dialog__accept"
+                >
+                    Aceptar
+                </button>
+
+            </div>
+
+        </div>
+    `;
+
+
+    document.body.appendChild(
+        dialog
+    );
+
+
+    return dialog;
+
+}
+
+
+function mostrarAvisoMinuta(
+    mensaje,
+    mostrarBoton = true,
+    permitirHTML = false
+) {
+
+    const dialog =
+        obtenerDialogoAvisoMinuta();
+
+
+    const message =
+        dialog.querySelector(
+            ".minuta-status-dialog__message"
+        );
+
+
+    const acceptBtn =
+        dialog.querySelector(
+            ".minuta-status-dialog__accept"
+        );
+
+
+    if (
+        permitirHTML
+    ) {
+
+        message.innerHTML =
+            mensaje;
+
+    }
+    else {
+
+        message.textContent =
+            mensaje;
+
+    }
+
+
+    acceptBtn.style.display =
+        mostrarBoton
+            ? ""
+            : "none";
+
+
+    if (
+        dialog.open
+    ) {
+
+        return Promise.resolve();
+
+    }
+
+
+    dialog.showModal();
+
+
+    if (
+        !mostrarBoton
+    ) {
+
+        return Promise.resolve();
+
+    }
+
+
+    return new Promise(
+        resolve => {
+
+            function cerrar() {
+
+                acceptBtn.removeEventListener(
+                    "click",
+                    cerrar
+                );
+
+                if (
+                    dialog.open
+                ) {
+
+                    dialog.close();
+
+                }
+
+                resolve();
+
+            }
+
+
+            acceptBtn.addEventListener(
+                "click",
+                cerrar
             );
 
-
-        if (
-            !confirmado
-        ) {
-
-            return;
-
         }
+    );
+
+}
 
 
-        if (
-            terminandoReunion
-        ) {
+function cerrarAvisoMinuta() {
 
-            return;
+    const dialog =
+        document.querySelector(
+            "#minuta-status-dialog"
+        );
 
-        }
+
+    if (
+        dialog &&
+        dialog.open
+    ) {
+
+        dialog.close();
+
+    }
+
+}
+
+/* =========================================================
+   TERMINAR REUNIÓN
+   ========================================================= */
+
+async function terminar() {
+
+    if (
+        terminandoReunion
+    ) {
+
+        return;
+
+    }
+
+
+    /*
+     * PRIMERA CONFIRMACIÓN
+     */
+
+    const confirmado =
+        await confirmDialog(
+            "¿Seguro que quieres terminar la reunión? Se guardará en el historial y no podrás editarla."
+        );
+
+
+    if (
+        !confirmado
+    ) {
+
+        return;
+
+    }
+
+
+    /*
+     * SEGUNDA CONFIRMACIÓN
+     */
+
+    const enviarMinuta =
+        await confirmDialog(
+            "¿Deseas enviar por correo la minuta de la reunión a los participantes?"
+        );
+
+
+    /*
+     * EVITAR DOBLE EJECUCIÓN
+     */
+
+    if (
+        terminandoReunion
+    ) {
+
+        return;
+
+    }
+
+
+    terminandoReunion =
+        true;
+
+
+    const reunionId =
+        Number(
+            getReunionActivaId()
+        );
+
+
+    if (
+        !reunionId
+    ) {
+
+        console.error(
+            "No existe una reunión activa."
+        );
 
         terminandoReunion =
-            true;
+            false;
+
+        return;
+
+    }
 
 
-        const reunionId =
-    Number(
-        getReunionActivaId()
-    );
+    /*
+     * =====================================================
+     * FINALIZAR REUNIÓN EN MYSQL
+     * =====================================================
+     */
+
+    try {
+
+        await actualizarEstadoReunionBD(
+            reunionId,
+            "Finalizada"
+        );
+
+    }
+    catch (error) {
+
+        console.error(
+            "ERROR ACTUALIZANDO ESTADO EN MYSQL:",
+            error
+        );
 
 
-if (!reunionId) {
-
-    console.error(
-        "No existe una reunión activa."
-    );
-
-    terminandoReunion =
-        false;
-
-    return;
-
-}
+        alert(
+            error.message ||
+            "No fue posible finalizar la reunión."
+        );
 
 
-try {
-
-    await actualizarEstadoReunionBD(
-        reunionId,
-        "Finalizada"
-    );
-
-}
-catch (error) {
-
-    console.error(
-        "ERROR ACTUALIZANDO ESTADO EN MYSQL:",
-        error
-    );
-
-
-    alert(
-        error.message ||
-        "No fue posible finalizar la reunión."
-    );
-
-
-    terminandoReunion =
-        false;
-
-    return;
-
-}
-
-
-/*
- * Mantener temporalmente
- * el comportamiento anterior.
- */
-terminarReunion();
-
-
-        if (
-            overlay
-        ) {
-
-            overlay.classList.remove(
-                "pause-overlay--visible"
-            );
-
-        }
-
-
-        pausada =
+        terminandoReunion =
             false;
 
 
-        setBotonesReunionActiva(
+        return;
+
+    }
+
+
+    /*
+     * =====================================================
+     * ENVIAR MINUTA
+     * =====================================================
+     */
+
+    if (
+        enviarMinuta
+    ) {
+
+        mostrarAvisoMinuta(
+            "Envío de minuta en proceso...",
             false
         );
 
 
-        if (
-            btnPausar
-        ) {
+        try {
 
-            btnPausar.textContent =
-                "Pausar";
+            const resultado =
+                await enviarReporteAlFinalizar(
+                    reunionId
+                );
+
+
+            cerrarAvisoMinuta();
+
+
+            const fallidos =
+                Array.isArray(
+                    resultado?.fallidos
+                )
+                    ? resultado.fallidos
+                    : [];
+
+
+            if (
+                fallidos.length === 0
+            ) {
+
+                await mostrarAvisoMinuta(
+                    "Envío realizado correctamente.",
+                    true
+                );
+
+            }
+            else {
+
+                const listaCorreos =
+                    fallidos
+                        .map(
+                            correo =>
+                                `<div style="margin:4px 0;">${escaparHTMLAviso(correo)}</div>`
+                        )
+                        .join("");
+
+
+                await mostrarAvisoMinuta(
+                    `
+                        <div>
+                            <strong>
+                                No se pudo entregar el correo a los siguientes destinatarios:
+                            </strong>
+
+                            <div style="margin-top:12px;">
+                                ${listaCorreos}
+                            </div>
+                        </div>
+                    `,
+                    true,
+                    true
+                );
+
+            }
 
         }
+        catch (error) {
+
+            console.error(
+                "ERROR ENVIANDO REPORTE DE REUNIÓN:",
+                error
+            );
 
 
-        showView(
-            "historial"
-        );
+            cerrarAvisoMinuta();
 
 
-        if (
-            typeof onEnd ===
-            "function"
-        ) {
+            await mostrarAvisoMinuta(
+                `
+                    <div>
+                        <strong>
+                            No se pudo enviar la minuta.
+                        </strong>
 
-            onEnd();
+                        <div style="margin-top:12px;">
+                            ${escaparHTMLAviso(
+                                error.message ||
+                                "Error desconocido."
+                            )}
+                        </div>
+                    </div>
+                `,
+                true,
+                true
+            );
 
         }
 
     }
+
+
+    /*
+     * =====================================================
+     * FINALIZAR INTERFAZ
+     * =====================================================
+     */
+
+    terminarReunion();
+
+
+    if (
+        overlay
+    ) {
+
+        overlay.classList.remove(
+            "pause-overlay--visible"
+        );
+
+    }
+
+
+    pausada =
+        false;
+
+
+    terminandoReunion =
+        false;
+
+
+    setBotonesReunionActiva(
+        false
+    );
+
+
+    if (
+        btnPausar
+    ) {
+
+        btnPausar.textContent =
+            "Pausar";
+
+    }
+
+
+    showView(
+        "historial"
+    );
+
+
+    if (
+        typeof onEnd ===
+        "function"
+    ) {
+
+        onEnd();
+
+    }
+
+}
 
 
     /* =========================================================

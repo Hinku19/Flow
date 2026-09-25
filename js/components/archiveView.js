@@ -7,7 +7,8 @@ import {
 } from "../services/viewManager.js";
 
 import {
-    exportarReunionPDF
+    exportarReunionPDF,
+    enviarReporteReunionPorCorreo
 } from "../services/pdfReportService.js";
 
 import {
@@ -29,6 +30,10 @@ import {
 import {
     createEditableList
 } from "./editableList.js";
+
+import {
+    confirmDialog
+} from "../services/confirmDialog.js";
 
 import {
     createDevelopmentTable
@@ -105,6 +110,11 @@ export function createArchiveView() {
         document.querySelector(
              "#archive-export-pdf"
         );
+
+    const reenviarMinutaBtn =
+    document.querySelector(
+        "#archive-resend-minutes"
+    );
 
 
     /* =====================================================
@@ -1308,7 +1318,7 @@ seccionesActuales =
 
     pdfBtn.addEventListener(
         "click",
-        function () {
+        async function () {
 
             try {
 
@@ -1325,7 +1335,7 @@ seccionesActuales =
                 }
 
 
-                exportarReunionPDF(
+                await exportarReunionPDF(
                     reunionActual,
                     seccionesActuales,
                     reunionActual.participantes ||
@@ -1344,6 +1354,327 @@ seccionesActuales =
                 alert(
                     error.message ||
                     "No fue posible generar el PDF."
+                );
+
+            }
+
+        }
+    );
+
+}
+
+if (
+    reenviarMinutaBtn
+) {
+
+    reenviarMinutaBtn.addEventListener(
+        "click",
+        async function () {
+
+            try {
+
+                if (
+                    !reunionActual
+                ) {
+
+                    alert(
+                        "No hay una reunión cargada."
+                    );
+
+                    return;
+
+                }
+
+
+const confirmar =
+    await confirmDialog(
+        "¿Deseas reenviar la minuta de esta reunión?",
+        {
+            acceptLabel: "Sí",
+            cancelLabel: "No"
+        }
+    );
+
+if (
+    !confirmar
+) {
+
+    return;
+
+}
+
+
+                // =====================================================
+                // ENVIAR MINUTA
+                // =====================================================
+
+                const avisoProceso =
+                    document.createElement(
+                        "div"
+                    );
+
+                avisoProceso.id =
+                    "archive-resend-status";
+
+                avisoProceso.innerHTML = `
+                    <div
+                        style="
+                            position:fixed;
+                            inset:0;
+                            background:rgba(0,0,0,.45);
+                            display:flex;
+                            align-items:center;
+                            justify-content:center;
+                            z-index:99999;
+                        "
+                    >
+                        <div
+                            style="
+                                background:white;
+                                padding:28px 35px;
+                                border-radius:12px;
+                                box-shadow:0 8px 30px rgba(0,0,0,.25);
+                                text-align:center;
+                                min-width:320px;
+                                max-width:600px;
+                            "
+                        >
+                            <div
+                                style="
+                                    font-size:17px;
+                                    font-weight:600;
+                                "
+                            >
+                                Envío de minuta en proceso...
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                document.body.appendChild(
+                    avisoProceso
+                );
+
+
+                try {
+
+                    const resultado =
+                        await enviarReporteReunionPorCorreo(
+                            reunionActual.id ||
+                            reunionActual.ReunionId ||
+                            reunionActual.reunionId,
+                            reunionActual,
+                            seccionesActuales,
+                            reunionActual.participantes || []
+                        );
+
+
+                    avisoProceso.remove();
+
+
+                    const fallidos =
+                        Array.isArray(
+                            resultado?.fallidos
+                        )
+                            ? resultado.fallidos
+                            : [];
+
+
+                    if (
+                        fallidos.length === 0
+                    ) {
+
+                        mostrarResultadoReenvio(
+                            "Envío realizado correctamente."
+                        );
+
+                    }
+                    else {
+
+                        const listaCorreos =
+                            fallidos
+                                .map(
+                                    correo =>
+                                        `<div style="margin:4px 0;">${escaparHTMLReenvio(correo)}</div>`
+                                )
+                                .join("");
+
+
+                        mostrarResultadoReenvio(
+                            `
+                                <div>
+                                    <strong>
+                                        No se pudo entregar el correo a los siguientes destinatarios:
+                                    </strong>
+
+                                    <div style="margin-top:12px;">
+                                        ${listaCorreos}
+                                    </div>
+                                </div>
+                            `
+                        );
+
+                    }
+
+                }
+                catch (error) {
+
+                    console.error(
+                        "ERROR ENVIANDO REPORTE DE REUNIÓN:",
+                        error
+                    );
+
+
+                    avisoProceso.remove();
+
+
+                    mostrarResultadoReenvio(
+                        `
+                            <div>
+                                <strong>
+                                    No se pudo enviar la minuta.
+                                </strong>
+
+                                <div style="margin-top:12px;">
+                                    ${escaparHTMLReenvio(
+                                        error.message ||
+                                        "Error desconocido."
+                                    )}
+                                </div>
+                            </div>
+                        `
+                    );
+
+                }
+
+            }
+            catch (error) {
+
+                console.error(
+                    "ERROR EN REENVIAR MINUTA:",
+                    error
+                );
+
+            }
+
+        }
+    );
+
+}
+
+function escaparHTMLReenvio(
+    texto
+) {
+
+    const div =
+        document.createElement(
+            "div"
+        );
+
+    div.textContent =
+        texto == null
+            ? ""
+            : String(texto);
+
+    return div.innerHTML;
+
+}
+
+
+function mostrarResultadoReenvio(
+    contenido
+) {
+
+    const aviso =
+        document.createElement(
+            "div"
+        );
+
+    aviso.id =
+        "archive-resend-result";
+
+    aviso.innerHTML = `
+        <div
+            style="
+                position:fixed;
+                inset:0;
+                background:rgba(0,0,0,.45);
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                z-index:99999;
+            "
+        >
+            <div
+                style="
+                    background:white;
+                    padding:28px 35px;
+                    border-radius:12px;
+                    box-shadow:0 8px 30px rgba(0,0,0,.25);
+                    min-width:320px;
+                    max-width:600px;
+                    text-align:center;
+                "
+            >
+
+                <div
+                    style="
+                        font-size:16px;
+                        line-height:1.5;
+                    "
+                >
+                    ${contenido}
+                </div>
+
+                <button
+                    type="button"
+                    id="archive-resend-result-ok"
+                    style="
+                        margin-top:22px;
+                        padding:9px 25px;
+                        border:none;
+                        border-radius:6px;
+                        background:#333;
+                        color:white;
+                        cursor:pointer;
+                        font-size:14px;
+                    "
+                >
+                    Aceptar
+                </button>
+
+            </div>
+        </div>
+    `;
+
+
+    document.body.appendChild(
+        aviso
+    );
+
+
+    return new Promise(
+        resolve => {
+
+            const btn =
+                document.querySelector(
+                    "#archive-resend-result-ok"
+                );
+
+
+            if (
+                btn
+            ) {
+
+                btn.addEventListener(
+                    "click",
+                    function () {
+
+                        aviso.remove();
+
+                        resolve();
+
+                    }
                 );
 
             }

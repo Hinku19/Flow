@@ -18,7 +18,9 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "multer": "^2.3.0",
-    "mysql2": "^3.24.2"
+    "mysql2": "^3.24.2",
+    "nodemailer": "^10.0.10",
+    "puppeteer": "^24.26.1"
   },
   "devDependencies": {
     "live-server": "^1.2.2"

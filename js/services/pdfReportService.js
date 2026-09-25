@@ -2,7 +2,38 @@
    PDF REPORT SERVICE
    ========================================================= */
 
-export function exportarReunionPDF(
+import {
+    API_URL
+} from "../components/config.js";
+
+import {
+    headerUsuario
+} from "./auth.service.js";
+
+async function convertirImagenADataURL(url) {
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+        throw new Error(`No fue posible cargar el recurso ${url}.`);
+    }
+
+    const blob = await response.blob();
+
+    return await new Promise((resolve, reject) => {
+
+        const reader = new FileReader();
+
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+
+        reader.readAsDataURL(blob);
+
+    });
+
+}
+
+export async function generarHTMLReunionPDF(
     reunion,
     secciones,
     participantes
@@ -17,17 +48,21 @@ export function exportarReunionPDF(
     }
 
     const logoSocoda =
-    new URL(
-        "./assets/socoadalogo.png",
-        window.location.href
-    ).href;
+        await convertirImagenADataURL(
+            new URL(
+                "./assets/socoadalogo.png",
+                window.location.href
+            ).href
+        );
 
 
-const logoFlow =
-    new URL(
-        "./assets/flowlogo.png",
-        window.location.href
-    ).href;
+    const logoFlow =
+        await convertirImagenADataURL(
+            new URL(
+                "./assets/flowlogo.png",
+                window.location.href
+            ).href
+        );
 
 
     const s =
@@ -41,23 +76,6 @@ const logoFlow =
         )
             ? participantes
             : [];
-
-
-    const ventana =
-        window.open(
-            "",
-            "_blank",
-            "width=1200,height=900"
-        );
-
-
-    if (!ventana) {
-
-        throw new Error(
-            "El navegador bloqueó la ventana del reporte. Permite ventanas emergentes para Flow."
-        );
-
-    }
 
 
     /* =====================================================
@@ -595,10 +613,7 @@ const logoFlow =
             );
 
 
-    ventana.document.open();
-
-
-ventana.document.write(
+    const html =
 `
 <!DOCTYPE html>
 
@@ -1765,10 +1780,103 @@ ventana.document.write(
 
 </html>
 
-`
-);
+`;
 
 
+    return html;
+
+}
+
+/* =========================================================
+   EXPORTAR PDF DESDE EL NAVEGADOR
+   ========================================================= */
+
+export async function exportarReunionPDF(
+    reunion,
+    secciones,
+    participantes
+) {
+
+    const html =
+        await generarHTMLReunionPDF(
+            reunion,
+            secciones,
+            participantes
+        );
+
+    const ventana =
+        window.open(
+            "",
+            "_blank",
+            "width=1200,height=900"
+        );
+
+    if (!ventana) {
+        throw new Error(
+            "El navegador bloqueó la ventana del reporte. Permite ventanas emergentes para Flow."
+        );
+    }
+
+    ventana.document.open();
+    ventana.document.write(html);
     ventana.document.close();
+
+}
+
+/* =========================================================
+   ENVIAR REPORTE POR CORREO
+   ========================================================= */
+
+export async function enviarReporteReunionPorCorreo(
+    reunionId,
+    reunion,
+    secciones,
+    participantes
+) {
+
+    const html =
+        await generarHTMLReunionPDF(
+            reunion,
+            secciones,
+            participantes
+        );
+
+    /*
+     * El HTML de Exportar PDF contiene el script que abre
+     * el diálogo de impresión. Para el servidor solo necesitamos
+     * la plantilla visual, así que lo retiramos antes de enviarla.
+     */
+    const htmlParaCorreo =
+        html.replace(
+            /<script[\s\S]*?<\/script>/gi,
+            ""
+        );
+
+    const response =
+        await fetch(
+            `${API_URL}/reuniones/${reunionId}/enviar-reporte`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...headerUsuario()
+                },
+                body: JSON.stringify({
+                    html: htmlParaCorreo
+                })
+            }
+        );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.mensaje ||
+            data.error ||
+            "No fue posible enviar el reporte por correo."
+        );
+    }
+
+    return data;
 
 }

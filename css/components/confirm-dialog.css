@@ -50,3 +50,107 @@ dialog{
 .confirm-dialog__accept--danger {
   background-color: var(--color-danger);
 }
+
+/* =========================================================
+   AVISO DE ENVÍO DE MINUTA
+   ========================================================= */
+
+.minuta-status-dialog {
+
+    border: none;
+
+    border-radius:
+        var(--radius-lg);
+
+    padding:
+        var(--space-xl);
+
+    max-width:
+        500px;
+
+    width:
+        90%;
+
+    box-shadow:
+        var(--shadow-lg);
+
+}
+
+
+.minuta-status-dialog::backdrop {
+
+    background:
+        rgba(
+            0,
+            0,
+            0,
+            0.35
+        );
+
+}
+
+
+.minuta-status-dialog__content {
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    gap:
+        var(--space-lg);
+
+}
+
+
+.minuta-status-dialog__message {
+
+    font-size:
+        var(--text-base);
+
+    color:
+        var(--color-text);
+
+    line-height:
+        1.5;
+
+}
+
+
+.minuta-status-dialog__actions {
+
+    display:
+        flex;
+
+    justify-content:
+        flex-end;
+
+}
+
+
+.minuta-status-dialog__accept {
+
+    border:
+        none;
+
+    padding:
+        var(--space-sm)
+        var(--space-lg);
+
+    border-radius:
+        var(--radius-md);
+
+    background:
+        var(--color-success);
+
+    color:
+        #ffffff;
+
+    font-weight:
+        var(--weight-medium);
+
+    cursor:
+        pointer;
+
+}
