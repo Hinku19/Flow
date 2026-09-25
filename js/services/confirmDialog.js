@@ -16,10 +16,19 @@ export function confirmarEliminacion(texto = "¿Eliminar este elemento? Esta acc
   });
 }
 
-export function confirmDialog(texto, { danger = false, acceptLabel = "Sí", cancelLabel = "No" } = {}) {
+/*
+ * Reemplazo de alert() con la estética de la app: el mismo
+ * diálogo, pero solo con el botón de aceptar.
+ */
+export function avisoDialog(texto, { acceptLabel = "Aceptar" } = {}) {
+  return confirmDialog(texto, { acceptLabel, soloAceptar: true });
+}
+
+export function confirmDialog(texto, { danger = false, acceptLabel = "Sí", cancelLabel = "No", soloAceptar = false } = {}) {
   message.textContent = texto;
   acceptBtn.textContent = acceptLabel;
   cancelBtn.textContent = cancelLabel;
+  cancelBtn.hidden = soloAceptar;
   acceptBtn.classList.toggle("confirm-dialog__accept--danger", danger);
   dialog.showModal();
 

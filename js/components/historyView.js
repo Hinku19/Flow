@@ -11,7 +11,8 @@ import {
 } from "./config.js";
 
 import {
-    confirmDialog
+    confirmDialog,
+    avisoDialog
 } from "../services/confirmDialog.js";
 
 import {
@@ -706,7 +707,7 @@ export function createHistoryView({
             getReunionActivaId()
         ) {
 
-            alert(
+            avisoDialog(
                 "No puedes eliminar la reunión que está en curso."
             );
 
@@ -768,7 +769,7 @@ export function createHistoryView({
                 error
             );
 
-            alert(
+            avisoDialog(
                 error.message ||
                 "No fue posible eliminar la reunión."
             );

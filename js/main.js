@@ -30,8 +30,21 @@ import {
 } from "./services/viewManager.js";
 
 import {
-    confirmDialog
+    confirmDialog,
+    avisoDialog
 } from "./services/confirmDialog.js";
+
+import {
+    asignarResponsableDialog
+} from "./services/asignarDialog.js";
+
+import {
+    obtenerResponsables
+} from "./utils/responsables.js";
+
+import {
+    API_URL
+} from "./components/config.js";
 
 import {
     initMeetingViewMode
@@ -88,6 +101,10 @@ import {
 } from "./components/commitmentsView.js";
 
 import {
+    initActivitiesView
+} from "./components/activitiesView.js";
+
+import {
     initInnovationForm
 } from "./components/innovationForm.js";
 
@@ -127,7 +144,8 @@ import {
     cerrarSesion,
     usuarioAutenticado,
     esAdmin,
-    getUsuarioActual
+    getUsuarioActual,
+    headerUsuario
 } from "./services/auth.service.js";
 
 
@@ -223,6 +241,15 @@ function inicializarNavegacion() {
         ) {
 
             commitmentsView.render();
+
+        }
+
+
+        if (
+            vista === "actividades"
+        ) {
+
+            activitiesView.render();
 
         }
 
@@ -460,6 +487,135 @@ function inicializarNavegacion() {
 
 
 /* =========================================================
+   RESPONSABLE DE UN OBJETIVO
+   ---------------------------------------------------------
+   Al crear un objetivo se elige a quién se le asigna, entre
+   los participantes de la reunión activa. Se consultan en el
+   servidor cada vez (no del meta local) para que siempre
+   reflejen a los participantes reales de la reunión.
+   ========================================================= */
+
+async function obtenerParticipantesReunion(
+    reunionId
+) {
+
+    const response =
+        await fetch(
+            `${API_URL}/reuniones/${reunionId}`,
+            {
+
+                headers:
+                    headerUsuario()
+
+            }
+        );
+
+
+    const data =
+        await response.json();
+
+
+    if (!response.ok) {
+
+        throw new Error(
+            data.mensaje ||
+            data.error ||
+            "No fue posible obtener los participantes."
+        );
+
+    }
+
+
+    return (
+        data.participantes ||
+        []
+    )
+        .map(
+            participante => ({
+
+                id:
+                    Number(
+                        participante.UsuarioId
+                    ),
+
+                nombre:
+                    participante.nombre
+
+            })
+        )
+        .sort(
+            (a, b) =>
+                a.nombre.localeCompare(
+                    b.nombre
+                )
+        );
+
+}
+
+
+async function asignarResponsableObjetivo(
+    objetivo
+) {
+
+    let participantes;
+
+    try {
+
+        participantes =
+            await obtenerParticipantesReunion(
+                getReunionActivaId()
+            );
+
+    }
+    catch (error) {
+
+        console.error(
+            "ERROR CARGANDO PARTICIPANTES PARA ASIGNAR:",
+            error
+        );
+
+        await avisoDialog(
+            "No fue posible cargar los participantes de la reunión para asignar el objetivo."
+        );
+
+        return null;
+
+    }
+
+
+    if (participantes.length === 0) {
+
+        await avisoDialog(
+            "La reunión no tiene participantes a quién asignar el objetivo."
+        );
+
+        return null;
+
+    }
+
+
+    return asignarResponsableDialog({
+
+        texto:
+            objetivo.texto,
+
+        participantes:
+            participantes,
+
+        seleccionadosIds:
+            obtenerResponsables(
+                objetivo
+            ).map(
+                responsable =>
+                    responsable.id
+            )
+
+    });
+
+}
+
+
+/* =========================================================
    MONTAR REUNIÓN
    ========================================================= */
 
@@ -515,6 +671,9 @@ function montarReunion() {
 
         showCheckbox:
             false,
+
+        asignarResponsable:
+            asignarResponsableObjetivo,
 
         checkCompletado:
             (id) =>
@@ -1203,6 +1362,14 @@ initUserEdit();
 
 const commitmentsView =
     initCommitmentsView();
+
+
+/* =========================================================
+   VISOR DE ACTIVIDADES POR USUARIO
+   ========================================================= */
+
+const activitiesView =
+    initActivitiesView();
 
 
 /* =========================================================

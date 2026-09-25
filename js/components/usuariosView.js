@@ -1,3 +1,5 @@
+import { avisoDialog } from "../services/confirmDialog.js";
+
 /* =========================================================
    FLOW - CONTROL DE USUARIOS
    ========================================================= */
@@ -401,7 +403,7 @@ export function initUsuariosView() {
             );
 
 
-            alert(
+            avisoDialog(
                 error.message ||
                 "No fue posible actualizar el estado."
             );

@@ -47,6 +47,9 @@
     --color-evaluaciones: #0E8388;   /*verde azulado (teal) - Evaluaciones*/
     --color-evaluaciones-light: #16A3A0;
     --color-evaluaciones-bg: #E3F5F4;
+    --color-actividades: #B04A82;    /*magenta - Mis actividades*/
+    --color-actividades-light: #D873AA;
+    --color-actividades-bg: #FBEAF3;
 
     /*Espaciado (escala de 4px)*/
     --space-2xs: 4px;

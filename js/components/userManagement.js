@@ -12,6 +12,10 @@ import {
     getUsuarioActual
 } from "../services/auth.service.js";
 
+import {
+    avisoDialog
+} from "../services/confirmDialog.js";
+
 const ROL_LABEL = {
     administrador: "Administrador",
     lider: "Líder",
@@ -1012,7 +1016,7 @@ if (btnEditar) {
             );
 
 
-            alert(
+            avisoDialog(
                 error.message ||
                 "No fue posible cambiar el estado del usuario."
             );
@@ -1084,7 +1088,7 @@ if (btnEditar) {
                 error
             );
 
-            alert(
+            avisoDialog(
                 error.message ||
                 "No fue posible cambiar el rol del usuario."
             );

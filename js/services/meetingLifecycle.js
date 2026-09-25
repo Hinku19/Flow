@@ -20,7 +20,8 @@ import {
 
 
 import {
-    confirmDialog
+    confirmDialog,
+    avisoDialog
 } from "./confirmDialog.js";
 
 
@@ -2090,7 +2091,7 @@ async function crearReunionBD(
             2
         ) {
 
-            alert(
+            avisoDialog(
                 "Debes seleccionar al menos dos participantes."
             );
 
@@ -2116,7 +2117,7 @@ async function crearReunionBD(
     !titulo
 ) {
 
-    alert(
+    avisoDialog(
         "Debes indicar el título de la reunión."
     );
 
@@ -2137,7 +2138,7 @@ async function crearReunionBD(
             !hora
         ) {
 
-            alert(
+            avisoDialog(
                 "Debes seleccionar la fecha y hora de la reunión."
             );
 
@@ -2158,7 +2159,7 @@ async function crearReunionBD(
             )
         ) {
 
-            alert(
+            avisoDialog(
                 "La fecha u hora de la reunión no es válida."
             );
 
@@ -2172,7 +2173,7 @@ async function crearReunionBD(
             new Date()
         ) {
 
-            alert(
+            avisoDialog(
                 "La fecha y hora de la reunión deben ser posteriores al momento actual."
             );
 
@@ -2195,7 +2196,7 @@ const usuarioSesion =
 
 if (!usuarioSesion) {
 
-    alert(
+    avisoDialog(
         "No se encontró la sesión del usuario."
     );
 
@@ -2206,7 +2207,7 @@ if (!usuarioSesion) {
 
 if (!usuarioSesion.id) {
 
-    alert(
+    avisoDialog(
         "La sesión del usuario no contiene un ID válido."
     );
 
@@ -2292,7 +2293,7 @@ catch (error) {
     );
 
 
-    alert(
+    avisoDialog(
         error.message ||
         "No fue posible crear la reunión."
     );
@@ -2327,7 +2328,7 @@ catch (error) {
     );
 
 
-    alert(
+    avisoDialog(
         error.message ||
         "La reunión se creó, pero no fue posible guardar los participantes."
     );
@@ -2736,7 +2737,7 @@ async function iniciarReunionProgramada(
         );
 
 
-        alert(
+        avisoDialog(
             error.message ||
             "No fue posible iniciar la reunión."
         );

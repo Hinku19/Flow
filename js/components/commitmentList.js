@@ -1,7 +1,7 @@
 import { loadData, saveData } from "../services/storage.service.js";
 import { API_URL } from "./config.js";
 import { capitalizar } from "../utils/capitalize.js";
-import { confirmarEliminacion } from "../services/confirmDialog.js";
+import { confirmarEliminacion, avisoDialog } from "../services/confirmDialog.js";
 import { getUsuarioActual, headerUsuario } from "../services/auth.service.js";
 
 export const ESTADO_LABEL = {
@@ -190,7 +190,7 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
       }
     } catch (error) {
       console.error("ERROR SINCRONIZANDO COMPROMISOS CON LA TABLA:", error);
-      alert(error.message || "No fue posible sincronizar los compromisos con la base de datos.");
+      avisoDialog(error.message || "No fue posible sincronizar los compromisos con la base de datos.");
     }
   }
 
@@ -337,12 +337,12 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
       original?.estado !== "completado";
 
     if (seCompleta && !puedeCompletar({ ...original, ...data })) {
-      alert("Solo el responsable del compromiso o un líder pueden marcarlo como completado.");
+      avisoDialog("Solo el responsable del compromiso o un líder pueden marcarlo como completado.");
       return;
     }
 
     if (editingId === null && data.estado === "completado" && !puedeCompletar(data)) {
-      alert("Solo el responsable del compromiso o un líder pueden marcarlo como completado.");
+      avisoDialog("Solo el responsable del compromiso o un líder pueden marcarlo como completado.");
       return;
     }
 

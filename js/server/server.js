@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const multer = require("multer");
 const nodemailer = require("nodemailer");
 const puppeteer = require("puppeteer");
+const path = require("path");
 
 const db = require("./db");
 
@@ -114,6 +115,216 @@ app.use(
 
 
 /* =========================================================
+   FORMATOS PERMITIDOS EN SUBIDAS
+   ---------------------------------------------------------
+   El frontend ya convierte las imágenes a WebP y las reduce
+   (ver js/utils/normalizarImagen.js), pero el servidor no
+   confía en eso ni en el mimetype que manda el navegador (se
+   puede falsificar): revisa la firma real del archivo (sus
+   primeros bytes). Así se rechazan SVG (pueden traer scripts),
+   HEIC (Chrome/Edge no los muestran) y archivos renombrados.
+   ========================================================= */
+
+const TIPOS_IMAGEN_PERMITIDOS = [
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+];
+
+
+function detectarTipoArchivo(
+    buffer
+) {
+
+    if (
+        !buffer ||
+        buffer.length < 12
+    ) {
+
+        return null;
+
+    }
+
+
+    if (
+        buffer[0] === 0xff &&
+        buffer[1] === 0xd8 &&
+        buffer[2] === 0xff
+    ) {
+
+        return "image/jpeg";
+
+    }
+
+
+    if (
+        buffer
+            .subarray(0, 8)
+            .equals(
+                Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+            )
+    ) {
+
+        return "image/png";
+
+    }
+
+
+    if (
+        buffer.toString("ascii", 0, 4) === "RIFF" &&
+        buffer.toString("ascii", 8, 12) === "WEBP"
+    ) {
+
+        return "image/webp";
+
+    }
+
+
+    if (
+        buffer.toString("ascii", 0, 5) === "%PDF-"
+    ) {
+
+        return "application/pdf";
+
+    }
+
+
+    return null;
+
+}
+
+
+/* =========================================================
+   EVIDENCIA DE INNOVACIONES (PDF / WORD / EXCEL)
+   ---------------------------------------------------------
+   Igual que con las imágenes, el tipo se decide por la firma
+   real del archivo y no por el mimetype del navegador. Word y
+   Excel no tienen firma propia: .docx/.xlsx son ZIP ("PK") y
+   .doc/.xls son OLE2, así que la firma se cruza con la
+   extensión. Devuelve el MIME a guardar, o null si no es
+   un formato permitido.
+   ========================================================= */
+
+const FIRMA_ZIP =
+    Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+
+const FIRMA_OLE2 =
+    Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+
+const TIPOS_EVIDENCIA_OFFICE = {
+    ".docx": {
+        firma: FIRMA_ZIP,
+        mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    },
+    ".xlsx": {
+        firma: FIRMA_ZIP,
+        mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    ".doc": {
+        firma: FIRMA_OLE2,
+        mime: "application/msword"
+    },
+    ".xls": {
+        firma: FIRMA_OLE2,
+        mime: "application/vnd.ms-excel"
+    }
+};
+
+
+function detectarTipoEvidenciaArchivo(
+    archivo
+) {
+
+    if (
+        detectarTipoArchivo(
+            archivo.buffer
+        ) === "application/pdf"
+    ) {
+
+        return "application/pdf";
+
+    }
+
+
+    const extension =
+        path
+            .extname(
+                archivo.originalname || ""
+            )
+            .toLowerCase();
+
+    const tipoOffice =
+        TIPOS_EVIDENCIA_OFFICE[extension];
+
+    if (
+        tipoOffice &&
+        archivo.buffer &&
+        archivo.buffer
+            .subarray(0, tipoOffice.firma.length)
+            .equals(
+                tipoOffice.firma
+            )
+    ) {
+
+        return tipoOffice.mime;
+
+    }
+
+
+    return null;
+
+}
+
+
+/* =========================================================
+   ENVIAR UN ARCHIVO GUARDADO EN MySQL
+   ---------------------------------------------------------
+   nosniff evita que el navegador "adivine" otro tipo (p. ej.
+   HTML) a partir del contenido. Solo imágenes y PDF se
+   muestran en línea; cualquier otro tipo (Word, Excel o un
+   tipo raro guardado antes de validar firmas) se descarga.
+   ========================================================= */
+
+const TIPOS_MOSTRABLES_EN_LINEA = [
+    ...TIPOS_IMAGEN_PERMITIDOS,
+    "application/pdf"
+];
+
+
+function enviarArchivoGuardado(
+    res,
+    archivo
+) {
+
+    const enLinea =
+        TIPOS_MOSTRABLES_EN_LINEA.includes(
+            archivo.tipo_mime
+        );
+
+    res.set(
+        "Content-Type",
+        archivo.tipo_mime ||
+        "application/octet-stream"
+    );
+
+    res.set(
+        "X-Content-Type-Options",
+        "nosniff"
+    );
+
+    res.set(
+        "Content-Disposition",
+        `${enLinea ? "inline" : "attachment"}; filename="${encodeURIComponent(archivo.nombre_original)}"`
+    );
+
+    return res.send(
+        archivo.contenido
+    );
+
+}
+
+
+/* =========================================================
    ARCHIVOS SUBIDOS (INNOVACIONES)
    ---------------------------------------------------------
    Se guardan como BLOB en MySQL (tabla innovacion_archivos)
@@ -131,7 +342,31 @@ const uploadInnovacion =
         limits: {
             fileSize:
                 15 * 1024 * 1024
-        }
+        },
+
+        /*
+         * Solo las imágenes de evidencia se restringen; el
+         * archivo de evidencia (PDF/Word/Excel) no cambia.
+         */
+        fileFilter:
+            (req, file, cb) => {
+
+                if (
+                    file.fieldname === "evidenciaImagenes" &&
+                    !TIPOS_IMAGEN_PERMITIDOS.includes(file.mimetype)
+                ) {
+
+                    return cb(
+                        new Error(
+                            "Las imágenes de evidencia deben ser JPG, PNG o WebP."
+                        )
+                    );
+
+                }
+
+                cb(null, true);
+
+            }
 
     });
 
@@ -158,14 +393,14 @@ const uploadEnlaceArchivo =
             (req, file, cb) => {
 
                 const permitido =
-                    file.mimetype.startsWith("image/") ||
+                    TIPOS_IMAGEN_PERMITIDOS.includes(file.mimetype) ||
                     file.mimetype === "application/pdf";
 
                 if (!permitido) {
 
                     return cb(
                         new Error(
-                            "Solo se permiten imágenes o archivos PDF."
+                            "Solo se permiten imágenes JPG, PNG, WebP o archivos PDF."
                         )
                     );
 
@@ -200,13 +435,13 @@ const uploadFotoPerfil =
             (req, file, cb) => {
 
                 const permitido =
-                    file.mimetype.startsWith("image/");
+                    TIPOS_IMAGEN_PERMITIDOS.includes(file.mimetype);
 
                 if (!permitido) {
 
                     return cb(
                         new Error(
-                            "Solo se permiten imágenes."
+                            "Solo se permiten imágenes JPG, PNG o WebP."
                         )
                     );
 
@@ -1229,6 +1464,27 @@ app.post(
             }
 
 
+            const tipoReal =
+                detectarTipoArchivo(
+                    req.file.buffer
+                );
+
+            if (!TIPOS_IMAGEN_PERMITIDOS.includes(tipoReal)) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "La imagen no es un JPG, PNG o WebP válido."
+
+                    });
+
+            }
+
+
             await db.execute(
                 `
                 UPDATE usuarios
@@ -1238,7 +1494,7 @@ app.post(
                 WHERE id = ?
                 `,
                 [
-                    req.file.mimetype,
+                    tipoReal,
                     req.file.buffer,
                     usuarioId
                 ]
@@ -1392,6 +1648,58 @@ app.get(
                     req.params.id
                 );
 
+
+            /*
+             * Caché: el navegador guarda la foto y en cada uso
+             * pregunta si cambió (no-cache + ETag). Primero se
+             * pide solo el MD5 (lo calcula MySQL): si coincide
+             * con el que ya tiene el navegador se responde 304 y
+             * el BLOB no viaja desde el MySQL remoto.
+             */
+
+            const [hashRows] =
+                await db.execute(
+                    `
+                    SELECT
+                        MD5(foto_contenido) AS hash
+                    FROM usuarios
+                    WHERE id = ?
+                    LIMIT 1
+                    `,
+                    [
+                        usuarioId
+                    ]
+                );
+
+            const hash =
+                hashRows[0]?.hash;
+
+            if (hash) {
+
+                const etag =
+                    `"${hash}"`;
+
+                res.set(
+                    "Cache-Control",
+                    "private, no-cache"
+                );
+
+                res.set(
+                    "ETag",
+                    etag
+                );
+
+                if (req.get("If-None-Match") === etag) {
+
+                    return res
+                        .status(304)
+                        .end();
+
+                }
+
+            }
+
+
             const [rows] =
                 await db.execute(
                     `
@@ -1430,6 +1738,11 @@ app.get(
                 "Content-Type",
                 rows[0].foto_mime ||
                 "application/octet-stream"
+            );
+
+            res.set(
+                "X-Content-Type-Options",
+                "nosniff"
             );
 
             return res.send(
@@ -5411,7 +5724,24 @@ app.post(
                                 objetivo.texto,
 
                             done:
-                                false
+                                false,
+
+                            /*
+                             * Los responsables asignados al crear
+                             * el objetivo viajan con él a la
+                             * siguiente reunión (ver visor de
+                             * actividades).
+                             */
+                            ...(
+                                obtenerResponsablesObjetivo(objetivo).length > 0
+                                    ? {
+                                        responsables:
+                                            obtenerResponsablesObjetivo(
+                                                objetivo
+                                            )
+                                    }
+                                    : {}
+                            )
 
                         };
 
@@ -5715,6 +6045,389 @@ app.post(
                 connection.release();
 
             }
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   VISOR DE ACTIVIDADES POR USUARIO
+   ========================================================= */
+
+/*
+ * Objetivos asignados a un usuario (está entre los "responsables"
+ * del objetivo en el JSON de la sección "objetivos"; un objetivo
+ * puede tener varios) con el avance de sus puntos de
+ * desarrollo, para que cada quien vea sus actividades sin abrir
+ * el reporte completo de la junta.
+ *
+ * Solo se leen reuniones cuyos pendientes todavía no se heredaron
+ * (PendientesConsumidos = 0): cuando una reunión hereda, los
+ * objetivos pendientes se copian a la nueva con otro id, así que
+ * la reunión anterior ya no representa el estado actual y
+ * mostrarla duplicaría las actividades.
+ *
+ * Por defecto se consulta al propio solicitante. ?usuarioId=
+ * permite ver a otro: administrador a cualquiera, líder solo a
+ * usuarios de su mismo departamento, operador a nadie más.
+ */
+
+/*
+ * Responsables de un objetivo como arreglo [{ id, nombre }].
+ * Los objetivos asignados antes de permitir varios responsables
+ * traen un solo usuarioAsignadoId / usuarioAsignadoNombre (mismo
+ * criterio que js/utils/responsables.js en el frontend).
+ */
+function obtenerResponsablesObjetivo(
+    objetivo
+) {
+
+    if (Array.isArray(objetivo?.responsables)) {
+
+        return objetivo.responsables;
+
+    }
+
+
+    if (objetivo?.usuarioAsignadoId) {
+
+        return [
+            {
+                id:
+                    objetivo.usuarioAsignadoId,
+
+                nombre:
+                    objetivo.usuarioAsignadoNombre ||
+                    "?"
+            }
+        ];
+
+    }
+
+
+    return [];
+
+}
+
+
+function calcularAvanceObjetivo(
+    bloques
+) {
+
+    const puntos =
+        (
+            Array.isArray(bloques)
+                ? bloques
+                : []
+        ).filter(
+            (bloque) =>
+                bloque.tipo === "punto"
+        );
+
+
+    const avance =
+        puntos.length === 0
+            ? 0
+            : Math.round(
+                puntos.reduce(
+                    (suma, punto) =>
+                        suma + (Number(punto.avance) || 0),
+                    0
+                ) / puntos.length
+            );
+
+
+    return {
+
+        puntos:
+            puntos.map(
+                (punto) => ({
+
+                    texto:
+                        punto.texto || "",
+
+                    avance:
+                        Number(punto.avance) || 0
+
+                })
+            ),
+
+        avance:
+            avance,
+
+        completado:
+            puntos.length > 0 &&
+            puntos.every(
+                (punto) =>
+                    (Number(punto.avance) || 0) === 100
+            )
+
+    };
+
+}
+
+
+app.get(
+    "/api/actividades",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (!usuarioSolicitante) {
+
+                return res
+                    .status(401)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "No fue posible identificar al usuario."
+
+                    });
+
+            }
+
+
+            const usuarioId =
+                Number(req.query.usuarioId) ||
+                usuarioSolicitante.id;
+
+
+            if (
+                usuarioId !== usuarioSolicitante.id &&
+                !esAdmin(usuarioSolicitante)
+            ) {
+
+                if (usuarioSolicitante.rol !== "lider") {
+
+                    return respuestaSinPermiso(res);
+
+                }
+
+
+                const [consultadoRows] =
+                    await db.execute(
+                        `
+                        SELECT departamento
+                        FROM usuarios
+                        WHERE id = ?
+                        LIMIT 1
+                        `,
+                        [
+                            usuarioId
+                        ]
+                    );
+
+
+                if (
+                    consultadoRows.length === 0 ||
+                    String(consultadoRows[0].departamento || "").trim() !==
+                        String(usuarioSolicitante.departamento || "").trim()
+                ) {
+
+                    return respuestaSinPermiso(res);
+
+                }
+
+            }
+
+
+            const [rows] =
+                await db.execute(
+                    `
+                    SELECT
+                        r.ReunionId,
+                        r.Titulo,
+                        r.FechaInicio,
+                        r.Estado,
+                        rs.Seccion,
+                        rs.Contenido
+                    FROM reuniones r
+                    INNER JOIN reunion_secciones rs
+                        ON rs.ReunionId = r.ReunionId
+                        AND rs.Seccion IN ('objetivos', 'desarrollo')
+                    WHERE
+                        r.Estado IN ('En curso', 'Finalizada')
+                        AND r.PendientesConsumidos = 0
+                    ORDER BY
+                        r.FechaInicio DESC
+                    `
+                );
+
+
+            /*
+             * Agrupar las dos secciones de cada reunión.
+             */
+
+            const reuniones =
+                new Map();
+
+            rows.forEach(
+                (row) => {
+
+                    if (!reuniones.has(row.ReunionId)) {
+
+                        reuniones.set(
+                            row.ReunionId,
+                            {
+                                reunion: row,
+                                filas: []
+                            }
+                        );
+
+                    }
+
+                    reuniones
+                        .get(row.ReunionId)
+                        .filas
+                        .push(row);
+
+                }
+            );
+
+
+            const actividades =
+                [];
+
+            reuniones.forEach(
+                ({ reunion, filas }) => {
+
+                    let objetivos;
+                    let desarrollo;
+
+                    try {
+
+                        objetivos =
+                            contenidoDeSeccion(
+                                filas,
+                                "objetivos",
+                                []
+                            );
+
+                        desarrollo =
+                            contenidoDeSeccion(
+                                filas,
+                                "desarrollo",
+                                {}
+                            );
+
+                    }
+                    catch (error) {
+
+                        console.error(
+                            `ERROR PARSEANDO SECCIONES DE LA REUNIÓN ${reunion.ReunionId}:`,
+                            error
+                        );
+
+                        return;
+
+                    }
+
+
+                    (
+                        Array.isArray(objetivos)
+                            ? objetivos
+                            : []
+                    )
+                        .filter(
+                            (objetivo) =>
+                                obtenerResponsablesObjetivo(objetivo).some(
+                                    (responsable) =>
+                                        Number(responsable.id) === usuarioId
+                                )
+                        )
+                        .forEach(
+                            (objetivo) => {
+
+                                actividades.push({
+
+                                    /*
+                                     * Los demás responsables del
+                                     * mismo objetivo, para mostrar
+                                     * con quién se comparte.
+                                     */
+                                    compartidoCon:
+                                        obtenerResponsablesObjetivo(objetivo)
+                                            .filter(
+                                                (responsable) =>
+                                                    Number(responsable.id) !== usuarioId
+                                            )
+                                            .map(
+                                                (responsable) =>
+                                                    responsable.nombre
+                                            ),
+
+                                    reunionId:
+                                        reunion.ReunionId,
+
+                                    reunionTitulo:
+                                        reunion.Titulo,
+
+                                    reunionFecha:
+                                        reunion.FechaInicio,
+
+                                    reunionEstado:
+                                        reunion.Estado,
+
+                                    objetivoId:
+                                        objetivo.id,
+
+                                    texto:
+                                        objetivo.texto,
+
+                                    ...calcularAvanceObjetivo(
+                                        desarrollo?.[objetivo.id]
+                                    )
+
+                                });
+
+                            }
+                        );
+
+                }
+            );
+
+
+            return res.json({
+
+                ok: true,
+
+                usuarioId:
+                    usuarioId,
+
+                actividades:
+                    actividades
+
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL OBTENER ACTIVIDADES:",
+                error
+            );
+
+
+            return res
+                .status(500)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        "No fue posible obtener las actividades.",
+
+                    error:
+                        error.message
+
+                });
 
         }
 
@@ -7020,6 +7733,62 @@ app.post(
                 {};
 
 
+            const imagenInvalida =
+                (archivos.evidenciaImagenes || []).find(
+                    (archivo) =>
+                        !TIPOS_IMAGEN_PERMITIDOS.includes(
+                            detectarTipoArchivo(
+                                archivo.buffer
+                            )
+                        )
+                );
+
+            if (imagenInvalida) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            `La imagen "${imagenInvalida.originalname}" no es un JPG, PNG o WebP válido.`
+
+                    });
+
+            }
+
+
+            const evidenciaArchivo =
+                archivos.evidenciaArchivo &&
+                archivos.evidenciaArchivo[0];
+
+            const tipoEvidenciaArchivo =
+                evidenciaArchivo
+                    ? detectarTipoEvidenciaArchivo(
+                        evidenciaArchivo
+                    )
+                    : null;
+
+            if (
+                evidenciaArchivo &&
+                !tipoEvidenciaArchivo
+            ) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            `El archivo "${evidenciaArchivo.originalname}" no es un PDF, Word o Excel válido.`
+
+                    });
+
+            }
+
+
             /* =============================================
                VALIDACIÓN
                ============================================= */
@@ -7306,7 +8075,9 @@ app.post(
                         innovacionId,
                         tipo,
                         archivo.originalname,
-                        archivo.mimetype,
+                        tipo === "evidencia_imagen"
+                            ? detectarTipoArchivo(archivo.buffer)
+                            : tipoEvidenciaArchivo,
                         archivo.buffer
                     ]
                 );
@@ -8249,22 +9020,9 @@ app.get(
             }
 
 
-            const archivo =
-                rows[0];
-
-            res.set(
-                "Content-Type",
-                archivo.tipo_mime ||
-                "application/octet-stream"
-            );
-
-            res.set(
-                "Content-Disposition",
-                `inline; filename="${encodeURIComponent(archivo.nombre_original)}"`
-            );
-
-            return res.send(
-                archivo.contenido
+            return enviarArchivoGuardado(
+                res,
+                rows[0]
             );
 
 
@@ -8385,6 +9143,30 @@ app.post(
                     }
 
 
+                    const tipoReal =
+                        detectarTipoArchivo(
+                            req.file.buffer
+                        );
+
+                    if (
+                        !TIPOS_IMAGEN_PERMITIDOS.includes(tipoReal) &&
+                        tipoReal !== "application/pdf"
+                    ) {
+
+                        return res
+                            .status(400)
+                            .json({
+
+                                ok: false,
+
+                                mensaje:
+                                    "El archivo no es una imagen JPG, PNG, WebP o un PDF válido."
+
+                            });
+
+                    }
+
+
                     const [result] =
                         await db.execute(
                             `
@@ -8403,7 +9185,7 @@ app.post(
                             [
                                 reunionId,
                                 req.file.originalname,
-                                req.file.mimetype,
+                                tipoReal,
                                 req.file.buffer
                             ]
                         );
@@ -8419,7 +9201,7 @@ app.post(
                             req.file.originalname,
 
                         tipoMime:
-                            req.file.mimetype
+                            tipoReal
 
                     });
 
@@ -8520,22 +9302,9 @@ app.get(
             }
 
 
-            const archivo =
-                rows[0];
-
-            res.set(
-                "Content-Type",
-                archivo.tipo_mime ||
-                "application/octet-stream"
-            );
-
-            res.set(
-                "Content-Disposition",
-                `inline; filename="${encodeURIComponent(archivo.nombre_original)}"`
-            );
-
-            return res.send(
-                archivo.contenido
+            return enviarArchivoGuardado(
+                res,
+                rows[0]
             );
 
         }
@@ -9952,6 +10721,16 @@ app.get(
     }
 );
 
+// =========================================================
+// FRONTEND
+// =========================================================
+
+app.use(
+    express.static(
+        path.join(__dirname, "../..")
+    )
+);
+
 
 /* =========================================================
    RUTA NO ENCONTRADA
@@ -9984,6 +10763,72 @@ app.use(
 /* =========================================================
    INICIAR SERVIDOR
    ========================================================= */
+
+/* =========================================================
+   ERRORES DE SUBIDA DE ARCHIVOS
+   ---------------------------------------------------------
+   Multer (archivo demasiado grande, formato rechazado por
+   fileFilter) pasa el error a Express, que por defecto
+   responde con una página HTML y el frontend no puede leer
+   el mensaje. Aquí se convierte al formato { ok, mensaje }.
+   Debe registrarse después de todas las rutas.
+   ========================================================= */
+
+app.use(
+    (error, req, res, next) => {
+
+        if (res.headersSent) {
+
+            return next(error);
+
+        }
+
+
+        console.error(
+            "ERROR EN LA PETICIÓN:",
+            error
+        );
+
+
+        if (error instanceof multer.MulterError) {
+
+            return res
+                .status(400)
+                .json({
+
+                    ok: false,
+
+                    mensaje:
+                        error.code === "LIMIT_FILE_SIZE"
+                            ? "El archivo es demasiado grande."
+                            : "No fue posible procesar el archivo subido."
+
+                });
+
+        }
+
+
+        /*
+         * Los rechazos de formato de los fileFilter llegan
+         * como Error normal con un mensaje ya pensado para
+         * el usuario.
+         */
+
+        return res
+            .status(400)
+            .json({
+
+                ok: false,
+
+                mensaje:
+                    error.message ||
+                    "No fue posible procesar la petición."
+
+            });
+
+    }
+);
+
 
 app.listen(
     PORT,

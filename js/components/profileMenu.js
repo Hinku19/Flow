@@ -7,7 +7,12 @@ import {
 } from "./config.js";
 
 import {
-    confirmarEliminacion
+    normalizarImagen
+} from "../utils/normalizarImagen.js";
+
+import {
+    confirmarEliminacion,
+    avisoDialog
 } from "../services/confirmDialog.js";
 
 import {
@@ -114,9 +119,21 @@ export function initProfileMenu() {
 
     }
 
+    /*
+     * El servidor responde la foto con ETag, así que el navegador
+     * la guarda en caché y solo la vuelve a descargar si cambió.
+     * La versión solo cambia al subir una foto nueva, para que el
+     * <img> se refresque al instante (antes era Date.now() en cada
+     * pintado, que obligaba a descargarla siempre).
+     */
+    let versionFoto =
+        0;
+
     function urlFoto() {
 
-        return `${API_URL}/usuarios/${usuario.id}/foto?t=${Date.now()}`;
+        return versionFoto
+            ? `${API_URL}/usuarios/${usuario.id}/foto?v=${versionFoto}`
+            : `${API_URL}/usuarios/${usuario.id}/foto`;
 
     }
 
@@ -496,15 +513,31 @@ export function initProfileMenu() {
 
                 if (!archivo) return;
 
-                const formData =
-                    new FormData();
-
-                formData.append(
-                    "foto",
-                    archivo
-                );
-
                 try {
+
+                    /*
+                     * Cuadrada de 256 px: se muestra como avatar
+                     * pequeño en toda la app, no hace falta más.
+                     */
+                    const foto =
+                        await normalizarImagen(
+                            archivo,
+                            {
+                                tamanoMaximo:
+                                    256,
+
+                                cuadrado:
+                                    true
+                            }
+                        );
+
+                    const formData =
+                        new FormData();
+
+                    formData.append(
+                        "foto",
+                        foto
+                    );
 
                     const response =
                         await fetch(
@@ -521,7 +554,7 @@ export function initProfileMenu() {
 
                     if (!data.ok) {
 
-                        alert(
+                        avisoDialog(
                             data.mensaje ||
                             "No fue posible subir la foto."
                         );
@@ -531,6 +564,9 @@ export function initProfileMenu() {
                     }
 
                     usuario.tieneFoto = true;
+
+                    versionFoto =
+                        Date.now();
 
                     sessionStorage.setItem(
                         "flow.usuario",
@@ -547,7 +583,8 @@ export function initProfileMenu() {
                         error
                     );
 
-                    alert(
+                    avisoDialog(
+                        error.message ||
                         "No fue posible subir la foto."
                     );
 

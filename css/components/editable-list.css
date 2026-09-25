@@ -128,3 +128,27 @@
     outline:none;
     box-shadow: 0 0 0 3px rgba(0, 48, 73, 0.12);
   }
+/* Responsable asignado (objetivos). Clic para reasignar. */
+.editable-list__responsable {
+  align-self: flex-start;
+  padding: 2px var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-alt);
+  color: var(--color-text-second);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.editable-list__responsable:hover,
+.editable-list__responsable:focus-visible {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.editable-list__responsable--vacio {
+  border-style: dashed;
+  color: var(--color-text-subtle);
+}

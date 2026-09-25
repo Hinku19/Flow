@@ -58,6 +58,10 @@
 
 /* Diálogos */
 @import "components/confirm-dialog.css";
+@import "components/asignar-dialog.css";
+
+/* Visor de actividades */
+@import "components/activities-view.css";
 
 /* Perfil */
 @import "components/profile-menu.css";

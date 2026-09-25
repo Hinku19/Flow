@@ -51,6 +51,10 @@ import {
     createLinkList
 } from "./linkList.js";
 
+import {
+    avisoDialog
+} from "../services/confirmDialog.js";
+
 
 let reunionActual =
     null;
@@ -1326,7 +1330,7 @@ seccionesActuales =
                     !reunionActual
                 ) {
 
-                    alert(
+                    avisoDialog(
                         "No hay una reunión cargada."
                     );
 
@@ -1351,7 +1355,7 @@ seccionesActuales =
                 );
 
 
-                alert(
+                avisoDialog(
                     error.message ||
                     "No fue posible generar el PDF."
                 );

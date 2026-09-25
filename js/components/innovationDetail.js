@@ -14,6 +14,10 @@ import {
     pintarInnovacionEnElementos
 } from "../utils/innovacionRender.js";
 
+import {
+    avisoDialog
+} from "../services/confirmDialog.js";
+
 
 export function initInnovationDetail() {
 
@@ -146,7 +150,7 @@ export function initInnovationDetail() {
                 error
             );
 
-            alert(
+            avisoDialog(
                 error.message ||
                 "No fue posible abrir la innovación."
             );

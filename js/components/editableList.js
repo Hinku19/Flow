@@ -1,6 +1,7 @@
 import {loadData, saveData} from "../services/storage.service.js"
 import { confirmDialog } from "../services/confirmDialog.js"
 import { capitalizar } from "../utils/capitalize.js"
+import { obtenerResponsables } from "../utils/responsables.js"
 
 function formatearFechaCompletado(fechaISO){
     if (!fechaISO) return "";
@@ -14,7 +15,13 @@ function formatearFechaCompletado(fechaISO){
     return `${dia}/${mes}/${d.getFullYear()}`;
 }
 
-export function createEditableList({container, itemName, storageKey, onChange, showCheckbox = true, checkCompletado, onNavigate}){
+/*
+ * asignarResponsable (opcional): async (item) => [{ id, nombre }] | null.
+ * Si se pasa, al agregar un elemento se piden sus responsables (uno o
+ * varios; null = cancelar, no se agrega) y cada elemento muestra un
+ * botón con los responsables para reasignarlos.
+ */
+export function createEditableList({container, itemName, storageKey, onChange, showCheckbox = true, checkCompletado, onNavigate, asignarResponsable}){
     const list = container.querySelector(".editable-list__list")
     const input = container.querySelector(".editable-list__input")
     const addBtn = container.querySelector(".editable-list__add")
@@ -22,6 +29,7 @@ export function createEditableList({container, itemName, storageKey, onChange, s
 
     let items  = loadData(storageKey);
     let editingId = null;
+    let asignando = false;
 
       function createLabel(data){
         const label = document.createElement("span");
@@ -33,6 +41,32 @@ export function createEditableList({container, itemName, storageKey, onChange, s
         return label;
     }
    
+    function createResponsable(data){
+        const responsables = obtenerResponsables(data);
+        const nombres = responsables.map((responsable) => responsable.nombre).join(", ");
+
+        const boton = document.createElement("button");
+        boton.type = "button";
+        boton.classList.add("editable-list__responsable");
+        boton.classList.toggle("editable-list__responsable--vacio", responsables.length === 0);
+        boton.textContent = responsables.length === 0
+            ? "Sin responsable · Asignar"
+            : `${responsables.length === 1 ? "Responsable" : "Responsables"}: ${nombres}`;
+        boton.title = "Cambiar responsables";
+        return boton;
+    }
+
+    /*
+     * Guarda los responsables en el formato de varios y quita los
+     * campos del formato anterior (un solo usuarioAsignadoId).
+     */
+    function aplicarResponsables(data, responsables){
+        data.responsables = responsables;
+        delete data.usuarioAsignadoId;
+        delete data.usuarioAsignadoNombre;
+        return data;
+    }
+
     function createEditField(data){
         const field = document.createElement("input");
         field.type = "text";
@@ -75,6 +109,12 @@ export function createEditableList({container, itemName, storageKey, onChange, s
                 fecha.classList.add("editable-list__fecha-completado");
                 fecha.textContent = `Completado: ${formatearFechaCompletado(data.fechaCompletado)}`;
                 contentWrapper.appendChild(fecha);
+
+            }
+
+            if (typeof asignarResponsable === "function") {
+
+                contentWrapper.appendChild(createResponsable(data));
 
             }
 
@@ -133,9 +173,38 @@ export function createEditableList({container, itemName, storageKey, onChange, s
     //total: cuantos items hay en el array. Los arrays tienen una propiedad que te da su tamaño
     //completados: cuantos tienen donde:true
   
-    function addItem(texto){
-        items.push({id: crypto.randomUUID(), texto, done: false});
+    function addItem(texto, responsables = null){
+        const data = {id: crypto.randomUUID(), texto, done: false};
+        if (responsables) aplicarResponsables(data, responsables);
+        items.push(data);
         render()
+    }
+
+    /*
+     * Pide el responsable sin permitir abrir dos diálogos a la vez
+     * (p. ej. Enter repetido en el campo mientras está abierto).
+     */
+    async function pedirResponsable(data){
+        if (asignando) return null;
+
+        asignando = true;
+
+        try {
+            return await asignarResponsable(data);
+        } finally {
+            asignando = false;
+        }
+    }
+
+    async function reasignarItem(id){
+        const data = items.find((item) => item.id === id);
+        if (!data) return;
+
+        const responsables = await pedirResponsable(data);
+        if (!responsables) return;
+
+        aplicarResponsables(data, responsables);
+        render();
     }
     async function removeItem(id) {
 
@@ -209,12 +278,23 @@ export function createEditableList({container, itemName, storageKey, onChange, s
      }
 
 
-    function handleAdd(){
+    async function handleAdd(){
         const texto = input.value.trim()
 
-        if(texto === "") return;
+        if(texto === "" || asignando) return;
 
-        addItem(texto);
+        let responsables = null;
+
+        if (typeof asignarResponsable === "function") {
+            responsables = await pedirResponsable({ texto });
+
+            if (!responsables) {
+                input.focus();
+                return;
+            }
+        }
+
+        addItem(texto, responsables);
         input.value = "";
         input.focus();        
     }
@@ -239,6 +319,10 @@ export function createEditableList({container, itemName, storageKey, onChange, s
         }
         if(event.target.matches(".editable-list__edit-btn")){
             startEditing(id);
+            return
+        }
+        if(event.target.matches(".editable-list__responsable")){
+            reasignarItem(id);
             return
         }
         if (event.target.matches(".editable-list__check")){

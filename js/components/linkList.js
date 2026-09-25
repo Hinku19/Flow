@@ -1,7 +1,8 @@
 import { loadData, saveData } from "../services/storage.service.js";
 import { API_URL } from "./config.js";
-import { confirmarEliminacion } from "../services/confirmDialog.js";
+import { confirmarEliminacion, avisoDialog } from "../services/confirmDialog.js";
 import { headerUsuario } from "../services/auth.service.js";
+import { normalizarImagen } from "../utils/normalizarImagen.js";
 
 export function createLinkList({ container, storageKey, reunionId }) {
   const list = container.querySelector(".link-list__list");
@@ -104,12 +105,22 @@ export function createLinkList({ container, storageKey, reunionId }) {
    */
   async function subirArchivo(file) {
     if (!reunionId) {
-      alert("No hay una reunión activa para subir el archivo.");
+      avisoDialog("No hay una reunión activa para subir el archivo.");
+      return null;
+    }
+
+    let archivo = file;
+
+    try {
+      // Los PDF se suben tal cual; las imágenes se reducen y pasan a WebP.
+      if (file.type !== "application/pdf") archivo = await normalizarImagen(file);
+    } catch (error) {
+      avisoDialog(error.message);
       return null;
     }
 
     const formData = new FormData();
-    formData.append("archivo", file);
+    formData.append("archivo", archivo);
 
     try {
       const response = await fetch(
@@ -130,7 +141,7 @@ export function createLinkList({ container, storageKey, reunionId }) {
       return data;
     } catch (error) {
       console.error("ERROR SUBIENDO ARCHIVO DE ENLACE:", error);
-      alert(error.message || "No fue posible subir el archivo.");
+      avisoDialog(error.message || "No fue posible subir el archivo.");
       return null;
     }
   }
@@ -157,7 +168,7 @@ export function createLinkList({ container, storageKey, reunionId }) {
       });
     } else if (url !== "") {
       if (!esUrlValida(url)) {
-        alert("La URL debe empezar por http:// o https://");
+        avisoDialog("La URL debe empezar por http:// o https://");
         return;
       }
 
