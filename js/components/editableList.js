@@ -3,6 +3,77 @@ import { confirmDialog } from "../services/confirmDialog.js"
 import { capitalizar } from "../utils/capitalize.js"
 import { obtenerResponsables } from "../utils/responsables.js"
 
+function generarUUID() {
+
+    if (
+        window.crypto &&
+        typeof window.crypto.randomUUID === "function"
+    ) {
+
+        return window.crypto.randomUUID();
+
+    }
+
+
+    if (
+        window.crypto &&
+        typeof window.crypto.getRandomValues === "function"
+    ) {
+
+        const bytes =
+            new Uint8Array(16);
+
+        window.crypto.getRandomValues(
+            bytes
+        );
+
+
+        // UUID v4
+        bytes[6] =
+            (bytes[6] & 0x0f) | 0x40;
+
+        bytes[8] =
+            (bytes[8] & 0x3f) | 0x80;
+
+
+        const hex =
+            Array
+                .from(bytes)
+                .map(
+                    byte =>
+                        byte
+                            .toString(16)
+                            .padStart(2, "0")
+                )
+                .join("");
+
+
+        return (
+            hex.substring(0, 8) +
+            "-" +
+            hex.substring(8, 12) +
+            "-" +
+            hex.substring(12, 16) +
+            "-" +
+            hex.substring(16, 20) +
+            "-" +
+            hex.substring(20, 32)
+        );
+
+    }
+
+
+    // Último recurso
+    return (
+        Date.now().toString(36) +
+        "-" +
+        Math.random()
+            .toString(36)
+            .substring(2, 12)
+    );
+
+}
+
 function formatearFechaCompletado(fechaISO){
     if (!fechaISO) return "";
 
@@ -174,7 +245,7 @@ export function createEditableList({container, itemName, storageKey, onChange, s
     //completados: cuantos tienen donde:true
   
     function addItem(texto, responsables = null){
-        const data = {id: crypto.randomUUID(), texto, done: false};
+        const data = {id: generarUUID(), texto, done: false};
         if (responsables) aplicarResponsables(data, responsables);
         items.push(data);
         render()
