@@ -20,6 +20,7 @@ export function initReportsView() {
     const tipo = view.querySelector("#reporte-tipo");
     const filtros = view.querySelector("#reporte-compromisos-filtros");
     const departamento = view.querySelector("#reporte-departamento");
+    const area = view.querySelector("#reporte-area");
     const colaborador = view.querySelector("#reporte-colaborador");
     const error = view.querySelector("#reporte-error");
     const resultados = view.querySelector("#reporte-resultados");
@@ -27,6 +28,7 @@ export function initReportsView() {
     const proximamente = view.querySelector("#reporte-proximamente");
     const usuario = getUsuarioActual();
     let opcionesCargadas = false;
+    let solicitudColaboradores = 0;
 
     const ocultarReporte = () => {
         resultados.hidden = true;
@@ -41,14 +43,23 @@ export function initReportsView() {
         ocultarReporte();
     }
 
-    async function cargarOpciones(depto = "") {
+    async function cargarOpciones(depto = "", areaSeleccionada = "todas") {
+        const solicitudActual = ++solicitudColaboradores;
+        const departamentoConcreto = usuario?.rol === "lider" || (depto && depto !== "todos");
+        const areaConcreta = areaSeleccionada && areaSeleccionada !== "todas";
+        colaborador.disabled = true;
+        area.disabled = true;
+        colaborador.replaceChildren(new Option("Cargando colaboradores…", ""));
+
         const query = new URLSearchParams();
         if (depto) query.set("departamento", depto);
+        if (areaSeleccionada) query.set("area", areaSeleccionada);
         const response = await fetch(`${API_URL}/reportes/compromisos/opciones?${query}`, {
             headers: { ...headerUsuario() }
         });
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.mensaje || "No fue posible cargar los filtros.");
+        if (solicitudActual !== solicitudColaboradores) return;
 
         if (usuario?.rol === "lider") {
             departamento.replaceChildren(new Option(data.departamentoFijo || "Mi departamento", data.departamentoFijo || ""));
@@ -60,13 +71,26 @@ export function initReportsView() {
             if (depto && depto !== "todos") departamento.value = depto;
         }
 
-        colaborador.replaceChildren(new Option("Todos los colaboradores", "todos"));
+        area.replaceChildren(new Option("Todas las áreas", "todas"));
+        for (const nombreArea of data.areas || []) area.add(new Option(nombreArea, nombreArea));
+        if (areaConcreta) area.value = areaSeleccionada;
+        area.disabled = false;
+
+        colaborador.replaceChildren(new Option(
+            areaConcreta
+                ? "Todos los colaboradores de esta área"
+                : departamentoConcreto
+                    ? "Todos los colaboradores de este departamento"
+                : "Todos los colaboradores",
+            "todos"
+        ));
         for (const persona of data.colaboradores || []) colaborador.add(new Option(persona.nombre, String(persona.id)));
+        colaborador.disabled = false;
     }
 
     async function cargarOpcionesIniciales() {
         if (opcionesCargadas) return;
-        await cargarOpciones(usuario?.rol === "lider" ? "" : "todos");
+        await cargarOpciones(usuario?.rol === "lider" ? "" : "todos", "todas");
         opcionesCargadas = true;
     }
 
@@ -76,6 +100,10 @@ export function initReportsView() {
             try {
                 await cargarOpcionesIniciales();
             } catch (err) {
+                colaborador.disabled = true;
+                area.disabled = true;
+                area.replaceChildren(new Option("No se pudieron cargar", ""));
+                colaborador.replaceChildren(new Option("No se pudieron cargar", ""));
                 error.textContent = err.message;
                 error.hidden = false;
             }
@@ -85,15 +113,56 @@ export function initReportsView() {
         ocultarReporte();
         error.hidden = true;
         try {
-            await cargarOpciones(departamento.value);
+            await cargarOpciones(departamento.value, "todas");
         } catch (err) {
+            area.disabled = true;
+            area.replaceChildren(new Option("No se pudieron cargar", ""));
+            colaborador.disabled = true;
+            colaborador.replaceChildren(new Option("No se pudieron cargar", ""));
             error.textContent = err.message;
             error.hidden = false;
         }
     });
 
-    for (const selector of ["#reporte-desde", "#reporte-hasta", "#reporte-colaborador", "#reporte-estatus"]) {
+    area.addEventListener("change", async () => {
+        ocultarReporte();
+        error.hidden = true;
+        try {
+            await cargarOpciones(departamento.value, area.value);
+        } catch (err) {
+            area.disabled = true;
+            area.replaceChildren(new Option("No se pudieron cargar", ""));
+            colaborador.disabled = true;
+            colaborador.replaceChildren(new Option("No se pudieron cargar", ""));
+            error.textContent = err.message;
+            error.hidden = false;
+        }
+    });
+
+    for (const selector of ["#reporte-desde", "#reporte-hasta", "#reporte-colaborador"]) {
         view.querySelector(selector).addEventListener("change", () => {
+            ocultarReporte();
+            error.hidden = true;
+        });
+    }
+
+    const estadosCheckboxes = [...view.querySelectorAll('input[name="reporte-estatus"]')];
+    const todosCheckbox = estadosCheckboxes.find((checkbox) => checkbox.value === "todos");
+    for (const checkbox of estadosCheckboxes) {
+        checkbox.addEventListener("change", () => {
+            if (checkbox === todosCheckbox && checkbox.checked) {
+                for (const estadoCheckbox of estadosCheckboxes) {
+                    if (estadoCheckbox !== todosCheckbox) estadoCheckbox.checked = false;
+                }
+            } else if (checkbox !== todosCheckbox && checkbox.checked) {
+                todosCheckbox.checked = false;
+            }
+
+            const hayEstatusEspecificos = estadosCheckboxes.some((estadoCheckbox) =>
+                estadoCheckbox !== todosCheckbox && estadoCheckbox.checked
+            );
+            if (!hayEstatusEspecificos) todosCheckbox.checked = true;
+
             ocultarReporte();
             error.hidden = true;
         });
@@ -111,12 +180,23 @@ export function initReportsView() {
             return;
         }
 
+        const estadosSeleccionados = estadosCheckboxes
+            .filter((checkbox) => checkbox !== todosCheckbox && checkbox.checked)
+            .map((checkbox) => checkbox.value);
+        const estadosConsulta = todosCheckbox.checked || estadosSeleccionados.length === 0
+            ? ["todos"]
+            : estadosSeleccionados;
+        const etiquetasEstados = estadosCheckboxes
+            .filter((checkbox) => estadosConsulta.includes(checkbox.value))
+            .map((checkbox) => checkbox.parentElement.textContent.trim());
+
         const params = new URLSearchParams({
             desde,
             hasta,
             departamento: usuario?.rol === "lider" ? "" : departamento.value,
+            area: area.value,
             colaborador: colaborador.value,
-            estado: view.querySelector("#reporte-estatus").value
+            estados: estadosConsulta.join(",")
         });
         const button = view.querySelector(".reports-view__generate");
         button.disabled = true;
@@ -130,7 +210,8 @@ export function initReportsView() {
             renderizarReporte(data, {
                 desde,
                 hasta,
-                estado: view.querySelector("#reporte-estatus").selectedOptions[0]?.textContent || "Todos",
+                estado: etiquetasEstados.join(", "),
+                area: area.selectedOptions[0]?.textContent || "Todas las áreas",
                 colaborador: colaborador.selectedOptions[0]?.textContent || "Todos los colaboradores"
             });
         } catch (err) {
@@ -154,6 +235,7 @@ export function initReportsView() {
                 <td>${escapeHTML(item.titulo || item.descripcion)}</td>
                 <td>${escapeHTML(item.colaborador)}</td>
                 <td>${escapeHTML(item.departamento)}</td>
+                <td>${escapeHTML(item.area)}</td>
                 <td>${escapeHTML(item.estado)}</td>
                 <td>${escapeHTML(fechaCorta(item.fechaLimite))}</td>
                 <td>${escapeHTML(item.reunion || "Compromiso independiente")}</td>
@@ -163,6 +245,7 @@ export function initReportsView() {
             <div class="report-output__heading">
                 <h3>Reporte general de compromisos</h3>
                 <p><strong>Departamento:</strong> ${escapeHTML(data.departamento)}</p>
+                <p><strong>Área:</strong> ${escapeHTML(filtrosAplicados.area)}</p>
                 <p><strong>Colaborador:</strong> ${escapeHTML(filtrosAplicados.colaborador)}</p>
                 <p><strong>Periodo de vencimiento:</strong> ${escapeHTML(fechaCorta(filtrosAplicados.desde))} a ${escapeHTML(fechaCorta(filtrosAplicados.hasta))}</p>
                 <p><strong>Estatus:</strong> ${escapeHTML(filtrosAplicados.estado)}</p>
@@ -171,7 +254,7 @@ export function initReportsView() {
             </div>
             ${compromisos.length ? `
                 <div class="report-output__table-wrap"><table class="report-output__table">
-                    <thead><tr><th>Compromiso</th><th>Colaborador</th><th>Departamento</th><th>Estatus</th><th>Fecha límite</th><th>Reunión</th></tr></thead>
+                    <thead><tr><th>Compromiso</th><th>Colaborador</th><th>Departamento</th><th>Área</th><th>Estatus</th><th>Fecha límite</th><th>Reunión</th></tr></thead>
                     <tbody>${filas}</tbody>
                 </table></div>
             ` : '<p class="report-output__empty">No se encontraron compromisos con los filtros seleccionados.</p>'}
@@ -188,6 +271,8 @@ export function initReportsView() {
                 try {
                     await cargarOpcionesIniciales();
                 } catch (err) {
+                    colaborador.disabled = true;
+                    colaborador.replaceChildren(new Option("No se pudieron cargar", ""));
                     error.textContent = err.message;
                     error.hidden = false;
                 }

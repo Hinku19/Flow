@@ -2961,17 +2961,37 @@ app.get("/api/reportes/compromisos/opciones", async (req, res) => {
             ? String(usuario.departamento || "").trim()
             : String(req.query.departamento || "").trim();
         if (!esLider && departamento === "todos") departamento = "";
+        let area = String(req.query.area || "").trim();
+        if (area === "todas") area = "";
+        const condicionesColaboradores = ["activo = 1"];
+        const parametrosColaboradores = [];
+        if (departamento) {
+            condicionesColaboradores.push("TRIM(departamento) = TRIM(?)");
+            parametrosColaboradores.push(departamento);
+        }
+        if (area) {
+            condicionesColaboradores.push("TRIM(area) = TRIM(?)");
+            parametrosColaboradores.push(area);
+        }
+        const [areas] = await db.execute(
+            `SELECT DISTINCT area FROM usuarios
+             WHERE activo = 1 AND area IS NOT NULL AND TRIM(area) <> ''
+             ${departamento ? "AND TRIM(departamento) = TRIM(?)" : ""}
+             ORDER BY area`,
+            departamento ? [departamento] : []
+        );
         const [colaboradores] = await db.execute(
             `SELECT id, nombre FROM usuarios
-             WHERE activo = 1 ${departamento ? "AND TRIM(departamento) = TRIM(?)" : ""}
+             WHERE ${condicionesColaboradores.join(" AND ")}
              ORDER BY nombre`,
-            departamento ? [departamento] : []
+            parametrosColaboradores
         );
 
         return res.json({
             ok: true,
             departamentoFijo: esLider ? departamento : null,
             departamentos: departamentosRows.map((fila) => fila.departamento).filter(Boolean),
+            areas: areas.map((fila) => fila.area).filter(Boolean),
             colaboradores: colaboradores.map(({ id, nombre }) => ({ id, nombre }))
         });
     } catch (error) {
@@ -2992,8 +3012,12 @@ app.get("/api/reportes/compromisos", async (req, res) => {
 
         const desde = String(req.query.desde || "").trim();
         const hasta = String(req.query.hasta || "").trim();
-        const estado = String(req.query.estado || "todos").trim();
+        const estados = String(req.query.estados || req.query.estado || "todos")
+            .split(",")
+            .map((valor) => valor.trim())
+            .filter(Boolean);
         const departamentoSolicitado = String(req.query.departamento || "").trim();
+        const areaSolicitada = String(req.query.area || "").trim();
         const colaboradorId = String(req.query.colaborador || "").trim();
         if ((desde && !fechaISOValida(desde)) || (hasta && !fechaISOValida(hasta)) || (desde && hasta && desde > hasta)) {
             return res.status(400).json({ ok: false, mensaje: "El rango de fechas no es válido." });
@@ -3001,7 +3025,8 @@ app.get("/api/reportes/compromisos", async (req, res) => {
         if (colaboradorId && colaboradorId !== "todos" && (!/^\d+$/.test(colaboradorId) || Number(colaboradorId) < 1)) {
             return res.status(400).json({ ok: false, mensaje: "El colaborador seleccionado no es válido." });
         }
-        if (!["todos", "pendiente", "en-progreso", "completado", "vencido"].includes(estado)) {
+        const estadosPermitidos = ["todos", "pendiente", "en-progreso", "completado", "vencido"];
+        if (!estados.length || estados.some((estado) => !estadosPermitidos.includes(estado))) {
             return res.status(400).json({ ok: false, mensaje: "El estatus seleccionado no es válido." });
         }
 
@@ -3010,12 +3035,17 @@ app.get("/api/reportes/compromisos", async (req, res) => {
         const departamento = usuario.rol === "lider"
             ? String(usuario.departamento || "").trim()
             : departamentoSolicitado === "todos" ? "" : departamentoSolicitado;
+        const area = areaSolicitada === "todas" ? "" : areaSolicitada;
         if (usuario.rol === "lider") {
             condiciones.push("TRIM(u.departamento) = TRIM(?)");
             parametros.push(departamento);
         } else if (departamento) {
             condiciones.push("TRIM(u.departamento) = TRIM(?)");
             parametros.push(departamento);
+        }
+        if (area) {
+            condiciones.push("TRIM(u.area) = TRIM(?)");
+            parametros.push(area);
         }
         if (colaboradorId && colaboradorId !== "todos") {
             condiciones.push("u.id = ?");
@@ -3038,14 +3068,17 @@ app.get("/api/reportes/compromisos", async (req, res) => {
             completado: "c.Status = 3 AND COALESCE(c.Aprobado, 0) = 1",
             vencido: `${expresionEstado} = 4`
         };
-        if (filtrosEstado[estado]) condiciones.push(filtrosEstado[estado]);
+        if (!estados.includes("todos")) {
+            const filtrosSeleccionados = estados.map((estado) => filtrosEstado[estado]);
+            condiciones.push(`(${filtrosSeleccionados.join(" OR ")})`);
+        }
 
         const [filas] = await db.execute(
             `SELECT c.CompromisoId AS id, c.Titulo AS titulo, c.Descripcion AS descripcion,
                     c.Prioridad AS prioridad, c.FechaInicioEstimada AS fechaInicio,
                     c.FechaFinEstimada AS fechaLimite, c.FechaFinReal AS fechaCompletado,
                     ${expresionEstado} AS statusEfectivo, c.Status AS statusOriginal, c.Aprobado AS aprobado,
-                    u.nombre AS colaborador, u.departamento AS departamento,
+                    u.nombre AS colaborador, u.departamento AS departamento, u.area AS area,
                     r.Titulo AS reunion
              FROM compromisos c
              LEFT JOIN reuniones r ON r.ReunionId = c.ReunionId
@@ -3058,6 +3091,7 @@ app.get("/api/reportes/compromisos", async (req, res) => {
         return res.json({
             ok: true,
             departamento: departamento || "Todos los departamentos",
+            area: area || "Todas las áreas",
             compromisos: filas.map((fila) => ({
                 ...fila,
                 descripcion: fila.descripcion || fila.titulo,
