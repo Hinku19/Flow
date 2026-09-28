@@ -15,6 +15,10 @@ import {
     confirmarEliminacion
 } from "../services/confirmDialog.js";
 
+import {
+    generarUUID
+} from "../utils/generarUUID.js";
+
 
 const MESES_PROYECCION =
     36;
@@ -193,7 +197,7 @@ export function createVpnCalculator({
         const fila = {
 
             id:
-                crypto.randomUUID()
+                generarUUID()
 
         };
 

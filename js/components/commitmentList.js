@@ -5,6 +5,7 @@ import { confirmarEliminacion, avisoDialog } from "../services/confirmDialog.js"
 import { getUsuarioActual, headerUsuario } from "../services/auth.service.js";
 import { obtenerResponsables, nombresResponsables, esResponsable, mismaArea, obtenerInvolucrados, textoInvolucrados } from "../utils/responsables.js";
 import { crearSelectorResponsables } from "../utils/selectorResponsables.js";
+import { generarUUID } from "../utils/generarUUID.js";
 
 export const ESTADO_LABEL = {
   "pendiente": "Pendiente",
@@ -210,7 +211,7 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
   }
 
   function addCommitment(data) {
-    items.push({ id: crypto.randomUUID(), ...data });
+    items.push({ id: generarUUID(), ...data });
     render();
   }
 

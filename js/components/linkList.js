@@ -3,6 +3,7 @@ import { API_URL } from "./config.js";
 import { confirmarEliminacion, avisoDialog } from "../services/confirmDialog.js";
 import { headerUsuario } from "../services/auth.service.js";
 import { normalizarImagen } from "../utils/normalizarImagen.js";
+import {generarUUID } from "../utils/generarUUID.js";
 
 export function createLinkList({ container, storageKey, reunionId }) {
   const list = container.querySelector(".link-list__list");
@@ -73,7 +74,7 @@ export function createLinkList({ container, storageKey, reunionId }) {
   }
 
   function addItem(data) {
-    items.push({ id: crypto.randomUUID(), ...data });
+    items.push({ id: generarUUID(), ...data });
     render();
   }
 

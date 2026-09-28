@@ -3,6 +3,7 @@ import { capitalizar } from "../utils/capitalize.js";
 import { agruparPorPrioridad } from "../utils/agruparPorPrioridad.js";
 import { confirmarEliminacion } from "../services/confirmDialog.js";
 import { crearAsaArrastre, habilitarArrastre, moverEnArreglo } from "../utils/arrastrarOrdenar.js";
+import { generarUUID } from "../utils/generarUUID.js";
 
 /*
  * "flow:compromiso-creado-desde-punto" es un evento global
@@ -60,7 +61,7 @@ export function createDevelopmentTable({ container, storageKey }) {
 
       if (typeof value === "string") {
         result[id] = value.trim()
-          ? [{ id: crypto.randomUUID(), tipo: "parrafo", texto: value }]
+          ? [{ id: generarUUID(), tipo: "parrafo", texto: value }]
           : [];
       } else {
         result[id] = value;
@@ -96,7 +97,7 @@ export function createDevelopmentTable({ container, storageKey }) {
   }
 
   function addBlock(objetivoId, tipo, index = null) {
-    const block = { id: crypto.randomUUID(), tipo, texto: "" };
+    const block = { id: generarUUID(), tipo, texto: "" };
 
     if (tipo === "punto") {
       block.fechaCreacion = new Date().toISOString();

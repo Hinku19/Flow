@@ -6,6 +6,13 @@ const multer = require("multer");
 const nodemailer = require("nodemailer");
 const puppeteer = require("puppeteer");
 const path = require("path");
+const {
+    enviarRecordatoriosCompromisos
+} = require("../services/compromisoReminderService");
+const {
+    enviarNotificacionNuevaEvaluacion,
+    enviarRecordatoriosEvaluaciones
+} = require("../services/evaluacionReminderService");
 
 const db = require("./db");
 
@@ -83,6 +90,228 @@ function crearTransportadorCorreo() {
             pass: password
         }
     });
+
+}
+
+/* =========================================================
+   NOTIFICAR NUEVA INNOVACIÓN
+   ---------------------------------------------------------
+   Envía:
+   1. Correo al usuario que registró la innovación.
+   2. Correo al líder del departamento del usuario.
+   ========================================================= */
+
+async function notificarNuevaInnovacion(
+    usuarioId,
+    nombreInnovacion
+) {
+
+    try {
+
+        /* =====================================================
+           OBTENER USUARIO
+           ===================================================== */
+
+        const [usuarios] =
+            await db.execute(
+                `
+                SELECT
+                    id,
+                    nombre,
+                    departamento,
+                    correo_electronico
+                FROM usuarios
+                WHERE
+                    id = ?
+                    AND activo = 1
+                LIMIT 1
+                `,
+                [
+                    usuarioId
+                ]
+            );
+
+
+        if (usuarios.length === 0) {
+
+            console.warn(
+                "No se encontró el usuario para enviar la notificación de innovación."
+            );
+
+            return;
+
+        }
+
+
+        const usuario =
+            usuarios[0];
+
+
+        /* =====================================================
+           OBTENER LÍDER DEL DEPARTAMENTO
+           ===================================================== */
+
+        const [lideres] =
+            await db.execute(
+                `
+                SELECT
+                    id,
+                    nombre,
+                    correo_electronico
+                FROM usuarios
+                WHERE
+                    departamento = ?
+                    AND rol = 'lider'
+                    AND activo = 1
+                    AND correo_electronico IS NOT NULL
+                    AND TRIM(correo_electronico) <> ''
+                ORDER BY id ASC
+                `,
+                [
+                    usuario.departamento
+                ]
+            );
+
+
+        const transporter =
+            crearTransportadorCorreo();
+
+
+        const from =
+            String(
+                process.env.SMTP_FROM ||
+                process.env.SMTP_USER
+            ).trim();
+
+
+        /* =====================================================
+           CORREO AL USUARIO
+           ===================================================== */
+
+        if (
+            usuario.correo_electronico &&
+            String(
+                usuario.correo_electronico
+            ).trim() !== ""
+        ) {
+
+            try {
+
+                await transporter.sendMail({
+
+                    from,
+
+                    to:
+                        usuario.correo_electronico,
+
+                    subject:
+                        "Innovación enviada para revisión",
+
+                    text:
+                        `Hola ${usuario.nombre},\n\n` +
+
+                        `Tu innovación "${nombreInnovacion}" ` +
+                        `ha sido registrada correctamente y enviada ` +
+                        `para su revisión y validación.\n\n` +
+
+                        `Una vez realizada la validación correspondiente, ` +
+                        `podrás consultar el resultado en FLOW.\n\n` +
+
+                        `Saludos,\n` +
+                        `Sistema FLOW`
+
+                });
+
+
+                console.log(
+                    `✓ Notificación de innovación enviada al usuario: ${usuario.correo_electronico}`
+                );
+
+            }
+            catch (error) {
+
+                console.error(
+                    `✗ No se pudo enviar la notificación al usuario ${usuario.correo_electronico}:`,
+                    error.message
+                );
+
+            }
+
+        }
+
+
+        /* =====================================================
+           CORREO AL LÍDER
+           ===================================================== */
+
+        for (
+            const lider
+            of lideres
+        ) {
+
+            try {
+
+                await transporter.sendMail({
+
+                    from,
+
+                    to:
+                        lider.correo_electronico,
+
+                    subject:
+                        "Nueva innovación pendiente de validación",
+
+                    text:
+                        `Hola ${lider.nombre},\n\n` +
+
+                        `Se ha registrado una nueva innovación ` +
+                        `titulada "${nombreInnovacion}", ` +
+                        `correspondiente a tu departamento.\n\n` +
+
+                        `La innovación se encuentra pendiente ` +
+                        `de tu revisión y validación. ` +
+                        `Te solicitamos ingresar a FLOW para ` +
+                        `consultar la información y realizar ` +
+                        `la validación correspondiente.\n\n` +
+
+                        `Saludos,\n` +
+                        `Sistema FLOW`
+
+                });
+
+
+                console.log(
+                    `✓ Notificación de innovación enviada al líder: ${lider.correo_electronico}`
+                );
+
+            }
+            catch (error) {
+
+                console.error(
+                    `✗ No se pudo enviar la notificación al líder ${lider.correo_electronico}:`,
+                    error.message
+                );
+
+            }
+
+        }
+
+    }
+    catch (error) {
+
+        /*
+         * El error de correo NO debe provocar que
+         * la innovación se considere fallida.
+         *
+         * La innovación ya fue guardada en BD.
+         */
+
+        console.error(
+            "ERROR EN NOTIFICACIONES DE INNOVACIÓN:",
+            error
+        );
+
+    }
 
 }
 
@@ -8968,27 +9197,37 @@ app.post(
             await connection.commit();
 
 
-            /* =============================================
-               RESPUESTA
-               ============================================= */
+/* =============================================
+   NOTIFICACIONES POR CORREO
+   ============================================= */
 
-            return res
-                .status(201)
-                .json({
+await notificarNuevaInnovacion(
+    campos.usuarioId,
+    campos.nombre.trim()
+);
 
-                    ok: true,
 
-                    mensaje:
-                        "Innovación registrada correctamente.",
+/* =============================================
+   RESPUESTA
+   ============================================= */
 
-                    innovacion: {
+return res
+    .status(201)
+    .json({
 
-                        id:
-                            innovacionId
+        ok: true,
 
-                    }
+        mensaje:
+            "Innovación registrada correctamente.",
 
-                });
+        innovacion: {
+
+            id:
+                innovacionId
+
+        }
+
+    });
 
 
         }
@@ -10884,28 +11123,74 @@ app.post(
 
             }
 
-            const [resultado] =
-                await db.execute(
-                    `
-                    INSERT INTO evaluacion_personalizada
-                        (titulo, descripcion, preguntas_json, destinatarios, activa, fecha_cierre, creado_por)
-                    VALUES (?, ?, ?, ?, 1, ?, ?)
-                    `,
-                    [
-                        titulo,
-                        descripcion || null,
-                        JSON.stringify(validacion.preguntas),
-                        destinatarios.join(","),
-                        fechaCierre,
-                        usuarioSolicitante.id
-                    ]
-                );
+const [resultado] =
+    await db.execute(
+        `
+        INSERT INTO evaluacion_personalizada
+            (
+                titulo,
+                descripcion,
+                preguntas_json,
+                destinatarios,
+                activa,
+                fecha_cierre,
+                creado_por
+            )
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+        `,
+        [
+            titulo,
+            descripcion || null,
+            JSON.stringify(validacion.preguntas),
+            destinatarios.join(","),
+            fechaCierre,
+            usuarioSolicitante.id
+        ]
+    );
 
-            return res.json({
-                ok: true,
-                mensaje: "Evaluación creada correctamente.",
-                evaluacionId: resultado.insertId
-            });
+
+const evaluacionId =
+    resultado.insertId;
+
+
+/*
+ * =====================================================
+ * ENVIAR NOTIFICACIONES
+ * =====================================================
+ *
+ * Si el correo falla, NO eliminamos la evaluación.
+ * La evaluación ya fue creada correctamente.
+ *
+ * El error se registra en consola.
+ */
+
+try {
+
+    await enviarNotificacionNuevaEvaluacion(
+        evaluacionId
+    );
+
+}
+catch (errorCorreo) {
+
+    console.error(
+        "ERROR ENVIANDO NOTIFICACIONES DE LA EVALUACIÓN:",
+        errorCorreo
+    );
+
+}
+
+
+return res.json({
+
+    ok: true,
+
+    mensaje:
+        "Evaluación creada correctamente.",
+
+    evaluacionId
+
+});
 
         }
         catch (error) {
@@ -11709,6 +11994,117 @@ app.use(
     }
 );
 
+/* =========================================================
+   RECORDATORIOS DIARIOS DE COMPROMISOS
+   ---------------------------------------------------------
+   Ejecuta el envío todos los días a las 08:00 AM
+   utilizando la hora local del servidor.
+   ========================================================= */
+
+function programarRecordatoriosCompromisos() {
+
+    const ahora =
+        new Date();
+
+
+    const siguiente =
+        new Date(
+            ahora
+        );
+
+
+    siguiente.setHours(
+        10,
+        23,
+        0,
+        0
+    );
+
+
+    /*
+     * Si ya pasaron las 08:00 de hoy,
+     * programamos para mañana.
+     */
+
+    if (
+        siguiente <= ahora
+    ) {
+
+        siguiente.setDate(
+            siguiente.getDate() + 1
+        );
+
+    }
+
+
+    const milisegundos =
+        siguiente.getTime() -
+        ahora.getTime();
+
+
+    console.log(
+        "=========================================="
+    );
+
+    console.log(
+        "RECORDATORIO DE COMPROMISOS PROGRAMADO"
+    );
+
+    console.log(
+        `Próximo envío: ${siguiente.toLocaleString("es-MX")}`
+    );
+
+    console.log(
+        "=========================================="
+    );
+
+
+    setTimeout(
+        async () => {
+
+            try {
+
+                await enviarRecordatoriosCompromisos();
+
+            }
+            catch (error) {
+
+                console.error(
+                    "ERROR EN EL ENVÍO PROGRAMADO DE COMPROMISOS:",
+                    error
+                );
+
+            }
+
+            try {
+
+    await enviarRecordatoriosEvaluaciones();
+
+}
+catch (error) {
+
+    console.error(
+        "ERROR EN RECORDATORIOS DE EVALUACIONES:",
+        error
+    );
+
+}
+
+
+            /*
+             * Programar nuevamente para el siguiente día.
+             */
+
+            programarRecordatoriosCompromisos();
+
+        },
+
+        milisegundos
+
+    );
+
+}
+
 
 app.listen(
     PORT,
@@ -11742,6 +12138,12 @@ app.listen(
         console.log(
             "===================================="
         );
+
+                /*
+         * Iniciar programación de recordatorios.
+         */
+
+        programarRecordatoriosCompromisos();
 
     }
 );
