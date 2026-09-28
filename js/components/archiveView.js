@@ -55,6 +55,11 @@ import {
     avisoDialog
 } from "../services/confirmDialog.js";
 
+import {
+    nombresResponsables,
+    textoInvolucrados
+} from "../utils/responsables.js";
+
 
 let reunionActual =
     null;
@@ -648,6 +653,9 @@ export function createArchiveView() {
             showCheckbox:
                 false,
 
+            reordenable:
+                true,
+
             checkCompletado:
                 (id) =>
                     developmentTable.todosLosPuntosCompletados(
@@ -1115,7 +1123,9 @@ seccionesActuales =
                     compromiso => {
 
                         const colaboradores =
-                            compromiso.usuarioAsignadoNombre ||
+                            nombresResponsables(
+                                compromiso
+                            ) ||
                             (
                                 Array.isArray(
                                     compromiso.colaboradores
@@ -1148,7 +1158,12 @@ seccionesActuales =
                             `${compromiso.descripcion || ""}` +
                             ` [${
                                 estado
-                            }]`
+                            }]` +
+                            `${
+                                textoInvolucrados(compromiso)
+                                    ? ` · Involucrados: ${textoInvolucrados(compromiso)}`
+                                    : ""
+                            }`
                         );
 
                     }

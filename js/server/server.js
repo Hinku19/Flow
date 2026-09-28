@@ -2954,7 +2954,7 @@ const STATUS_A_ESTADO = {
 /*
  * Status 3 ("completado" a nivel de columna) por sí solo no
  * basta: el operador puede reportarlo, pero solo cuenta como
- * completado de verdad cuando el líder de su área dio el visto
+ * completado de verdad cuando el líder de su departamento dio el visto
  * bueno (columna Aprobado). Sin ese visto bueno se muestra
  * como "en-revision", el mismo patrón que 95%/100% en
  * innovaciones (ver /api/innovaciones/estado-mes).
@@ -3003,9 +3003,12 @@ app.get(
 
 
             /*
-             * administrador ve todo. lider ve solo los
-             * compromisos de usuarios de su misma área.
-             * operador ve solo los suyos.
+             * administrador ve todo. lider ve los compromisos
+             * donde al menos un responsable es de su mismo
+             * departamento.
+             * operador ve aquellos en los que es responsable.
+             * (El responsable principal cuenta aunque no tenga
+             * fila en compromiso_responsables.)
              */
 
             let filtroRol =
@@ -3016,20 +3019,44 @@ app.get(
 
             if (usuarioSolicitante.rol === "lider") {
 
-                filtroRol =
-                    "AND u.area = ?";
+                filtroRol = `
+                    AND (
+                        TRIM(u.departamento) = TRIM(?)
+                        OR EXISTS (
+                            SELECT 1
+                            FROM compromiso_responsables crFiltro
+                            INNER JOIN usuarios uFiltro
+                                ON uFiltro.id = crFiltro.UsuarioId
+                            WHERE
+                                crFiltro.CompromisoId = c.CompromisoId
+                                AND TRIM(uFiltro.departamento) = TRIM(?)
+                        )
+                    )
+                `;
 
                 parametrosFiltro.push(
-                    usuarioSolicitante.area
+                    usuarioSolicitante.departamento || "",
+                    usuarioSolicitante.departamento || ""
                 );
 
             }
             else if (usuarioSolicitante.rol === "operador") {
 
-                filtroRol =
-                    "AND c.UsuarioAsignadoId = ?";
+                filtroRol = `
+                    AND (
+                        c.UsuarioAsignadoId = ?
+                        OR EXISTS (
+                            SELECT 1
+                            FROM compromiso_responsables crFiltro
+                            WHERE
+                                crFiltro.CompromisoId = c.CompromisoId
+                                AND crFiltro.UsuarioId = ?
+                        )
+                    )
+                `;
 
                 parametrosFiltro.push(
+                    usuarioSolicitante.id,
                     usuarioSolicitante.id
                 );
 
@@ -3043,6 +3070,7 @@ app.get(
                         c.CompromisoId,
                         c.Titulo,
                         c.Descripcion,
+                        c.PersonasInvolucradas,
                         c.Prioridad,
                         c.FechaInicioEstimada,
                         c.FechaFinEstimada,
@@ -3077,6 +3105,13 @@ app.get(
                 );
 
 
+            const responsablesPorCompromiso =
+                await cargarResponsablesDeCompromisos(
+                    db,
+                    rows.map((row) => row.CompromisoId)
+                );
+
+
             const compromisos =
                 rows.map(
                     row => ({
@@ -3088,11 +3123,29 @@ app.get(
                             row.Descripcion ||
                             row.Titulo,
 
+                        /*
+                         * usuarioAsignadoId/Nombre = responsable
+                         * principal, por compatibilidad.
+                         */
                         usuarioAsignadoId:
                             row.UsuarioAsignadoId,
 
                         usuarioAsignadoNombre:
                             row.ResponsableNombre,
+
+                        responsables:
+                            responsablesPorCompromiso.get(row.CompromisoId) ||
+                            [
+                                {
+                                    id: row.UsuarioAsignadoId,
+                                    nombre: row.ResponsableNombre
+                                }
+                            ],
+
+                        personasInvolucradas:
+                            parsearPersonasInvolucradas(
+                                row.PersonasInvolucradas
+                            ),
 
                         fechaInicio:
                             row.FechaInicioEstimada,
@@ -3162,6 +3215,7 @@ app.get(
                     ok: false,
 
                     mensaje:
+                        mensajeFaltaMigracionCompromisos(error) ||
                         "No fue posible obtener los compromisos.",
 
                     error:
@@ -3180,9 +3234,9 @@ app.get(
    ========================================================= */
 
 /*
- * Solo administrador y líder. El líder solo puede asignar a
- * usuarios de su misma área (mismo criterio con el que solo ve
- * los compromisos de su área). El compromiso no pertenece a
+ * Solo administrador y líder, y ambos solo pueden asignar a
+ * usuarios de su mismo departamento (mismo criterio con el que el
+ * líder ve los compromisos). El compromiso no pertenece a
  * ninguna reunión (ReunionId NULL), así que las resincronizaciones
  * de compromisos de reuniones nunca lo tocan.
  */
@@ -3226,8 +3280,37 @@ app.post(
             const descripcion =
                 String(req.body.descripcion || "").trim();
 
-            const usuarioAsignadoId =
-                Number(req.body.usuarioAsignadoId);
+            /*
+             * responsablesIds: [id, ...] (uno o varios). Se sigue
+             * aceptando usuarioAsignadoId por si llega de una
+             * versión anterior del frontend.
+             */
+            const responsablesIds =
+                [
+                    ...new Set(
+                        (
+                            Array.isArray(req.body.responsablesIds)
+                                ? req.body.responsablesIds
+                                : [req.body.usuarioAsignadoId]
+                        )
+                            .map(Number)
+                            .filter((id) => id > 0)
+                    )
+                ];
+
+            /* opcional: usuarios de cualquier departamento */
+            const personasInvolucradasIds =
+                [
+                    ...new Set(
+                        (
+                            Array.isArray(req.body.personasInvolucradasIds)
+                                ? req.body.personasInvolucradasIds
+                                : []
+                        )
+                            .map(Number)
+                            .filter((id) => id > 0)
+                    )
+                ];
 
             const prioridad =
                 req.body.prioridad || "media";
@@ -3256,8 +3339,12 @@ app.post(
                     ? "La descripción es obligatoria."
                     : descripcion.length > 2000
                         ? "La descripción es demasiado larga (máx. 2000 caracteres)."
-                        : !usuarioAsignadoId
-                            ? "Selecciona un responsable."
+                        : responsablesIds.length === 0
+                            ? "Selecciona al menos un responsable."
+                            : responsablesIds.length > MAX_RESPONSABLES_COMPROMISO
+                                ? `Máximo ${MAX_RESPONSABLES_COMPROMISO} responsables por compromiso.`
+                            : personasInvolucradasIds.length > MAX_PERSONAS_INVOLUCRADAS
+                                ? `Máximo ${MAX_PERSONAS_INVOLUCRADAS} personas involucradas por compromiso.`
                             : !["alta", "media", "baja"].includes(prioridad)
                                 ? "Prioridad no válida."
                                 : !fechaISOValida(fechaInicio) || !fechaISOValida(fechaLimite)
@@ -3279,52 +3366,170 @@ app.post(
 
 
             const [responsables] =
-                await db.execute(
+                await db.query(
                     `
-                    SELECT id, area
+                    SELECT id, nombre, departamento, area
                     FROM usuarios
-                    WHERE id = ? AND activo = 1
-                    LIMIT 1
+                    WHERE id IN (?) AND activo = 1
                     `,
                     [
-                        usuarioAsignadoId
+                        responsablesIds
                     ]
                 );
 
-            if (responsables.length === 0) {
+            if (responsables.length !== responsablesIds.length) {
 
                 return res
                     .status(400)
                     .json({
                         ok: false,
-                        mensaje: "El responsable seleccionado no es válido."
+                        mensaje: "Alguno de los responsables seleccionados no es válido."
                     });
 
             }
 
+            /*
+             * Todos los responsables deben ser del mismo
+             * departamento y área que quien crea el compromiso
+             * (también para el administrador).
+             */
             if (
-                usuarioSolicitante.rol === "lider" &&
-                responsables[0].area !== usuarioSolicitante.area
+                responsables.some(
+                    (responsable) =>
+                        !mismoDepartamento(
+                            responsable.departamento,
+                            usuarioSolicitante.departamento
+                        ) ||
+                        !mismoDepartamento(
+                            responsable.area,
+                            usuarioSolicitante.area
+                        )
+                )
             ) {
 
-                return respuestaSinPermiso(res);
+                return res
+                    .status(403)
+                    .json({
+                        ok: false,
+                        mensaje: "Solo puedes asignar compromisos a personas de tu departamento y área."
+                    });
 
             }
 
 
-            const insertado =
-                await insertarCompromiso(
-                    db,
-                    null,
-                    {
-                        descripcion,
-                        usuarioAsignadoId,
-                        prioridad,
-                        fechaInicio,
-                        fechaLimite,
-                        estado: "pendiente"
-                    }
+            /* los nombres se toman de la base de datos, no del cliente */
+            let personasInvolucradas =
+                [];
+
+            if (personasInvolucradasIds.length > 0) {
+
+                const [involucrados] =
+                    await db.query(
+                        `
+                        SELECT id, nombre
+                        FROM usuarios
+                        WHERE id IN (?) AND activo = 1
+                        `,
+                        [
+                            personasInvolucradasIds
+                        ]
+                    );
+
+                if (involucrados.length !== personasInvolucradasIds.length) {
+
+                    return res
+                        .status(400)
+                        .json({
+                            ok: false,
+                            mensaje: "Alguna de las personas involucradas no es válida."
+                        });
+
+                }
+
+                personasInvolucradas =
+                    personasInvolucradasIds.map(
+                        (id) => {
+
+                            const persona =
+                                involucrados.find(
+                                    (involucrado) => Number(involucrado.id) === id
+                                );
+
+                            return {
+                                id,
+                                nombre: persona.nombre
+                            };
+
+                        }
+                    );
+
+            }
+
+
+            /* mismo orden en que se eligieron: el primero es el principal */
+            const responsablesOrdenados =
+                responsablesIds.map(
+                    (id) =>
+                        responsables.find(
+                            (responsable) => Number(responsable.id) === id
+                        )
                 );
+
+
+            const connection =
+                await db.getConnection();
+
+            let insertado;
+
+            try {
+
+                await connection.beginTransaction();
+
+                insertado =
+                    await insertarCompromiso(
+                        connection,
+                        null,
+                        {
+                            descripcion,
+                            responsables:
+                                responsablesOrdenados.map(
+                                    (responsable) => ({
+                                        id: responsable.id,
+                                        nombre: responsable.nombre
+                                    })
+                                ),
+                            personasInvolucradas,
+                            prioridad,
+                            fechaInicio,
+                            fechaLimite,
+                            estado: "pendiente"
+                        }
+                    );
+
+                if (insertado) {
+
+                    await connection.commit();
+
+                }
+                else {
+
+                    await connection.rollback();
+
+                }
+
+            }
+            catch (error) {
+
+                await connection.rollback();
+
+                throw error;
+
+            }
+            finally {
+
+                connection.release();
+
+            }
 
             if (!insertado) {
 
@@ -3358,7 +3563,8 @@ app.post(
                     mensaje:
                         error.code === "ER_BAD_NULL_ERROR"
                             ? "La base de datos aún no permite compromisos sin reunión. Ejecuta js/server/sql/compromisos_sin_reunion.sql."
-                            : "No fue posible crear el compromiso.",
+                            : mensajeFaltaMigracionCompromisos(error) ||
+                                "No fue posible crear el compromiso.",
                     error: error.message
                 });
 
@@ -3427,26 +3633,17 @@ app.patch(
 
 
             /*
-             * lider solo puede editar compromisos de su misma
-             * área, operador solo los suyos.
+             * lider solo puede editar compromisos donde algún
+             * responsable sea de su departamento, operador solo aquellos
+             * en los que es responsable.
              */
 
-            const [compromisoActual] =
-                await db.execute(
-                    `
-                    SELECT c.UsuarioAsignadoId, c.Status, c.FechaFinReal, c.Aprobado, u.area
-                    FROM compromisos c
-                    INNER JOIN usuarios u
-                        ON u.id = c.UsuarioAsignadoId
-                    WHERE c.CompromisoId = ?
-                    LIMIT 1
-                    `,
-                    [
-                        compromisoId
-                    ]
+            const compromisoActual =
+                await obtenerCompromisoParaPermisos(
+                    compromisoId
                 );
 
-            if (compromisoActual.length === 0) {
+            if (!compromisoActual) {
 
                 return res
                     .status(404)
@@ -3463,13 +3660,10 @@ app.patch(
 
             const puedeEditar =
                 usuarioSolicitante.rol === "administrador" ||
-                (
-                    usuarioSolicitante.rol === "lider" &&
-                    usuarioSolicitante.area === compromisoActual[0].area
-                ) ||
+                esLiderDeCompromiso(usuarioSolicitante, compromisoActual) ||
                 (
                     usuarioSolicitante.rol === "operador" &&
-                    usuarioSolicitante.id === compromisoActual[0].UsuarioAsignadoId
+                    esResponsableDeCompromiso(usuarioSolicitante, compromisoActual)
                 );
 
             if (!puedeEditar) {
@@ -3513,7 +3707,7 @@ app.patch(
              * "Completado" desde aquí es solo el reporte del
              * operador (Status = 3): igual que con las
              * innovaciones, no cuenta como completado de verdad
-             * hasta que el líder de su área da el visto bueno
+             * hasta que el líder de su departamento da el visto bueno
              * (POST /api/compromisos/:id/aprobar, que es lo
              * único que puede poner Aprobado = 1). Por eso,
              * cualquier cambio de estado que no sea "seguir
@@ -3527,20 +3721,20 @@ app.patch(
 
             const seMantieneCompletado =
                 nuevoStatus === 3 &&
-                Number(compromisoActual[0].Status) === 3;
+                Number(compromisoActual.Status) === 3;
 
             /*
-             * Solo el responsable del compromiso o el líder de su
-             * área pueden marcarlo como completado (el visto bueno
+             * Solo un responsable del compromiso (cualquiera de
+             * ellos: el estado es compartido) o el líder de su
+             * departamento pueden marcarlo como completado (el visto bueno
              * sigue siendo aparte: POST /api/compromisos/:id/aprobar).
              */
 
             const esResponsable =
-                usuarioSolicitante.id === compromisoActual[0].UsuarioAsignadoId;
+                esResponsableDeCompromiso(usuarioSolicitante, compromisoActual);
 
             const esLiderDelArea =
-                usuarioSolicitante.rol === "lider" &&
-                usuarioSolicitante.area === compromisoActual[0].area;
+                esLiderDeCompromiso(usuarioSolicitante, compromisoActual);
 
             if (
                 nuevoStatus === 3 &&
@@ -3556,7 +3750,7 @@ app.patch(
                         ok: false,
 
                         mensaje:
-                            "Solo el responsable del compromiso o el líder de su área pueden marcarlo como completado."
+                            "Solo un responsable del compromiso o el líder de su departamento pueden marcarlo como completado."
 
                     });
 
@@ -3564,12 +3758,12 @@ app.patch(
 
             const aprobado =
                 seMantieneCompletado
-                    ? Boolean(compromisoActual[0].Aprobado)
+                    ? Boolean(compromisoActual.Aprobado)
                     : false;
 
             const fechaFinReal =
                 seMantieneCompletado
-                    ? compromisoActual[0].FechaFinReal
+                    ? compromisoActual.FechaFinReal
                     : null;
 
 
@@ -3642,7 +3836,8 @@ app.patch(
                     ok: false,
 
                     mensaje:
-                        "No fue posible actualizar el compromiso.",
+                        mensajeFaltaMigracionCompromisos(error) ||
+                            "No fue posible actualizar el compromiso.",
 
                     error:
                         error.message
@@ -3659,7 +3854,7 @@ app.patch(
    DAR VISTO BUENO A UN COMPROMISO (SOLO LÍDER / ADMIN)
    ---------------------------------------------------------
    Mismo patrón que POST /api/innovaciones/:id/aprobar: solo el
-   líder del área del responsable (o un administrador) puede
+   líder del departamento de algún responsable (o un administrador) puede
    darlo, y solo aplica si el compromiso está reportado como
    completado (Status = 3) y todavía sin aprobar.
    ========================================================= */
@@ -3720,22 +3915,12 @@ app.post(
             }
 
 
-            const [compromisoActual] =
-                await db.execute(
-                    `
-                    SELECT c.Status, c.Aprobado, u.area
-                    FROM compromisos c
-                    INNER JOIN usuarios u
-                        ON u.id = c.UsuarioAsignadoId
-                    WHERE c.CompromisoId = ?
-                    LIMIT 1
-                    `,
-                    [
-                        compromisoId
-                    ]
+            const compromisoActual =
+                await obtenerCompromisoParaPermisos(
+                    compromisoId
                 );
 
-            if (compromisoActual.length === 0) {
+            if (!compromisoActual) {
 
                 return res
                     .status(404)
@@ -3753,7 +3938,7 @@ app.post(
 
             if (
                 usuarioSolicitante.rol === "lider" &&
-                usuarioSolicitante.area !== compromisoActual[0].area
+                !esLiderDeCompromiso(usuarioSolicitante, compromisoActual)
             ) {
 
                 return respuestaSinPermiso(res);
@@ -3761,7 +3946,7 @@ app.post(
             }
 
 
-            if (Number(compromisoActual[0].Status) !== 3) {
+            if (Number(compromisoActual.Status) !== 3) {
 
                 return res
                     .status(400)
@@ -3777,7 +3962,7 @@ app.post(
             }
 
 
-            if (Boolean(compromisoActual[0].Aprobado)) {
+            if (Boolean(compromisoActual.Aprobado)) {
 
                 return res
                     .status(400)
@@ -3835,7 +4020,8 @@ app.post(
                     ok: false,
 
                     mensaje:
-                        "No fue posible aprobar el compromiso.",
+                        mensajeFaltaMigracionCompromisos(error) ||
+                            "No fue posible aprobar el compromiso.",
 
                     error:
                         error.message
@@ -3900,26 +4086,17 @@ app.delete(
 
             /*
              * Mismo criterio que al editar: lider solo puede
-             * borrar compromisos de su misma área, operador
-             * solo los suyos.
+             * borrar compromisos donde algún responsable sea de
+             * su departamento, operador solo aquellos en los que es
+             * responsable.
              */
 
-            const [compromisoActual] =
-                await db.execute(
-                    `
-                    SELECT c.UsuarioAsignadoId, u.area
-                    FROM compromisos c
-                    INNER JOIN usuarios u
-                        ON u.id = c.UsuarioAsignadoId
-                    WHERE c.CompromisoId = ?
-                    LIMIT 1
-                    `,
-                    [
-                        compromisoId
-                    ]
+            const compromisoActual =
+                await obtenerCompromisoParaPermisos(
+                    compromisoId
                 );
 
-            if (compromisoActual.length === 0) {
+            if (!compromisoActual) {
 
                 return res
                     .status(404)
@@ -3936,13 +4113,10 @@ app.delete(
 
             const puedeEliminar =
                 usuarioSolicitante.rol === "administrador" ||
-                (
-                    usuarioSolicitante.rol === "lider" &&
-                    usuarioSolicitante.area === compromisoActual[0].area
-                ) ||
+                esLiderDeCompromiso(usuarioSolicitante, compromisoActual) ||
                 (
                     usuarioSolicitante.rol === "operador" &&
-                    usuarioSolicitante.id === compromisoActual[0].UsuarioAsignadoId
+                    esResponsableDeCompromiso(usuarioSolicitante, compromisoActual)
                 );
 
             if (!puedeEliminar) {
@@ -3986,7 +4160,8 @@ app.delete(
                     ok: false,
 
                     mensaje:
-                        "No fue posible eliminar el compromiso.",
+                        mensajeFaltaMigracionCompromisos(error) ||
+                            "No fue posible eliminar el compromiso.",
 
                     error:
                         error.message
@@ -4812,22 +4987,387 @@ async function resolverDepartamentoArea(
 }
 
 
+/* =========================================================
+   COMPROMISOS CON VARIOS RESPONSABLES
+   ---------------------------------------------------------
+   Todos los responsables viven en compromiso_responsables (ver
+   js/server/sql/compromisos_varios_responsables.sql). En la tabla
+   compromisos, UsuarioAsignadoId sigue siendo el "responsable
+   principal" (el primero): de él salen DepartamentoId/AreaId y
+   sirve de respaldo para compromisos que no tengan filas en
+   compromiso_responsables (p. ej. creados por un backend que aún
+   no tenía este cambio).
+   ========================================================= */
+
+const MAX_RESPONSABLES_COMPROMISO = 20;
+
+const LARGO_MAX_PERSONAS_INVOLUCRADAS = 1000;
+
+const MAX_PERSONAS_INVOLUCRADAS = 30;
+
+
+/*
+ * Ids de los responsables de un compromiso (JSON de la reunión o
+ * cuerpo de la petición), únicos y en orden. Acepta el formato
+ * nuevo (responsables: [{ id, nombre }]) y el anterior
+ * (usuarioAsignadoId), igual que los objetivos.
+ */
+function idsResponsablesCompromiso(
+    compromiso
+) {
+
+    return [
+        ...new Set(
+            obtenerResponsablesObjetivo(compromiso)
+                .map((responsable) => Number(responsable.id))
+                .filter((id) => id > 0)
+        )
+    ];
+
+}
+
+
+/*
+ * Personas involucradas: ahora son usuarios de cualquier
+ * departamento ([{ id, nombre }]) y se guardan como JSON en
+ * compromisos.PersonasInvolucradas (TEXT). Los compromisos
+ * anteriores tienen texto libre ahí: se conserva tal cual.
+ */
+function normalizarPersonasInvolucradas(
+    valor
+) {
+
+    if (Array.isArray(valor)) {
+
+        const vistos =
+            new Set();
+
+        const personas =
+            valor
+                .map(
+                    (persona) => ({
+                        id:
+                            Number(persona?.id),
+                        nombre:
+                            String(persona?.nombre || "").trim().slice(0, 150)
+                    })
+                )
+                .filter(
+                    (persona) =>
+                        persona.id > 0 &&
+                        !vistos.has(persona.id) &&
+                        vistos.add(persona.id)
+                )
+                .slice(0, MAX_PERSONAS_INVOLUCRADAS);
+
+        return personas.length > 0
+            ? JSON.stringify(personas)
+            : null;
+
+    }
+
+    return (
+        String(valor || "")
+            .trim()
+            .slice(0, LARGO_MAX_PERSONAS_INVOLUCRADAS) ||
+        null
+    );
+
+}
+
+
+/* Inverso de normalizarPersonasInvolucradas: arreglo o texto libre (formato anterior). */
+function parsearPersonasInvolucradas(
+    valor
+) {
+
+    const texto =
+        String(valor || "").trim();
+
+    if (texto.startsWith("[")) {
+
+        try {
+
+            const personas =
+                JSON.parse(texto);
+
+            if (Array.isArray(personas)) {
+
+                return personas;
+
+            }
+
+        }
+        catch {
+
+            /* no era JSON: texto libre que empieza con "[" */
+
+        }
+
+    }
+
+    return texto;
+
+}
+
+
+/*
+ * Map CompromisoId -> [{ id, nombre }] con el responsable
+ * principal primero. Los compromisos sin filas en
+ * compromiso_responsables no aparecen: quien llama usa el
+ * responsable principal como respaldo.
+ */
+async function cargarResponsablesDeCompromisos(
+    connection,
+    compromisoIds
+) {
+
+    const porCompromiso =
+        new Map();
+
+    if (compromisoIds.length === 0) {
+
+        return porCompromiso;
+
+    }
+
+
+    const [filas] =
+        await connection.query(
+            `
+            SELECT
+                cr.CompromisoId,
+                u.id,
+                u.nombre
+            FROM compromiso_responsables cr
+            INNER JOIN usuarios u
+                ON u.id = cr.UsuarioId
+            INNER JOIN compromisos c
+                ON c.CompromisoId = cr.CompromisoId
+            WHERE cr.CompromisoId IN (?)
+            ORDER BY
+                cr.CompromisoId,
+                (u.id = c.UsuarioAsignadoId) DESC,
+                u.nombre
+            `,
+            [
+                compromisoIds
+            ]
+        );
+
+
+    filas.forEach(
+        (fila) => {
+
+            if (!porCompromiso.has(fila.CompromisoId)) {
+
+                porCompromiso.set(
+                    fila.CompromisoId,
+                    []
+                );
+
+            }
+
+            porCompromiso
+                .get(fila.CompromisoId)
+                .push({
+                    id: fila.id,
+                    nombre: fila.nombre
+                });
+
+        }
+    );
+
+
+    return porCompromiso;
+
+}
+
+
+/*
+ * Datos para decidir permisos sobre un compromiso: sus
+ * responsables (ids) y los departamentos de todos ellos. El líder
+ * de cualquiera de esos departamentos puede gestionarlo, igual que
+ * lo ve en GET /api/compromisos.
+ */
+async function obtenerCompromisoParaPermisos(
+    compromisoId
+) {
+
+    const [filas] =
+        await db.execute(
+            `
+            SELECT
+                c.UsuarioAsignadoId,
+                c.Status,
+                c.FechaFinReal,
+                c.Aprobado,
+                u.departamento
+            FROM compromisos c
+            INNER JOIN usuarios u
+                ON u.id = c.UsuarioAsignadoId
+            WHERE c.CompromisoId = ?
+            LIMIT 1
+            `,
+            [
+                compromisoId
+            ]
+        );
+
+    if (filas.length === 0) {
+
+        return null;
+
+    }
+
+
+    const [responsables] =
+        await db.execute(
+            `
+            SELECT u.id, u.departamento
+            FROM compromiso_responsables cr
+            INNER JOIN usuarios u
+                ON u.id = cr.UsuarioId
+            WHERE cr.CompromisoId = ?
+            `,
+            [
+                compromisoId
+            ]
+        );
+
+
+    return {
+
+        ...filas[0],
+
+        responsablesIds:
+            new Set([
+                Number(filas[0].UsuarioAsignadoId),
+                ...responsables.map((responsable) => Number(responsable.id))
+            ]),
+
+        departamentos:
+            [
+                filas[0].departamento,
+                ...responsables.map((responsable) => responsable.departamento)
+            ]
+
+    };
+
+}
+
+
+function esResponsableDeCompromiso(
+    usuario,
+    compromiso
+) {
+
+    return compromiso.responsablesIds.has(
+        Number(usuario.id)
+    );
+
+}
+
+
+function mismoDepartamento(
+    a,
+    b
+) {
+
+    const departamentoA =
+        String(a || "").trim();
+
+    return (
+        departamentoA !== "" &&
+        departamentoA === String(b || "").trim()
+    );
+
+}
+
+
+function esLiderDeCompromiso(
+    usuario,
+    compromiso
+) {
+
+    return (
+        usuario.rol === "lider" &&
+        compromiso.departamentos.some(
+            (departamento) =>
+                mismoDepartamento(
+                    departamento,
+                    usuario.departamento
+                )
+        )
+    );
+
+}
+
+
+/*
+ * Si la base de datos todavía no tiene el script de varios
+ * responsables, las consultas fallan con estos códigos: se
+ * explica qué falta en vez de un error genérico.
+ */
+function mensajeFaltaMigracionCompromisos(
+    error
+) {
+
+    return ["ER_NO_SUCH_TABLE", "ER_BAD_FIELD_ERROR"].includes(error?.code)
+        ? "La base de datos aún no tiene los cambios de compromisos con varios responsables. Ejecuta js/server/sql/compromisos_varios_responsables.sql."
+        : null;
+
+}
+
+
 async function insertarCompromiso(
     connection,
     reunionId,
     compromiso
 ) {
 
-    const usuarioAsignadoId =
-        Number(
-            compromiso.usuarioAsignadoId
+    /*
+     * Solo usuarios que existen: un id huérfano (usuario
+     * borrado) haría fallar la llave foránea y, con ella, la
+     * sincronización de todos los compromisos de la reunión.
+     */
+    const idsSolicitados =
+        idsResponsablesCompromiso(
+            compromiso
         );
+
+    const [existentes] =
+        idsSolicitados.length > 0
+            ? await connection.query(
+                `
+                SELECT id
+                FROM usuarios
+                WHERE id IN (?)
+                `,
+                [
+                    idsSolicitados
+                ]
+            )
+            : [[]];
+
+    const idsExistentes =
+        new Set(
+            existentes.map((usuario) => Number(usuario.id))
+        );
+
+    const responsablesIds =
+        idsSolicitados.filter(
+            (id) => idsExistentes.has(id)
+        );
+
+    const usuarioAsignadoId =
+        responsablesIds[0];
 
 
     if (!usuarioAsignadoId) {
 
         console.warn(
-            `Compromiso sin usuarioAsignadoId válido en reunión ${reunionId}, se omite:`,
+            `Compromiso sin responsables válidos en reunión ${reunionId}, se omite:`,
             compromiso
         );
 
@@ -4874,13 +5414,14 @@ async function insertarCompromiso(
      * POST /api/compromisos/:id/aprobar).
      */
 
-    await connection.execute(
+    const [resultado] = await connection.execute(
         `
         INSERT INTO compromisos
         (
             ReunionId,
             Titulo,
             Descripcion,
+            PersonasInvolucradas,
             UsuarioAsignadoId,
             DepartamentoId,
             AreaId,
@@ -4893,13 +5434,16 @@ async function insertarCompromiso(
         )
         VALUES
         (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
         `,
         [
             reunionId,
             descripcion.slice(0, 250) || "Compromiso",
             descripcion || null,
+            normalizarPersonasInvolucradas(
+                compromiso.personasInvolucradas
+            ),
             usuarioAsignadoId,
             deptoArea.departamentoId,
             deptoArea.areaId,
@@ -4909,6 +5453,26 @@ async function insertarCompromiso(
             status,
             null,
             0
+        ]
+    );
+
+
+    await connection.query(
+        `
+        INSERT INTO compromiso_responsables
+        (
+            CompromisoId,
+            UsuarioId
+        )
+        VALUES ?
+        `,
+        [
+            responsablesIds.map(
+                (id) => [
+                    resultado.insertId,
+                    id
+                ]
+            )
         ]
     );
 
@@ -5521,6 +6085,7 @@ async function obtenerCompromisosModuloPendientes(
                 c.CompromisoId,
                 c.Titulo,
                 c.Descripcion,
+                c.PersonasInvolucradas,
                 c.Prioridad,
                 c.Status,
                 DATE_FORMAT(c.FechaInicioEstimada, '%Y-%m-%d') AS FechaInicio,
@@ -5543,6 +6108,13 @@ async function obtenerCompromisosModuloPendientes(
             [
                 usuarioCreadorId
             ]
+        );
+
+
+    const responsablesPorCompromiso =
+        await cargarResponsablesDeCompromisos(
+            connection,
+            rows.map((row) => row.CompromisoId)
         );
 
 
@@ -5570,6 +6142,20 @@ async function obtenerCompromisosModuloPendientes(
 
                 usuarioAsignadoNombre:
                     row.ResponsableNombre,
+
+                responsables:
+                    responsablesPorCompromiso.get(row.CompromisoId) ||
+                    [
+                        {
+                            id: row.UsuarioAsignadoId,
+                            nombre: row.ResponsableNombre
+                        }
+                    ],
+
+                personasInvolucradas:
+                    parsearPersonasInvolucradas(
+                        row.PersonasInvolucradas
+                    ),
 
                 fechaInicio:
                     row.FechaInicio,
@@ -6837,7 +7423,8 @@ app.put(
                     ok: false,
 
                     mensaje:
-                        "No fue posible actualizar los compromisos.",
+                        mensajeFaltaMigracionCompromisos(error) ||
+                            "No fue posible actualizar los compromisos.",
 
                     error:
                         error.message

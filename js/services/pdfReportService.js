@@ -10,6 +10,11 @@ import {
     headerUsuario
 } from "./auth.service.js";
 
+import {
+    nombresResponsables,
+    textoInvolucrados
+} from "../utils/responsables.js";
+
 async function convertirImagenADataURL(url) {
 
     const response = await fetch(url);
@@ -497,7 +502,9 @@ export async function generarHTMLReunionPDF(
                     compromiso => {
 
                         const responsables =
-                            compromiso.usuarioAsignadoNombre ||
+                            nombresResponsables(
+                                compromiso
+                            ) ||
                             (
                                 Array.isArray(
                                     compromiso.colaboradores
@@ -525,6 +532,11 @@ export async function generarHTMLReunionPDF(
                                     ${texto(
                                         compromiso.descripcion
                                     )}
+                                    ${
+                                        textoInvolucrados(compromiso)
+                                            ? `<br><small>Involucrados: ${escaparHTML(textoInvolucrados(compromiso))}</small>`
+                                            : ""
+                                    }
                                 </td>
 
                                 <td>

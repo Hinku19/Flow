@@ -845,3 +845,38 @@
     }
 
 }
+
+
+/* ---------------------------------------------------------
+   FILTROS DE LA LISTA (buscar / estado / ordenar)
+   --------------------------------------------------------- */
+
+.eval-custom__filtros {
+    align-items: flex-end;
+}
+
+
+.eval-custom__contador {
+    margin-left: auto;
+
+    padding-bottom: var(--space-2xs);
+
+    color: var(--color-text-subtle);
+
+    font-size: var(--text-xs);
+}
+
+
+@media (max-width: 700px) {
+
+    .eval-custom__filtros .evaluations-resultados__campo {
+        flex: 1 1 100%;
+
+        min-width: 0;
+    }
+
+    .eval-custom__contador {
+        margin-left: 0;
+    }
+
+}

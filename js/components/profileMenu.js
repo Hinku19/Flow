@@ -20,6 +20,10 @@ import {
     headerUsuario
 } from "../services/auth.service.js";
 
+import {
+    esResponsable
+} from "../utils/responsables.js";
+
 
 export function initProfileMenu() {
 
@@ -336,7 +340,10 @@ export function initProfileMenu() {
             const propios =
                 data.compromisos.filter(
                     (compromiso) =>
-                        compromiso.usuarioAsignadoId === usuario.id
+                        esResponsable(
+                            compromiso,
+                            usuario.id
+                        )
                 );
 
             const ahora =
