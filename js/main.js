@@ -676,6 +676,9 @@ function montarReunion() {
         asignarResponsable:
             asignarResponsableObjetivo,
 
+        reordenable:
+            true,
+
         checkCompletado:
             (id) =>
                 developmentTable.todosLosPuntosCompletados(

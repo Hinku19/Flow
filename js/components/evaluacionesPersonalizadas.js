@@ -72,6 +72,11 @@ export function initEvaluacionesPersonalizadas() {
     let filtroDepartamento = "todos";
     let filtroArea = "todas";
 
+    /* filtros de la lista de tarjetas (se conservan al volver a ella) */
+    let busquedaLista = "";
+    let estadoLista = "todas";
+    let ordenLista = "creado_desc";
+
 
     /* =====================================================
        UTILIDADES
@@ -99,6 +104,30 @@ export function initEvaluacionesPersonalizadas() {
 
         const fecha =
             new Date(`${String(valor).slice(0, 10)}T00:00:00`);
+
+        if (Number.isNaN(fecha.getTime())) return "";
+
+        return fecha.toLocaleDateString(
+            "es-MX",
+            {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric"
+            }
+        );
+
+    }
+
+
+    /*
+     * creado_en es fecha y hora (llega en UTC); a diferencia de
+     * fecha_cierre no se puede cortar a 10 caracteres sin
+     * arriesgar que salga el día siguiente por la zona horaria.
+     */
+    function formatearCreacion(valor) {
+
+        const fecha =
+            new Date(valor);
 
         if (Number.isNaN(fecha.getTime())) return "";
 
@@ -286,6 +315,7 @@ export function initEvaluacionesPersonalizadas() {
                 <p class="innovation-card__responsable eval-card__descripcion">${escaparHTML(evaluacion.descripcion || "Sin descripción")}</p>
 
                 <p class="eval-card__meta">
+                    ${evaluacion.creadoEn ? `Creada el ${escaparHTML(formatearCreacion(evaluacion.creadoEn))} · ` : ""}
                     ${evaluacion.preguntas.length} pregunta${evaluacion.preguntas.length === 1 ? "" : "s"}
                     ${puedeVerResultados ? ` · ${evaluacion.totalRespuestas} respuesta${evaluacion.totalRespuestas === 1 ? "" : "s"}` : ""}
                 </p>
@@ -300,12 +330,200 @@ export function initEvaluacionesPersonalizadas() {
     }
 
 
+    const OPCIONES_ORDEN = [
+        { valor: "creado_desc", texto: "Más recientes primero" },
+        { valor: "creado_asc", texto: "Más antiguas primero" },
+        { valor: "cierre_asc", texto: "Cierre más próximo" },
+        { valor: "cierre_desc", texto: "Cierre más lejano" },
+        { valor: "titulo_asc", texto: "Título (A-Z)" },
+        { valor: "titulo_desc", texto: "Título (Z-A)" },
+        { valor: "respuestas_desc", texto: "Más respuestas", soloResultados: true }
+    ];
+
+
+    function marcaDeTiempo(valor) {
+
+        const tiempo =
+            valor ? new Date(valor).getTime() : NaN;
+
+        return Number.isNaN(tiempo) ? null : tiempo;
+
+    }
+
+
+    /*
+     * Compara por fecha dejando siempre al final las que no
+     * tienen (p. ej. "Sin fecha de cierre"), sin importar si el
+     * orden es ascendente o descendente.
+     */
+    function compararFechas(a, b, descendente) {
+
+        if (a === null && b === null) return 0;
+        if (a === null) return 1;
+        if (b === null) return -1;
+
+        return descendente ? b - a : a - b;
+
+    }
+
+
+    function evaluacionesFiltradas() {
+
+        const texto =
+            busquedaLista.trim().toLowerCase();
+
+        const filtradas =
+            evaluaciones.filter(
+                (evaluacion) =>
+                    (
+                        estadoLista === "todas" ||
+                        (estadoLista === "activas") === evaluacion.vigente
+                    ) &&
+                    (
+                        !texto ||
+                        `${evaluacion.titulo} ${evaluacion.descripcion || ""}`
+                            .toLowerCase()
+                            .includes(texto)
+                    )
+            );
+
+        const [criterio, direccion] =
+            ordenLista.split("_");
+
+        const descendente =
+            direccion === "desc";
+
+        return filtradas.sort(
+            (a, b) => {
+
+                if (criterio === "titulo") {
+
+                    const resultado =
+                        a.titulo.localeCompare(b.titulo, "es", { sensitivity: "base", numeric: true });
+
+                    return descendente ? -resultado : resultado;
+
+                }
+
+                if (criterio === "respuestas") {
+
+                    return (b.totalRespuestas || 0) - (a.totalRespuestas || 0);
+
+                }
+
+                const campo =
+                    criterio === "cierre" ? "fechaCierre" : "creadoEn";
+
+                return (
+                    compararFechas(marcaDeTiempo(a[campo]), marcaDeTiempo(b[campo]), descendente) ||
+                    compararFechas(marcaDeTiempo(a.creadoEn), marcaDeTiempo(b.creadoEn), true)
+                );
+
+            }
+        );
+
+    }
+
+
+    /*
+     * Solo se repintan las tarjetas (no la barra de filtros)
+     * para que el cuadro de búsqueda no pierda el foco al
+     * escribir.
+     */
+    function pintarTarjetas() {
+
+        const lista =
+            contenedor.querySelector(".eval-custom__lista");
+
+        if (!lista) return;
+
+        const visibles =
+            evaluacionesFiltradas();
+
+        lista.innerHTML =
+            visibles.length
+                ? `<div class="innovations-list__grid">${visibles.map(construirTarjeta).join("")}</div>`
+                : `<p class="evaluations-empty">No hay evaluaciones que coincidan con estos filtros.</p>`;
+
+        const contador =
+            contenedor.querySelector(".eval-custom__contador");
+
+        if (contador) {
+
+            contador.textContent =
+                visibles.length === evaluaciones.length
+                    ? `${evaluaciones.length} evaluación${evaluaciones.length === 1 ? "" : "es"}`
+                    : `${visibles.length} de ${evaluaciones.length} evaluaciones`;
+
+        }
+
+    }
+
+
+    function construirFiltrosLista() {
+
+        /* quien no administra solo recibe evaluaciones vigentes */
+        const filtroEstado =
+            puedeAdministrar
+                ? `
+                    <div class="evaluations-resultados__campo">
+                        <label for="eval-lista-estado">Estado</label>
+                        <select id="eval-lista-estado" data-filtro-lista="estado">
+                            <option value="todas" ${estadoLista === "todas" ? "selected" : ""}>Todas</option>
+                            <option value="activas" ${estadoLista === "activas" ? "selected" : ""}>Activas</option>
+                            <option value="cerradas" ${estadoLista === "cerradas" ? "selected" : ""}>Cerradas</option>
+                        </select>
+                    </div>
+                `
+                : "";
+
+        const opcionesOrden =
+            OPCIONES_ORDEN
+                .filter((opcion) => !opcion.soloResultados || puedeVerResultados)
+                .map((opcion) => `<option value="${opcion.valor}" ${opcion.valor === ordenLista ? "selected" : ""}>${opcion.texto}</option>`)
+                .join("");
+
+        return `
+            <div class="evaluations-resultados__controles eval-custom__filtros">
+
+                <div class="evaluations-resultados__campo">
+                    <label for="eval-lista-busqueda">Buscar</label>
+                    <input
+                        type="search"
+                        id="eval-lista-busqueda"
+                        data-filtro-lista="busqueda"
+                        placeholder="Título o descripción"
+                        value="${escaparHTML(busquedaLista)}"
+                    >
+                </div>
+
+                ${filtroEstado}
+
+                <div class="evaluations-resultados__campo">
+                    <label for="eval-lista-orden">Ordenar por</label>
+                    <select id="eval-lista-orden" data-filtro-lista="orden">
+                        ${opcionesOrden}
+                    </select>
+                </div>
+
+                <span class="eval-custom__contador"></span>
+
+            </div>
+        `;
+
+    }
+
+
     function pintarLista() {
 
         pantalla = "lista";
 
-        const tarjetas =
-            evaluaciones.map(construirTarjeta).join("");
+        /* "Más respuestas" no existe para quien no ve resultados */
+        if (!OPCIONES_ORDEN.some((opcion) => opcion.valor === ordenLista && (!opcion.soloResultados || puedeVerResultados))) {
+
+            ordenLista = "creado_desc";
+
+        }
 
         const vacio =
             puedeAdministrar
@@ -336,10 +554,12 @@ export function initEvaluacionesPersonalizadas() {
 
             ${
                 evaluaciones.length
-                    ? `<div class="innovations-list__grid">${tarjetas}</div>`
+                    ? `${construirFiltrosLista()}<div class="eval-custom__lista"></div>`
                     : `<p class="evaluations-empty">${vacio}</p>`
             }
         `;
+
+        pintarTarjetas();
 
     }
 
@@ -1546,6 +1766,37 @@ export function initEvaluacionesPersonalizadas() {
 
     contenedor.addEventListener("input", alEditarCampo);
     contenedor.addEventListener("change", alEditarCampo);
+
+
+    function alFiltrarLista(event) {
+
+        const filtro =
+            event.target.dataset?.filtroLista;
+
+        if (!filtro || pantalla !== "lista") return;
+
+        if (filtro === "busqueda") {
+
+            busquedaLista = event.target.value;
+
+        }
+        else if (filtro === "estado") {
+
+            estadoLista = event.target.value;
+
+        }
+        else if (filtro === "orden") {
+
+            ordenLista = event.target.value;
+
+        }
+
+        pintarTarjetas();
+
+    }
+
+    contenedor.addEventListener("input", alFiltrarLista);
+    contenedor.addEventListener("change", alFiltrarLista);
 
 
     contenedor.addEventListener(

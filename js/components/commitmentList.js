@@ -3,6 +3,8 @@ import { API_URL } from "./config.js";
 import { capitalizar } from "../utils/capitalize.js";
 import { confirmarEliminacion, avisoDialog } from "../services/confirmDialog.js";
 import { getUsuarioActual, headerUsuario } from "../services/auth.service.js";
+import { obtenerResponsables, nombresResponsables, esResponsable, mismaArea, obtenerInvolucrados, textoInvolucrados } from "../utils/responsables.js";
+import { crearSelectorResponsables } from "../utils/selectorResponsables.js";
 
 export const ESTADO_LABEL = {
   "pendiente": "Pendiente",
@@ -48,15 +50,19 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
   const form = container.querySelector(".commitment-list__form");
   const formTitle = container.querySelector(".commitment-list__form-title");
   const saveBtn = container.querySelector(".commitment-list__save");
-  const usuarioSelect = container.querySelector(".commitment-list__usuarios");
+  const selectorResponsables = crearSelectorResponsables(container.querySelector(".commitment-list__responsables"));
+  const selectorInvolucrados = crearSelectorResponsables(container.querySelector(".commitment-list__involucrados"), {
+    etiqueta: "Personas involucradas",
+    singular: "Involucrado",
+    plural: "involucrados",
+    conFiltros: true,
+  });
 
   let items = loadData(storageKey);
   let editingId = null; //* NULL significa "modo alta" y cualquier id significa "modo edición"
   let origenPunto = null; //* { objetivoId, blockId } cuando el compromiso viene de un punto de desarrollo
 
   async function cargarUsuarios() {
-    if (!usuarioSelect) return;
-
     try {
       const response = await fetch(`${API_URL}/usuarios`);
       const data = await response.json();
@@ -65,33 +71,28 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
         throw new Error(data.mensaje || data.error || "No fue posible cargar los usuarios.");
       }
 
-      const usuarios = (data.usuarios || [])
+      const activos = (data.usuarios || [])
         .filter((usuario) => Number(usuario.activo) === 1)
         .sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-      usuarioSelect.innerHTML = `<option value="">Seleccione un responsable</option>`;
-
-      usuarios.forEach((usuario) => {
-        const option = document.createElement("option");
-        option.value = usuario.id;
-        option.textContent = usuario.nombre;
-        usuarioSelect.appendChild(option);
-      });
+      /* responsables: solo del mismo departamento y área; involucrados: cualquiera */
+      selectorResponsables.setUsuarios(activos.filter((usuario) => mismaArea(usuario, getUsuarioActual())));
+      selectorInvolucrados.setUsuarios(activos);
     } catch (error) {
       console.error("ERROR CARGANDO USUARIOS PARA COMPROMISOS:", error);
     }
   }
 
   /*
-   * Solo el responsable del compromiso o un líder pueden marcarlo
-   * como completado.
+   * Solo un responsable del compromiso (cualquiera, si tiene
+   * varios) o un líder pueden marcarlo como completado.
    */
   function puedeCompletar(data) {
     const usuario = getUsuarioActual();
 
     return (
       usuario?.rol === "lider" ||
-      Number(usuario?.id) === Number(data.usuarioAsignadoId)
+      esResponsable(data, usuario?.id)
     );
   }
 
@@ -149,9 +150,16 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
 
     const meta = document.createElement("div");
     meta.classList.add("commitment-card__meta");
-    meta.textContent = `${data.usuarioAsignadoNombre || "?"} · ${data.fechaInicio || "?"} → ${data.fechaLimite || "?"} · ${data.vencidoInformativo ? "Vencido de la reunión anterior" : ESTADO_LABEL[data.estado]} · ${PRIORIDAD_LABEL[data.prioridad]}`;
+    meta.textContent = `${nombresResponsables(data) || "?"} · ${data.fechaInicio || "?"} → ${data.fechaLimite || "?"} · ${data.vencidoInformativo ? "Vencido de la reunión anterior" : ESTADO_LABEL[data.estado]} · ${PRIORIDAD_LABEL[data.prioridad]}`;
 
     card.append(meta);
+
+    if (textoInvolucrados(data)) {
+      const involucrados = document.createElement("div");
+      involucrados.classList.add("commitment-card__involucrados");
+      involucrados.textContent = `Involucrados: ${textoInvolucrados(data)}`;
+      card.append(involucrados);
+    }
 
     if (data.estado === "completado" && data.fechaCompletado) {
       const completado = document.createElement("div");
@@ -240,15 +248,20 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     updateCommitment(id, { estado: "completado", vencidoInformativo: false });
   }
 
+  /*
+   * usuarioAsignadoId / usuarioAsignadoNombre se siguen guardando
+   * con el primer responsable (el principal) por compatibilidad con
+   * lo que todavía lee un solo responsable.
+   */
   function readForm() {
     const formData = new FormData(form);
-
-    const usuarioAsignadoId = Number(formData.get("usuarioAsignadoId"));
-    const opcionSeleccionada = usuarioSelect?.selectedOptions?.[0];
+    const responsables = selectorResponsables.getSeleccionados();
 
     return {
-      usuarioAsignadoId,
-      usuarioAsignadoNombre: opcionSeleccionada?.textContent || "",
+      responsables,
+      usuarioAsignadoId: responsables[0]?.id || null,
+      usuarioAsignadoNombre: responsables[0]?.nombre || "",
+      personasInvolucradas: selectorInvolucrados.getSeleccionados(),
       descripcion: formData.get("descripcion").trim(),
       fechaInicio: formData.get("fechaInicio"),
       fechaLimite: formData.get("fechaLimite"),
@@ -259,7 +272,8 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
   }
 
   function fillForm(data) {
-    form.elements.usuarioAsignadoId.value = data.usuarioAsignadoId || "";
+    selectorResponsables.setSeleccionados(obtenerResponsables(data));
+    selectorInvolucrados.setSeleccionados(obtenerInvolucrados(data));
     form.elements.descripcion.value = data.descripcion;
     form.elements.fechaInicio.value = data.fechaInicio || "";
     form.elements.fechaLimite.value = data.fechaLimite || "";
@@ -293,6 +307,8 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
   function closeDialog() {
     dialog.close();
     form.reset();
+    selectorResponsables.limpiar();
+    selectorInvolucrados.limpiar();
     editingId = null;
     origenPunto = null;
   }
@@ -330,6 +346,11 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = readForm();
+
+    if (data.responsables.length === 0) {
+      avisoDialog("Selecciona al menos un responsable.");
+      return;
+    }
 
     const original = items.find((item) => item.id === editingId);
     const seCompleta =

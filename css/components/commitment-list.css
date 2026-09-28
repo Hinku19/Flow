@@ -230,3 +230,102 @@
 .commitment-card__delete:hover{
     color: var(--color-danger);
 }
+
+/* ---------------------------------------------------------
+   VARIOS RESPONSABLES / PERSONAS INVOLUCRADAS
+   --------------------------------------------------------- */
+
+.field__opcional {
+  font-weight: var(--weight-regular, 400);
+  color: var(--color-text-subtle);
+}
+
+.selector-responsables {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+/* botón que abre / cierra la lista */
+.selector-responsables__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.selector-responsables__flecha {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.selector-responsables--abierto .selector-responsables__flecha {
+  transform: rotate(180deg);
+}
+
+.selector-responsables__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.selector-responsables__panel[hidden] {
+  display: none;
+}
+
+.selector-responsables__filtros {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2xs);
+}
+
+@media (max-width: 480px) {
+  .selector-responsables__filtros {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* departamento · área junto al nombre (personas involucradas) */
+.selector-responsables__equipo {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+  text-align: right;
+}
+
+/* la lista de casillas viene de asignar-dialog; aquí más baja */
+.selector-responsables__opciones {
+  max-height: 180px;
+}
+
+.selector-responsables__sin-resultados {
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-sm);
+  color: var(--color-text-subtle);
+}
+
+.selector-responsables__resumen {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.selector-responsables__resumen--vacio {
+  color: var(--color-text-subtle);
+}
+
+.commitment-card__involucrados {
+  margin-top: var(--space-2xs);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

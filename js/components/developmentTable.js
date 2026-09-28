@@ -2,6 +2,7 @@ import { loadData, saveData } from "../services/storage.service.js";
 import { capitalizar } from "../utils/capitalize.js";
 import { agruparPorPrioridad } from "../utils/agruparPorPrioridad.js";
 import { confirmarEliminacion } from "../services/confirmDialog.js";
+import { crearAsaArrastre, habilitarArrastre, moverEnArreglo } from "../utils/arrastrarOrdenar.js";
 
 /*
  * "flow:compromiso-creado-desde-punto" es un evento global
@@ -21,6 +22,11 @@ const PLACEHOLDER = {
   subtitulo: "Escribe un subtitulo...",
   punto: "Coloca un punto...",
   parrafo: "Escribe un párrafo...",
+};
+const NOMBRE_TIPO = {
+  subtitulo: "subtítulo",
+  punto: "punto",
+  parrafo: "párrafo",
 };
 const AVANCE_CLASS = [
   {max: 33, clase: "avance--bajo"},
@@ -209,6 +215,8 @@ export function createDevelopmentTable({ container, storageKey }) {
     if (block.tipo === "punto" && block.compromisoCreado) {
       wrapper.classList.add("development-block--compromiso");
     }
+
+    wrapper.appendChild(crearAsaArrastre(NOMBRE_TIPO[block.tipo]));
 
     if (block.tipo === "punto") {
       const bullet = document.createElement("span");
@@ -561,6 +569,25 @@ function createInsertButton(tipo, label, index) {
       return;
     }
 
+  });
+
+  /*
+   * Los bloques solo se reordenan dentro de su propio objetivo:
+   * habilitarArrastre compara únicamente contra los hermanos del
+   * mismo .development__blocks. Un subtítulo se mueve solo (sus
+   * puntos se quedan donde estaban), igual que en Notion.
+   */
+  habilitarArrastre({
+    contenedor: table,
+    selectorElemento: ".development-block",
+    alMover: (desde, hacia, elemento) => {
+      const objetivoId = elemento.closest(".development__row")?.dataset.id;
+      if (!objetivoId) return;
+
+      moverEnArreglo(getBlocks(objetivoId), desde, hacia);
+      persist();
+      render();
+    },
   });
 
   table.addEventListener("dblclick", (event) => {

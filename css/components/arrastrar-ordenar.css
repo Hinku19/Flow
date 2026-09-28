@@ -1,0 +1,103 @@
+/* =========================================================
+   FLOW - REORDENAR ARRASTRANDO (ESTILO NOTION)
+   ---------------------------------------------------------
+   Asa de seis puntitos, copia que sigue al cursor y línea
+   azul de destino. Ver js/utils/arrastrarOrdenar.js.
+   ========================================================= */
+
+.asa-arrastre {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 18px;
+  height: 24px;
+  margin-left: calc(var(--space-2xs) * -1);
+  padding: 0;
+
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+
+  color: var(--color-text-subtle);
+
+  cursor: grab;
+  opacity: 0;
+  touch-action: none;
+
+  transition:
+    opacity var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.asa-arrastre svg {
+  fill: currentColor;
+}
+
+/* aparece al pasar el mouse por su elemento (o al enfocarla con Tab) */
+:hover > .asa-arrastre,
+.asa-arrastre:focus-visible {
+  opacity: 1;
+}
+
+.asa-arrastre:hover {
+  background-color: var(--color-surface-alt);
+  color: var(--color-text-second);
+}
+
+.asa-arrastre:focus-visible {
+  outline: 2px solid #2383e2;
+  outline-offset: 1px;
+}
+
+/* en pantallas táctiles no hay hover: se deja siempre visible, más tenue */
+@media (hover: none) {
+  .asa-arrastre {
+    opacity: 0.6;
+  }
+}
+
+
+/* ---------- durante el arrastre ---------- */
+
+body.asa-arrastre--activo,
+body.asa-arrastre--activo * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.asa-arrastre--origen {
+  opacity: 0.35;
+}
+
+.asa-arrastre__fantasma {
+  position: fixed;
+  z-index: 1000;
+
+  margin: 0;
+
+  list-style: none;
+  background-color: var(--color-surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.asa-arrastre__fantasma .asa-arrastre {
+  opacity: 1;
+}
+
+.asa-arrastre__indicador {
+  position: fixed;
+  z-index: 1001;
+
+  height: 3px;
+
+  border-radius: 2px;
+  background-color: #2383e2;
+
+  pointer-events: none;
+}

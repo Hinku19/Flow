@@ -25,6 +25,18 @@ import {
     avisoDialog
 } from "../services/confirmDialog.js";
 
+import {
+    obtenerResponsables,
+    nombresResponsables,
+    esResponsable,
+    mismaArea,
+    textoInvolucrados
+} from "../utils/responsables.js";
+
+import {
+    crearSelectorResponsables
+} from "../utils/selectorResponsables.js";
+
 
 const ESTADOS_ACTIVOS = [
     "pendiente",
@@ -112,6 +124,36 @@ export function initCommitmentsView() {
         [];
 
 
+    const selectorResponsables =
+        formNuevo
+            ? crearSelectorResponsables(
+                formNuevo.querySelector(
+                    ".commitment-list__responsables"
+                )
+            )
+            : null;
+
+
+    const selectorInvolucrados =
+        formNuevo
+            ? crearSelectorResponsables(
+                formNuevo.querySelector(
+                    ".commitment-list__involucrados"
+                ),
+                {
+                    etiqueta:
+                        "Personas involucradas",
+                    singular:
+                        "Involucrado",
+                    plural:
+                        "involucrados",
+                    conFiltros:
+                        true
+                }
+            )
+            : null;
+
+
     /*
      * "en-revision" no es una opción del <select> (no es algo
      * que se pueda "elegir": es "completado" sin visto bueno
@@ -129,9 +171,10 @@ export function initCommitmentsView() {
 
 
     /*
-     * Solo el responsable del compromiso o un líder pueden
-     * marcarlo como completado (el servidor valida además que
-     * el líder sea de la misma área).
+     * Solo un responsable del compromiso (cualquiera de ellos,
+     * el estado es compartido) o un líder pueden marcarlo como
+     * completado (el servidor valida además que el líder sea de
+     * la misma área).
      */
     function puedeCompletar(data) {
 
@@ -140,7 +183,10 @@ export function initCommitmentsView() {
 
         return (
             usuario?.rol === "lider" ||
-            Number(usuario?.id) === Number(data.usuarioAsignadoId)
+            esResponsable(
+                data,
+                usuario?.id
+            )
         );
 
     }
@@ -513,9 +559,6 @@ export function initCommitmentsView() {
 
     async function poblarResponsables() {
 
-        const select =
-            formNuevo.elements.usuarioAsignadoId;
-
         const usuarioActual =
             getUsuarioActual();
 
@@ -540,15 +583,11 @@ export function initCommitmentsView() {
             }
 
 
-            const usuarios =
+            const activos =
                 (data.usuarios || [])
                     .filter(
                         (usuario) =>
-                            Number(usuario.activo) === 1 &&
-                            (
-                                usuarioActual?.rol === "administrador" ||
-                                usuario.area === usuarioActual?.area
-                            )
+                            Number(usuario.activo) === 1
                     )
                     .sort(
                         (a, b) =>
@@ -556,26 +595,20 @@ export function initCommitmentsView() {
                     );
 
 
-            select.innerHTML =
-                `<option value="">Seleccione un responsable</option>`;
+            /* responsables: solo del mismo departamento y área */
+            selectorResponsables.setUsuarios(
+                activos.filter(
+                    (usuario) =>
+                        mismaArea(
+                            usuario,
+                            usuarioActual
+                        )
+                )
+            );
 
-            usuarios.forEach(
-                (usuario) => {
-
-                    const option =
-                        document.createElement("option");
-
-                    option.value =
-                        usuario.id;
-
-                    option.textContent =
-                        usuario.nombre;
-
-                    select.appendChild(
-                        option
-                    );
-
-                }
+            /* involucrados: cualquier persona de cualquier departamento */
+            selectorInvolucrados.setUsuarios(
+                activos
             );
 
         }
@@ -599,6 +632,10 @@ export function initCommitmentsView() {
 
         formNuevo.reset();
 
+        selectorResponsables.limpiar();
+
+        selectorInvolucrados.limpiar();
+
         formNuevo.elements.fechaInicio.value =
             fechaHoyInput();
 
@@ -616,15 +653,18 @@ export function initCommitmentsView() {
         const campos =
             formNuevo.elements;
 
+        const responsables =
+            selectorResponsables.getSeleccionados();
+
         if (
-            !campos.usuarioAsignadoId.value ||
+            responsables.length === 0 ||
             !campos.descripcion.value.trim() ||
             !campos.fechaInicio.value ||
             !campos.fechaLimite.value
         ) {
 
             mostrarErrorNuevo(
-                "Completa responsable, descripción y fechas."
+                "Elige al menos un responsable y completa descripción y fechas."
             );
 
             return;
@@ -672,8 +712,17 @@ export function initCommitmentsView() {
                         body:
                             JSON.stringify({
 
-                                usuarioAsignadoId:
-                                    Number(campos.usuarioAsignadoId.value),
+                                responsablesIds:
+                                    responsables.map(
+                                        (responsable) => responsable.id
+                                    ),
+
+                                personasInvolucradasIds:
+                                    selectorInvolucrados
+                                        .getSeleccionados()
+                                        .map(
+                                            (persona) => persona.id
+                                        ),
 
                                 descripcion:
                                     campos.descripcion.value.trim(),
@@ -838,7 +887,12 @@ export function initCommitmentsView() {
         const usuarios =
             [...new Set(
                 compromisos
-                    .map(c => c.usuarioAsignadoNombre)
+                    .flatMap(
+                        (c) =>
+                            obtenerResponsables(c).map(
+                                (responsable) => responsable.nombre
+                            )
+                    )
                     .filter(Boolean)
             )].sort(
                 (a, b) =>
@@ -1007,7 +1061,7 @@ export function initCommitmentsView() {
         );
 
         meta.textContent =
-            `${data.usuarioAsignadoNombre || "?"} · ${formatearFecha(data.fechaInicio)} → ${formatearFecha(data.fechaLimite)} · ${PRIORIDAD_LABEL[data.prioridad] || data.prioridad}`;
+            `${nombresResponsables(data) || "?"} · ${formatearFecha(data.fechaInicio)} → ${formatearFecha(data.fechaLimite)} · ${PRIORIDAD_LABEL[data.prioridad] || data.prioridad}`;
 
 
         const origen =
@@ -1142,7 +1196,34 @@ export function initCommitmentsView() {
 
         card.append(
             header,
-            meta,
+            meta
+        );
+
+
+        if (
+            textoInvolucrados(
+                data
+            )
+        ) {
+
+            const involucrados =
+                document.createElement("div");
+
+            involucrados.classList.add(
+                "commitment-card__involucrados"
+            );
+
+            involucrados.textContent =
+                `Involucrados: ${textoInvolucrados(data)}`;
+
+            card.append(
+                involucrados
+            );
+
+        }
+
+
+        card.append(
             origen,
             edicion
         );
@@ -1264,7 +1345,9 @@ export function initCommitmentsView() {
 
                     if (
                         usuario &&
-                        item.usuarioAsignadoNombre !== usuario
+                        !obtenerResponsables(item).some(
+                            (responsable) => responsable.nombre === usuario
+                        )
                     ) {
 
                         return false;

@@ -2,6 +2,7 @@ import {loadData, saveData} from "../services/storage.service.js"
 import { confirmDialog } from "../services/confirmDialog.js"
 import { capitalizar } from "../utils/capitalize.js"
 import { obtenerResponsables } from "../utils/responsables.js"
+import { crearAsaArrastre, habilitarArrastre, moverEnArreglo } from "../utils/arrastrarOrdenar.js"
 
 function generarUUID() {
 
@@ -91,8 +92,11 @@ function formatearFechaCompletado(fechaISO){
  * Si se pasa, al agregar un elemento se piden sus responsables (uno o
  * varios; null = cancelar, no se agrega) y cada elemento muestra un
  * botón con los responsables para reasignarlos.
+ *
+ * reordenable (opcional): muestra el asa ⋮⋮ para cambiar el orden
+ * de los elementos arrastrándolos (ver utils/arrastrarOrdenar.js).
  */
-export function createEditableList({container, itemName, storageKey, onChange, showCheckbox = true, checkCompletado, onNavigate, asignarResponsable}){
+export function createEditableList({container, itemName, storageKey, onChange, showCheckbox = true, checkCompletado, onNavigate, asignarResponsable, reordenable = false}){
     const list = container.querySelector(".editable-list__list")
     const input = container.querySelector(".editable-list__input")
     const addBtn = container.querySelector(".editable-list__add")
@@ -196,6 +200,8 @@ export function createEditableList({container, itemName, storageKey, onChange, s
         deleteBtn.classList.add("editable-list__delete");
         deleteBtn.textContent = "✕";
         deleteBtn.setAttribute("aria-label",`Eliminar ${itemName}`)
+
+        if (reordenable && data.id !== editingId) item.append(crearAsaArrastre(itemName));
 
         if (check) item.append(check);
 
@@ -404,6 +410,17 @@ export function createEditableList({container, itemName, storageKey, onChange, s
         // }
 
     })
+
+    if (reordenable) {
+        habilitarArrastre({
+            contenedor: list,
+            selectorElemento: ".editable-list__item",
+            alMover: (desde, hacia) => {
+                moverEnArreglo(items, desde, hacia);
+                render();
+            },
+        });
+    }
 
     list.addEventListener("dblclick", (event)=>{
         if (!event.target.matches(".editable-list__text")) return;
