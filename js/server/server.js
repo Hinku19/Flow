@@ -3106,6 +3106,99 @@ app.get("/api/reportes/compromisos", async (req, res) => {
     }
 });
 
+app.get("/api/reportes/innovaciones", async (req, res) => {
+    try {
+        const usuario = await obtenerUsuarioSolicitante(req);
+        if (!usuario) {
+            return res.status(401).json({ ok: false, mensaje: "No fue posible identificar al usuario." });
+        }
+        if (!["administrador", "lider"].includes(usuario.rol)) {
+            return respuestaSinPermiso(res);
+        }
+
+        const desde = String(req.query.desde || "").trim();
+        const hasta = String(req.query.hasta || "").trim();
+        const estados = String(req.query.estados || "todos").split(",").map((valor) => valor.trim()).filter(Boolean);
+        const departamentoSolicitado = String(req.query.departamento || "").trim();
+        const areaSolicitada = String(req.query.area || "").trim();
+        const colaboradorId = String(req.query.colaborador || "").trim();
+        if ((desde && !fechaISOValida(desde)) || (hasta && !fechaISOValida(hasta)) || (desde && hasta && desde > hasta)) {
+            return res.status(400).json({ ok: false, mensaje: "El rango de fechas no es válido." });
+        }
+        if (colaboradorId && colaboradorId !== "todos" && (!/^\d+$/.test(colaboradorId) || Number(colaboradorId) < 1)) {
+            return res.status(400).json({ ok: false, mensaje: "El colaborador seleccionado no es válido." });
+        }
+        const estadosPermitidos = ["todos", "completadas", "pendientes-autorizar"];
+        if (!estados.length || estados.some((estado) => !estadosPermitidos.includes(estado))) {
+            return res.status(400).json({ ok: false, mensaje: "El estatus de innovación seleccionado no es válido." });
+        }
+
+        const condiciones = [];
+        const parametros = [];
+        const departamento = usuario.rol === "lider"
+            ? String(usuario.departamento || "").trim()
+            : departamentoSolicitado === "todos" ? "" : departamentoSolicitado;
+        const area = areaSolicitada === "todas" ? "" : areaSolicitada;
+        if (usuario.rol === "lider") {
+            condiciones.push("TRIM(u.departamento) = TRIM(?)");
+            parametros.push(departamento);
+        } else if (departamento) {
+            condiciones.push("TRIM(u.departamento) = TRIM(?)");
+            parametros.push(departamento);
+        }
+        if (area) {
+            condiciones.push("TRIM(COALESCE(NULLIF(i.area_nombre, ''), u.area)) = TRIM(?)");
+            parametros.push(area);
+        }
+        if (colaboradorId && colaboradorId !== "todos") {
+            condiciones.push("i.usuario_id = ?");
+            parametros.push(Number(colaboradorId));
+        }
+        if (desde) {
+            condiciones.push("DATE(i.fecha_creacion) >= ?");
+            parametros.push(desde);
+        }
+        if (hasta) {
+            condiciones.push("DATE(i.fecha_creacion) <= ?");
+            parametros.push(hasta);
+        }
+        if (!estados.includes("todos")) {
+            const filtrosEstatus = {
+                completadas: "COALESCE(i.aprobada, 0) = 1",
+                "pendientes-autorizar": "COALESCE(i.aprobada, 0) = 0"
+            };
+            condiciones.push(`(${estados.map((estado) => filtrosEstatus[estado]).join(" OR ")})`);
+        }
+
+        const [filas] = await db.execute(
+            `SELECT i.id, i.nombre_innovacion AS nombreInnovacion,
+                    i.actividad_impacta AS actividadImpacta,
+                    i.servicio_relacionado AS servicioRelacionado,
+                    i.fecha_creacion AS fechaCreacion, i.aprobada AS aprobada,
+                    COALESCE(NULLIF(TRIM(CONCAT_WS(' ', i.responsable_nombre, i.responsable_apellido)), ''), u.nombre, 'Sin colaborador') AS colaborador,
+                    COALESCE(NULLIF(TRIM(u.departamento), ''), 'Sin departamento') AS departamento,
+                    COALESCE(NULLIF(TRIM(i.area_nombre), ''), NULLIF(TRIM(u.area), ''), 'Sin área') AS area
+             FROM innovaciones i
+             LEFT JOIN usuarios u ON u.id = i.usuario_id
+             ${condiciones.length ? `WHERE ${condiciones.join(" AND ")}` : ""}
+             ORDER BY i.fecha_creacion DESC, i.id DESC`,
+            parametros
+        );
+        return res.json({
+            ok: true,
+            departamento: departamento || "Todos los departamentos",
+            area: area || "Todas las áreas",
+            innovaciones: filas.map((fila) => ({
+                ...fila,
+                estado: Number(fila.aprobada) === 1 ? "Completada" : "Pendiente de Autorizar"
+            }))
+        });
+    } catch (error) {
+        console.error("ERROR GENERANDO REPORTE DE INNOVACIONES:", error);
+        return res.status(500).json({ ok: false, mensaje: "No fue posible generar el reporte de innovaciones." });
+    }
+});
+
 
 /* =========================================================
    OBTENER TODOS LOS COMPROMISOS

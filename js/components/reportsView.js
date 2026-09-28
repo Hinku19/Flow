@@ -18,7 +18,7 @@ export function initReportsView() {
     if (!view) return { render: async () => {} };
 
     const tipo = view.querySelector("#reporte-tipo");
-    const filtros = view.querySelector("#reporte-compromisos-filtros");
+    const filtros = view.querySelector("#reporte-filtros");
     const departamento = view.querySelector("#reporte-departamento");
     const area = view.querySelector("#reporte-area");
     const colaborador = view.querySelector("#reporte-colaborador");
@@ -26,6 +26,7 @@ export function initReportsView() {
     const resultados = view.querySelector("#reporte-resultados");
     const documento = view.querySelector("#reporte-documento");
     const proximamente = view.querySelector("#reporte-proximamente");
+    const gruposEstatus = [...view.querySelectorAll(".reports-status[data-report-type]")];
     const usuario = getUsuarioActual();
     let opcionesCargadas = false;
     let solicitudColaboradores = 0;
@@ -36,9 +37,12 @@ export function initReportsView() {
     };
 
     function actualizarTipo() {
-        const compromisos = tipo.value === "compromisos";
-        filtros.hidden = !compromisos;
-        proximamente.hidden = compromisos;
+        const disponible = ["compromisos", "innovaciones"].includes(tipo.value);
+        filtros.hidden = !disponible;
+        proximamente.hidden = disponible;
+        for (const grupo of gruposEstatus) {
+            grupo.hidden = grupo.dataset.reportType !== tipo.value;
+        }
         error.hidden = true;
         ocultarReporte();
     }
@@ -96,7 +100,7 @@ export function initReportsView() {
 
     tipo.addEventListener("change", async () => {
         actualizarTipo();
-        if (tipo.value === "compromisos") {
+        if (["compromisos", "innovaciones"].includes(tipo.value)) {
             try {
                 await cargarOpcionesIniciales();
             } catch (err) {
@@ -146,26 +150,28 @@ export function initReportsView() {
         });
     }
 
-    const estadosCheckboxes = [...view.querySelectorAll('input[name="reporte-estatus"]')];
-    const todosCheckbox = estadosCheckboxes.find((checkbox) => checkbox.value === "todos");
-    for (const checkbox of estadosCheckboxes) {
-        checkbox.addEventListener("change", () => {
-            if (checkbox === todosCheckbox && checkbox.checked) {
-                for (const estadoCheckbox of estadosCheckboxes) {
-                    if (estadoCheckbox !== todosCheckbox) estadoCheckbox.checked = false;
+    for (const grupo of gruposEstatus) {
+        const estadosCheckboxes = [...grupo.querySelectorAll('input[name="reporte-estatus"]')];
+        const todosCheckbox = estadosCheckboxes.find((checkbox) => checkbox.value === "todos");
+        for (const checkbox of estadosCheckboxes) {
+            checkbox.addEventListener("change", () => {
+                if (checkbox === todosCheckbox && checkbox.checked) {
+                    for (const estadoCheckbox of estadosCheckboxes) {
+                        if (estadoCheckbox !== todosCheckbox) estadoCheckbox.checked = false;
+                    }
+                } else if (checkbox !== todosCheckbox && checkbox.checked) {
+                    todosCheckbox.checked = false;
                 }
-            } else if (checkbox !== todosCheckbox && checkbox.checked) {
-                todosCheckbox.checked = false;
-            }
 
-            const hayEstatusEspecificos = estadosCheckboxes.some((estadoCheckbox) =>
-                estadoCheckbox !== todosCheckbox && estadoCheckbox.checked
-            );
-            if (!hayEstatusEspecificos) todosCheckbox.checked = true;
+                const hayEstatusEspecificos = estadosCheckboxes.some((estadoCheckbox) =>
+                    estadoCheckbox !== todosCheckbox && estadoCheckbox.checked
+                );
+                if (!hayEstatusEspecificos) todosCheckbox.checked = true;
 
-            ocultarReporte();
-            error.hidden = true;
-        });
+                ocultarReporte();
+                error.hidden = true;
+            });
+        }
     }
 
     filtros.addEventListener("submit", async (event) => {
@@ -180,6 +186,10 @@ export function initReportsView() {
             return;
         }
 
+        const tipoReporte = tipo.value;
+        const grupoEstatusActivo = gruposEstatus.find((grupo) => grupo.dataset.reportType === tipoReporte);
+        const estadosCheckboxes = [...grupoEstatusActivo.querySelectorAll('input[name="reporte-estatus"]')];
+        const todosCheckbox = estadosCheckboxes.find((checkbox) => checkbox.value === "todos");
         const estadosSeleccionados = estadosCheckboxes
             .filter((checkbox) => checkbox !== todosCheckbox && checkbox.checked)
             .map((checkbox) => checkbox.value);
@@ -202,12 +212,12 @@ export function initReportsView() {
         button.disabled = true;
         button.textContent = "Generando…";
         try {
-            const response = await fetch(`${API_URL}/reportes/compromisos?${params}`, {
+            const response = await fetch(`${API_URL}/reportes/${tipoReporte}?${params}`, {
                 headers: { ...headerUsuario() }
             });
             const data = await response.json();
             if (!response.ok || !data.ok) throw new Error(data.mensaje || "No fue posible generar el reporte.");
-            renderizarReporte(data, {
+            renderizarReporte(data, tipoReporte, {
                 desde,
                 hasta,
                 estado: etiquetasEstados.join(", "),
@@ -225,7 +235,11 @@ export function initReportsView() {
 
     view.querySelector("#reporte-imprimir").addEventListener("click", () => window.print());
 
-    function renderizarReporte(data, filtrosAplicados) {
+    function renderizarReporte(data, tipoReporte, filtrosAplicados) {
+        if (tipoReporte === "innovaciones") {
+            renderizarReporteInnovaciones(data, filtrosAplicados);
+            return;
+        }
         const compromisos = data.compromisos || [];
         const fechaGeneracion = new Intl.DateTimeFormat("es-MX", {
             dateStyle: "long", timeStyle: "short"
@@ -262,12 +276,49 @@ export function initReportsView() {
         resultados.hidden = false;
     }
 
+    function renderizarReporteInnovaciones(data, filtrosAplicados) {
+        const innovaciones = data.innovaciones || [];
+        const fechaGeneracion = new Intl.DateTimeFormat("es-MX", {
+            dateStyle: "long", timeStyle: "short"
+        }).format(new Date());
+        const filas = innovaciones.map((item) => `
+            <tr>
+                <td>${escapeHTML(item.nombreInnovacion)}</td>
+                <td>${escapeHTML(item.colaborador)}</td>
+                <td>${escapeHTML(item.departamento)}</td>
+                <td>${escapeHTML(item.area)}</td>
+                <td>${escapeHTML(item.estado)}</td>
+                <td>${escapeHTML(fechaCorta(item.fechaCreacion))}</td>
+                <td>${escapeHTML(item.actividadImpacta)}</td>
+            </tr>
+        `).join("");
+        documento.innerHTML = `
+            <div class="report-output__heading">
+                <h3>Reporte general de innovaciones</h3>
+                <p><strong>Departamento:</strong> ${escapeHTML(data.departamento)}</p>
+                <p><strong>Área:</strong> ${escapeHTML(filtrosAplicados.area)}</p>
+                <p><strong>Colaborador:</strong> ${escapeHTML(filtrosAplicados.colaborador)}</p>
+                <p><strong>Periodo de registro:</strong> ${escapeHTML(fechaCorta(filtrosAplicados.desde))} a ${escapeHTML(fechaCorta(filtrosAplicados.hasta))}</p>
+                <p><strong>Estatus:</strong> ${escapeHTML(filtrosAplicados.estado)}</p>
+                <p><strong>Generado:</strong> ${escapeHTML(fechaGeneracion)}</p>
+                <p><strong>Total de innovaciones:</strong> ${innovaciones.length}</p>
+            </div>
+            ${innovaciones.length ? `
+                <div class="report-output__table-wrap"><table class="report-output__table">
+                    <thead><tr><th>Innovación</th><th>Colaborador</th><th>Departamento</th><th>Área</th><th>Estatus</th><th>Fecha</th><th>Actividad que impacta</th></tr></thead>
+                    <tbody>${filas}</tbody>
+                </table></div>
+            ` : '<p class="report-output__empty">No se encontraron innovaciones con los filtros seleccionados.</p>'}
+        `;
+        resultados.hidden = false;
+    }
+
     actualizarTipo();
     return {
         render: async () => {
             error.hidden = true;
             ocultarReporte();
-            if (tipo.value === "compromisos") {
+            if (["compromisos", "innovaciones"].includes(tipo.value)) {
                 try {
                     await cargarOpcionesIniciales();
                 } catch (err) {

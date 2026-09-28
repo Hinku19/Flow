@@ -623,7 +623,7 @@
                         </select>
                     </label>
 
-                    <form id="reporte-compromisos-filtros" class="reports-form" hidden>
+                    <form id="reporte-filtros" class="reports-form" hidden>
                         <label class="reports-field" for="reporte-desde">
                             <span>Desde</span>
                             <input id="reporte-desde" type="date">
@@ -644,7 +644,7 @@
                             <span>Colaborador</span>
                             <select id="reporte-colaborador"></select>
                         </label>
-                        <fieldset class="reports-status">
+                        <fieldset class="reports-status" data-report-type="compromisos">
                             <legend>Estatus de compromiso</legend>
                             <div class="reports-status__options">
                                 <label><input type="checkbox" name="reporte-estatus" value="todos" checked> Todos</label>
@@ -652,6 +652,14 @@
                                 <label><input type="checkbox" name="reporte-estatus" value="en-progreso"> En progreso</label>
                                 <label><input type="checkbox" name="reporte-estatus" value="completado"> Completado</label>
                                 <label><input type="checkbox" name="reporte-estatus" value="vencido"> Vencido</label>
+                            </div>
+                        </fieldset>
+                        <fieldset class="reports-status" data-report-type="innovaciones" hidden>
+                            <legend>Estatus de innovación</legend>
+                            <div class="reports-status__options">
+                                <label><input type="checkbox" name="reporte-estatus" value="todos" checked> Todas</label>
+                                <label><input type="checkbox" name="reporte-estatus" value="completadas"> Completadas</label>
+                                <label><input type="checkbox" name="reporte-estatus" value="pendientes-autorizar"> Pendientes de Autorizar</label>
                             </div>
                         </fieldset>
                         <div class="reports-form__actions">
@@ -667,7 +675,7 @@
 
                 <section id="reporte-resultados" class="report-output" aria-live="polite" hidden>
                     <div class="report-output__toolbar">
-                        <h2>Reporte de compromisos</h2>
+                        <h2>Reporte generado</h2>
                         <button type="button" id="reporte-imprimir" class="reports-view__print">Imprimir / Exportar PDF</button>
                     </div>
                     <div id="reporte-documento" class="report-output__document"></div>

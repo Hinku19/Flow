@@ -128,6 +128,7 @@
 }
 
 .reports-form[hidden],
+.reports-status[hidden],
 .reports-view__coming-soon[hidden],
 .reports-view__error[hidden],
 .report-output[hidden] {
