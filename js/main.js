@@ -242,6 +242,19 @@ function inicializarNavegacion() {
     ) {
 
         if (
+            vista === "reportes" &&
+            getUsuarioActual()?.rol === "operador"
+        ) {
+
+             avisoDialog(
+                "No tienes permiso para acceder a Reportes. Esta opción está disponible para administradores y líderes."
+            );
+
+            return;
+
+        }
+
+        if (
             vista === "compromisos"
         ) {
 
@@ -249,8 +262,13 @@ function inicializarNavegacion() {
 
         }
 
-        if (vista === "reportes") {
+
+        if (
+            vista === "reportes"
+        ) {
+
             reportsView.render();
+
         }
 
 
@@ -1776,6 +1794,7 @@ initUserEdit();
 const commitmentsView =
     initCommitmentsView();
 
+
 const reportsView =
     initReportsView();
 
@@ -2026,6 +2045,18 @@ if (!esAdmin()) {
 if (
     getUsuarioActual()?.rol === "operador"
 ) {
+
+    const tarjetaReportes =
+        document.querySelector(
+            '.dashboard-card[data-view="reportes"]'
+        );
+
+    if (tarjetaReportes) {
+
+        tarjetaReportes.hidden =
+            true;
+
+    }
 
     const settingsMenu =
         document.querySelector(".settings-menu");

@@ -12276,8 +12276,8 @@ function programarRecordatoriosCompromisos() {
 
 
     siguiente.setHours(
-        10,
-        23,
+        8,
+        0,
         0,
         0
     );
