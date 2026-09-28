@@ -102,6 +102,10 @@ import {
 } from "./components/commitmentsView.js";
 
 import {
+    initReportsView
+} from "./components/reportsView.js";
+
+import {
     initActivitiesView
 } from "./components/activitiesView.js";
 
@@ -243,6 +247,10 @@ function inicializarNavegacion() {
 
             commitmentsView.render();
 
+        }
+
+        if (vista === "reportes") {
+            reportsView.render();
         }
 
 
@@ -1767,6 +1775,9 @@ initUserEdit();
 
 const commitmentsView =
     initCommitmentsView();
+
+const reportsView =
+    initReportsView();
 
 
 /* =========================================================

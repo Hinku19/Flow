@@ -2939,6 +2939,141 @@ app.get(
 
 
 /* =========================================================
+   REPORTES GENERALES DE COMPROMISOS
+   ========================================================= */
+
+app.get("/api/reportes/compromisos/opciones", async (req, res) => {
+    try {
+        const usuario = await obtenerUsuarioSolicitante(req);
+        if (!usuario) {
+            return res.status(401).json({ ok: false, mensaje: "No fue posible identificar al usuario." });
+        }
+        if (!["administrador", "lider"].includes(usuario.rol)) {
+            return respuestaSinPermiso(res);
+        }
+
+        const esLider = usuario.rol === "lider";
+        const [departamentosRows] = esLider
+            ? [[{ departamento: usuario.departamento }]]
+            : await db.execute(`SELECT DISTINCT departamento FROM usuarios WHERE activo = 1 AND departamento IS NOT NULL AND TRIM(departamento) <> '' ORDER BY departamento`);
+
+        let departamento = esLider
+            ? String(usuario.departamento || "").trim()
+            : String(req.query.departamento || "").trim();
+        if (!esLider && departamento === "todos") departamento = "";
+        const [colaboradores] = await db.execute(
+            `SELECT id, nombre FROM usuarios
+             WHERE activo = 1 ${departamento ? "AND TRIM(departamento) = TRIM(?)" : ""}
+             ORDER BY nombre`,
+            departamento ? [departamento] : []
+        );
+
+        return res.json({
+            ok: true,
+            departamentoFijo: esLider ? departamento : null,
+            departamentos: departamentosRows.map((fila) => fila.departamento).filter(Boolean),
+            colaboradores: colaboradores.map(({ id, nombre }) => ({ id, nombre }))
+        });
+    } catch (error) {
+        console.error("ERROR CARGANDO FILTROS DE REPORTES:", error);
+        return res.status(500).json({ ok: false, mensaje: "No fue posible cargar los filtros del reporte." });
+    }
+});
+
+app.get("/api/reportes/compromisos", async (req, res) => {
+    try {
+        const usuario = await obtenerUsuarioSolicitante(req);
+        if (!usuario) {
+            return res.status(401).json({ ok: false, mensaje: "No fue posible identificar al usuario." });
+        }
+        if (!["administrador", "lider"].includes(usuario.rol)) {
+            return respuestaSinPermiso(res);
+        }
+
+        const desde = String(req.query.desde || "").trim();
+        const hasta = String(req.query.hasta || "").trim();
+        const estado = String(req.query.estado || "todos").trim();
+        const departamentoSolicitado = String(req.query.departamento || "").trim();
+        const colaboradorId = String(req.query.colaborador || "").trim();
+        if ((desde && !fechaISOValida(desde)) || (hasta && !fechaISOValida(hasta)) || (desde && hasta && desde > hasta)) {
+            return res.status(400).json({ ok: false, mensaje: "El rango de fechas no es válido." });
+        }
+        if (colaboradorId && colaboradorId !== "todos" && (!/^\d+$/.test(colaboradorId) || Number(colaboradorId) < 1)) {
+            return res.status(400).json({ ok: false, mensaje: "El colaborador seleccionado no es válido." });
+        }
+        if (!["todos", "pendiente", "en-progreso", "completado", "vencido"].includes(estado)) {
+            return res.status(400).json({ ok: false, mensaje: "El estatus seleccionado no es válido." });
+        }
+
+        const condiciones = ["(r.ReunionId IS NULL OR r.Estado <> 'Cancelada')", "u.activo = 1"];
+        const parametros = [];
+        const departamento = usuario.rol === "lider"
+            ? String(usuario.departamento || "").trim()
+            : departamentoSolicitado === "todos" ? "" : departamentoSolicitado;
+        if (usuario.rol === "lider") {
+            condiciones.push("TRIM(u.departamento) = TRIM(?)");
+            parametros.push(departamento);
+        } else if (departamento) {
+            condiciones.push("TRIM(u.departamento) = TRIM(?)");
+            parametros.push(departamento);
+        }
+        if (colaboradorId && colaboradorId !== "todos") {
+            condiciones.push("u.id = ?");
+            parametros.push(Number(colaboradorId));
+        }
+        if (desde) {
+            condiciones.push("DATE(c.FechaFinEstimada) >= ?");
+            parametros.push(desde);
+        }
+        if (hasta) {
+            condiciones.push("DATE(c.FechaFinEstimada) <= ?");
+            parametros.push(hasta);
+        }
+        const expresionEstado = `CASE
+            WHEN c.Status IN (1, 2) AND c.FechaFinEstimada IS NOT NULL AND DATE(c.FechaFinEstimada) < CURDATE() THEN 4
+            ELSE c.Status END`;
+        const filtrosEstado = {
+            pendiente: `${expresionEstado} = 1`,
+            "en-progreso": `${expresionEstado} = 2`,
+            completado: "c.Status = 3 AND COALESCE(c.Aprobado, 0) = 1",
+            vencido: `${expresionEstado} = 4`
+        };
+        if (filtrosEstado[estado]) condiciones.push(filtrosEstado[estado]);
+
+        const [filas] = await db.execute(
+            `SELECT c.CompromisoId AS id, c.Titulo AS titulo, c.Descripcion AS descripcion,
+                    c.Prioridad AS prioridad, c.FechaInicioEstimada AS fechaInicio,
+                    c.FechaFinEstimada AS fechaLimite, c.FechaFinReal AS fechaCompletado,
+                    ${expresionEstado} AS statusEfectivo, c.Status AS statusOriginal, c.Aprobado AS aprobado,
+                    u.nombre AS colaborador, u.departamento AS departamento,
+                    r.Titulo AS reunion
+             FROM compromisos c
+             LEFT JOIN reuniones r ON r.ReunionId = c.ReunionId
+             INNER JOIN usuarios u ON u.id = c.UsuarioAsignadoId
+             WHERE ${condiciones.join(" AND ")}
+             ORDER BY u.departamento, u.nombre, c.FechaFinEstimada, c.CompromisoId`,
+            parametros
+        );
+        const etiquetas = { 1: "Pendiente", 2: "En progreso", 3: "Completado", 4: "Vencido" };
+        return res.json({
+            ok: true,
+            departamento: departamento || "Todos los departamentos",
+            compromisos: filas.map((fila) => ({
+                ...fila,
+                descripcion: fila.descripcion || fila.titulo,
+                estado: Number(fila.statusOriginal) === 3 && !fila.aprobado
+                    ? "En revisión"
+                    : etiquetas[Number(fila.statusEfectivo)] || "Pendiente"
+            }))
+        });
+    } catch (error) {
+        console.error("ERROR GENERANDO REPORTE DE COMPROMISOS:", error);
+        return res.status(500).json({ ok: false, mensaje: "No fue posible generar el reporte de compromisos." });
+    }
+});
+
+
+/* =========================================================
    OBTENER TODOS LOS COMPROMISOS
    ========================================================= */
 

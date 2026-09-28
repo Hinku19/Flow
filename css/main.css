@@ -55,6 +55,7 @@
 /* Historial y archivo */
 @import "components/history-view.css";
 @import "components/archive-view.css";
+@import "components/reports-view.css";
 
 /* Diálogos */
 @import "components/confirm-dialog.css";

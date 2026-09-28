@@ -564,7 +564,7 @@
                     <button
                         type="button"
                         class="dashboard-card dashboard-card--reports"
-                        data-view="historial"
+                        data-view="reportes"
                     >
 
                         <span class="dashboard-card__icon">
@@ -584,7 +584,7 @@
                         </span>
 
                         <span class="dashboard-card__description">
-                            Consulta reuniones anteriores y sus reportes.
+                            Genera reportes de compromisos, innovaciones y evaluaciones.
                         </span>
 
                     </button>
@@ -593,6 +593,82 @@
 
             </div>
 
+        </section>
+
+
+        <!-- =====================================================
+             REPORTES GENERALES
+             ===================================================== -->
+
+        <section
+            id="vista-reportes"
+            class="view view--hidden"
+        >
+            <div class="reports-view">
+                <header class="reports-view__header">
+                    <button type="button" class="reports-view__back" data-view="dashboard">
+                        ← Volver al inicio
+                    </button>
+                    <h1 class="reports-view__title">Reportes Generales</h1>
+                    <p class="reports-view__subtitle">Selecciona el tipo de reporte y define los filtros.</p>
+                </header>
+
+                <div class="reports-view__panel">
+                    <label class="reports-field reports-field--type" for="reporte-tipo">
+                        <span>Tipo de reporte</span>
+                        <select id="reporte-tipo">
+                            <option value="innovaciones">Innovaciones</option>
+                            <option value="compromisos">Compromisos</option>
+                            <option value="evaluaciones">Evaluaciones</option>
+                        </select>
+                    </label>
+
+                    <form id="reporte-compromisos-filtros" class="reports-form" hidden>
+                        <label class="reports-field" for="reporte-desde">
+                            <span>Desde</span>
+                            <input id="reporte-desde" type="date">
+                        </label>
+                        <label class="reports-field" for="reporte-hasta">
+                            <span>Hasta</span>
+                            <input id="reporte-hasta" type="date">
+                        </label>
+                        <label class="reports-field" for="reporte-departamento">
+                            <span>Departamento</span>
+                            <select id="reporte-departamento"></select>
+                        </label>
+                        <label class="reports-field" for="reporte-colaborador">
+                            <span>Colaborador</span>
+                            <select id="reporte-colaborador"></select>
+                        </label>
+                        <label class="reports-field" for="reporte-estatus">
+                            <span>Estatus de compromiso</span>
+                            <select id="reporte-estatus">
+                                <option value="todos">Todos</option>
+                                <option value="pendiente">Pendiente</option>
+                                <option value="en-progreso">En progreso</option>
+                                <option value="completado">Completado</option>
+                                <option value="vencido">Vencido</option>
+                            </select>
+                        </label>
+                        <div class="reports-form__actions">
+                            <button type="submit" class="reports-view__generate">Generar</button>
+                        </div>
+                    </form>
+
+                    <p id="reporte-proximamente" class="reports-view__coming-soon" hidden>
+                        Los filtros para este tipo de reporte se agregarán próximamente.
+                    </p>
+                    <p id="reporte-error" class="reports-view__error" role="alert" hidden></p>
+                </div>
+
+                <section id="reporte-resultados" class="report-output" aria-live="polite" hidden>
+                    <div class="report-output__toolbar">
+                        <h2>Reporte de compromisos</h2>
+                        <button type="button" id="reporte-imprimir" class="reports-view__print">Imprimir / Exportar PDF</button>
+                    </div>
+                    <div id="reporte-documento" class="report-output__document"></div>
+                </section>
+            </div>
         </section>
 
 

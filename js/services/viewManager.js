@@ -3,6 +3,9 @@ const vistas = {
     dashboard:
         document.querySelector("#vista-dashboard"),
 
+    reportes:
+        document.querySelector("#vista-reportes"),
+
     historial:
         document.querySelector("#vista-historial"),
 
@@ -50,6 +53,7 @@ const vistas = {
  */
 const VISTAS_CON_HISTORIAL = [
     "dashboard",
+    "reportes",
     "historial",
     "usuarios",
     "reunion",
@@ -106,6 +110,7 @@ function aplicarVista(nombre) {
  * Vistas disponibles:
  *
  * dashboard
+ * reportes
  * historial
  * usuarios
  * registroUsuario
