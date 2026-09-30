@@ -10945,6 +10945,9 @@ const DESTINATARIOS_PERSONALIZADA_VALIDOS = [
 const MAX_PREGUNTAS_PERSONALIZADA = 50;
 const MAX_OPCIONES_PERSONALIZADA = 12;
 const MAX_LARGO_RESPUESTA_TEXTO = 2000;
+const MAX_VALOR_RESPUESTA_PERSONALIZADA = 1000;
+const MAX_LIMITE_RESPUESTAS_PERSONALIZADA = 100000;
+const MAX_DESTINATARIOS_PERSONALIZADA = 5000;
 
 
 function parsearJSONColumna(valor, respaldo) {
@@ -10965,6 +10968,149 @@ function parsearJSONColumna(valor, respaldo) {
     }
 
     return valor;
+
+}
+
+
+/*
+ * Valor (puntos) que el administrador asigna a una respuesta.
+ * Vacío = 0. Devuelve null si no es un número válido.
+ */
+function normalizarValorRespuestaPersonalizada(valor) {
+
+    if (valor === undefined || valor === null || valor === "") {
+        return 0;
+    }
+
+    const numero =
+        Number(valor);
+
+    if (!Number.isFinite(numero) || Math.abs(numero) > MAX_VALOR_RESPUESTA_PERSONALIZADA) {
+        return null;
+    }
+
+    return Math.round(numero * 100) / 100;
+
+}
+
+
+function preguntaConPuntajePersonalizada(pregunta) {
+
+    return (
+        pregunta.tipo === "opcion_multiple" ||
+        pregunta.tipo === "casillas" ||
+        pregunta.tipo === "likert"
+    );
+
+}
+
+
+/*
+ * Las preguntas Likert creadas antes de los valores
+ * personalizados no traen valoresLikert: usan el puntaje fijo.
+ */
+function valoresLikertPersonalizada(pregunta) {
+
+    return {
+        ...PUNTAJE_LIKERT,
+        ...(pregunta.valoresLikert || {})
+    };
+
+}
+
+
+function valorOpcionPersonalizada(opcion) {
+
+    return Number(opcion?.valor) || 0;
+
+}
+
+
+/*
+ * Puntaje más alto que se puede obtener en una pregunta:
+ * la mejor opción (opción múltiple / Likert) o la suma de las
+ * opciones con valor positivo (casillas).
+ */
+function puntajeMaximoPreguntaPersonalizada(pregunta) {
+
+    if (pregunta.tipo === "opcion_multiple") {
+
+        return Math.max(0, ...pregunta.opciones.map(valorOpcionPersonalizada));
+
+    }
+
+    if (pregunta.tipo === "casillas") {
+
+        return pregunta.opciones
+            .map(valorOpcionPersonalizada)
+            .filter((valor) => valor > 0)
+            .reduce((suma, valor) => suma + valor, 0);
+
+    }
+
+    if (pregunta.tipo === "likert") {
+
+        return Math.max(0, ...Object.values(valoresLikertPersonalizada(pregunta)));
+
+    }
+
+    return 0;
+
+}
+
+
+/*
+ * Puntos obtenidos en una pregunta; null si no se contestó o
+ * si el tipo de pregunta no lleva puntaje.
+ */
+function puntajeRespuestaPersonalizada(pregunta, valor) {
+
+    if (!preguntaConPuntajePersonalizada(pregunta) || valor === undefined) {
+        return null;
+    }
+
+    if (pregunta.tipo === "likert") {
+
+        return valoresLikertPersonalizada(pregunta)[valor] ?? 0;
+
+    }
+
+    const valorDe = (opcionId) =>
+        valorOpcionPersonalizada(pregunta.opciones.find((opcion) => opcion.id === opcionId));
+
+    const puntos =
+        (Array.isArray(valor) ? valor : [valor])
+            .reduce((suma, opcionId) => suma + valorDe(opcionId), 0);
+
+    return Math.round(puntos * 100) / 100;
+
+}
+
+
+function puntajeTotalPersonalizada(preguntas, respuestas) {
+
+    const total =
+        preguntas.reduce(
+            (suma, pregunta) => suma + (puntajeRespuestaPersonalizada(pregunta, respuestas[pregunta.id]) || 0),
+            0
+        );
+
+    return Math.round(total * 100) / 100;
+
+}
+
+
+/*
+ * Una evaluación "usa puntaje" si alguna pregunta tiene al
+ * menos un valor distinto de cero.
+ */
+function usaPuntajePersonalizada(preguntas) {
+
+    return preguntas.some(
+        (pregunta) =>
+            (pregunta.tipo === "likert" && Object.values(valoresLikertPersonalizada(pregunta)).some(Boolean)) ||
+            (preguntaConPuntajePersonalizada(pregunta) && pregunta.opciones.some((opcion) => valorOpcionPersonalizada(opcion) !== 0))
+    );
 
 }
 
@@ -11015,10 +11161,20 @@ function validarPreguntasPersonalizadas(preguntas) {
 
         if (pregunta.tipo === "opcion_multiple" || pregunta.tipo === "casillas") {
 
-            const textosOpciones =
+            const opcionesRecibidas =
                 (Array.isArray(pregunta.opciones) ? pregunta.opciones : [])
-                    .map((opcion) => String(opcion?.texto ?? opcion ?? "").trim())
-                    .filter(Boolean);
+                    .map((opcion) => ({
+                        texto: String(opcion?.texto ?? opcion ?? "").trim(),
+                        valor: normalizarValorRespuestaPersonalizada(opcion?.valor)
+                    }))
+                    .filter((opcion) => opcion.texto);
+
+            const textosOpciones =
+                opcionesRecibidas.map((opcion) => opcion.texto);
+
+            if (opcionesRecibidas.some((opcion) => opcion.valor === null)) {
+                return { error: `Un valor de la pregunta ${numero} no es válido (debe ser un número entre -${MAX_VALOR_RESPUESTA_PERSONALIZADA} y ${MAX_VALOR_RESPUESTA_PERSONALIZADA}).` };
+            }
 
             if (textosOpciones.length < 2) {
                 return { error: `La pregunta ${numero} necesita al menos 2 opciones.` };
@@ -11037,10 +11193,33 @@ function validarPreguntasPersonalizadas(preguntas) {
             }
 
             normalizada.opciones =
-                textosOpciones.map((opcion, posicion) => ({
+                opcionesRecibidas.map((opcion, posicion) => ({
                     id: `o${posicion + 1}`,
-                    texto: opcion
+                    texto: opcion.texto,
+                    valor: opcion.valor
                 }));
+
+        }
+        else if (pregunta.tipo === "likert") {
+
+            const valoresLikert = {};
+
+            for (const nivel of VALORES_LIKERT_VALIDOS) {
+
+                const valor =
+                    pregunta.valoresLikert && pregunta.valoresLikert[nivel] !== undefined
+                        ? normalizarValorRespuestaPersonalizada(pregunta.valoresLikert[nivel])
+                        : PUNTAJE_LIKERT[nivel];
+
+                if (valor === null) {
+                    return { error: `Un valor de la escala de la pregunta ${numero} no es válido (debe ser un número entre -${MAX_VALOR_RESPUESTA_PERSONALIZADA} y ${MAX_VALOR_RESPUESTA_PERSONALIZADA}).` };
+                }
+
+                valoresLikert[nivel] = valor;
+
+            }
+
+            normalizada.valoresLikert = valoresLikert;
 
         }
 
@@ -11173,6 +11352,10 @@ function evaluacionPersonalizadaFormatear(fila, extra = {}) {
         activa: Number(fila.activa) === 1,
         vigente: Number(fila.vigente) === 1,
         fechaCierre: fila.fecha_cierre,
+        limiteRespuestas:
+            fila.limite_respuestas === null || fila.limite_respuestas === undefined
+                ? null
+                : Number(fila.limite_respuestas),
         creadoEn: fila.creado_en,
         ...extra
 
@@ -11181,8 +11364,41 @@ function evaluacionPersonalizadaFormatear(fila, extra = {}) {
 }
 
 
+const SQL_TOTAL_RESPUESTAS_PERSONALIZADA =
+    "(SELECT COUNT(*) FROM evaluacion_personalizada_respuestas rt WHERE rt.evaluacion_id = e.id)";
+
+/*
+ * Vigente: activa, sin vencer y sin haber llegado al tope de
+ * respuestas (si tiene uno).
+ */
 const SQL_VIGENTE_PERSONALIZADA =
-    "(e.activa = 1 AND (e.fecha_cierre IS NULL OR e.fecha_cierre >= CURDATE()))";
+    `(e.activa = 1 AND (e.fecha_cierre IS NULL OR e.fecha_cierre >= CURDATE()) AND (e.limite_respuestas IS NULL OR ${SQL_TOTAL_RESPUESTAS_PERSONALIZADA} < e.limite_respuestas))`;
+
+/*
+ * Evaluaciones creadas con destinatarios exactos tienen filas en
+ * evaluacion_personalizada_destinatarios; las anteriores se
+ * dirigen por rol (columna destinatarios).
+ */
+const SQL_TOTAL_DESTINATARIOS_PERSONALIZADA =
+    "(SELECT COUNT(*) FROM evaluacion_personalizada_destinatarios dt WHERE dt.evaluacion_id = e.id)";
+
+const SQL_ES_DESTINATARIO_PERSONALIZADA =
+    "(SELECT COUNT(*) FROM evaluacion_personalizada_destinatarios du WHERE du.evaluacion_id = e.id AND du.usuario_id = ?)";
+
+
+/*
+ * fila debe traer total_destinatarios y es_destinatario (ver
+ * SQL_TOTAL_DESTINATARIOS_PERSONALIZADA / SQL_ES_DESTINATARIO_PERSONALIZADA).
+ */
+function esDestinatarioPersonalizada(fila, usuario) {
+
+    if (Number(fila.total_destinatarios) > 0) {
+        return Number(fila.es_destinatario) > 0;
+    }
+
+    return parsearDestinatariosPersonalizada(fila.destinatarios).includes(usuario.rol);
+
+}
 
 
 function puedeVerResultadosPersonalizadas(usuario) {
@@ -11224,13 +11440,11 @@ app.get(
                     `
                     SELECT
                         e.id, e.titulo, e.descripcion, e.preguntas_json, e.destinatarios,
-                        e.activa, e.fecha_cierre, e.creado_en,
+                        e.activa, e.fecha_cierre, e.limite_respuestas, e.creado_en,
                         ${SQL_VIGENTE_PERSONALIZADA} AS vigente,
-                        (
-                            SELECT COUNT(*)
-                            FROM evaluacion_personalizada_respuestas r
-                            WHERE r.evaluacion_id = e.id
-                        ) AS total_respuestas,
+                        ${SQL_TOTAL_RESPUESTAS_PERSONALIZADA} AS total_respuestas,
+                        ${SQL_TOTAL_DESTINATARIOS_PERSONALIZADA} AS total_destinatarios,
+                        ${SQL_ES_DESTINATARIO_PERSONALIZADA} AS es_destinatario,
                         (
                             SELECT COUNT(*)
                             FROM evaluacion_personalizada_envios v
@@ -11240,6 +11454,7 @@ app.get(
                     ORDER BY e.creado_en DESC
                     `,
                     [
+                        usuarioSolicitante.id,
                         usuarioSolicitante.id
                     ]
                 );
@@ -11254,7 +11469,7 @@ app.get(
                             administrador ||
                             (
                                 Number(fila.vigente) === 1 &&
-                                parsearDestinatariosPersonalizada(fila.destinatarios).includes(usuarioSolicitante.rol)
+                                esDestinatarioPersonalizada(fila, usuarioSolicitante)
                             )
                     )
                     .map((fila) =>
@@ -11262,6 +11477,10 @@ app.get(
                             fila,
                             {
                                 totalRespuestas: Number(fila.total_respuestas),
+                                totalDestinatarios: Number(fila.total_destinatarios),
+                                limiteAlcanzado:
+                                    fila.limite_respuestas !== null &&
+                                    Number(fila.total_respuestas) >= Number(fila.limite_respuestas),
                                 yaRespondido: Number(fila.ya_respondido) > 0
                             }
                         )
@@ -11355,21 +11574,92 @@ app.post(
 
             }
 
-            const destinatarios =
-                Array.isArray(req.body.destinatarios)
-                    ? DESTINATARIOS_PERSONALIZADA_VALIDOS.filter((rol) => req.body.destinatarios.includes(rol))
+            let limiteRespuestas = null;
+
+            if (req.body.limiteRespuestas !== undefined && req.body.limiteRespuestas !== null && req.body.limiteRespuestas !== "") {
+
+                limiteRespuestas =
+                    Number(req.body.limiteRespuestas);
+
+                if (
+                    !Number.isInteger(limiteRespuestas) ||
+                    limiteRespuestas < 1 ||
+                    limiteRespuestas > MAX_LIMITE_RESPUESTAS_PERSONALIZADA
+                ) {
+
+                    return res
+                        .status(400)
+                        .json({
+                            ok: false,
+                            mensaje: `El límite de respuestas debe ser un número entero entre 1 y ${MAX_LIMITE_RESPUESTAS_PERSONALIZADA}.`
+                        });
+
+                }
+
+            }
+
+            /*
+             * Destinatarios exactos: ids de usuarios activos con rol
+             * líder u operador (los administradores no responden).
+             */
+            const usuariosSolicitados =
+                Array.isArray(req.body.usuarios)
+                    ? [...new Set(req.body.usuarios.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
                     : [];
 
-            if (destinatarios.length === 0) {
+            if (usuariosSolicitados.length === 0) {
 
                 return res
                     .status(400)
                     .json({
                         ok: false,
-                        mensaje: "Selecciona a quién se enviará la evaluación (líderes, operadores o ambos)."
+                        mensaje: "Selecciona al menos un usuario al que se enviará la evaluación."
                     });
 
             }
+
+            if (usuariosSolicitados.length > MAX_DESTINATARIOS_PERSONALIZADA) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: `Máximo ${MAX_DESTINATARIOS_PERSONALIZADA} destinatarios por evaluación.`
+                    });
+
+            }
+
+            const [usuariosDestino] =
+                await db.query(
+                    `
+                    SELECT id, rol
+                    FROM usuarios
+                    WHERE id IN (?)
+                        AND activo = 1
+                        AND rol IN (?)
+                    `,
+                    [
+                        usuariosSolicitados,
+                        DESTINATARIOS_PERSONALIZADA_VALIDOS
+                    ]
+                );
+
+            if (usuariosDestino.length !== usuariosSolicitados.length) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: "Algunos usuarios seleccionados ya no están activos o no pueden responder evaluaciones. Actualiza la lista e inténtalo de nuevo."
+                    });
+
+            }
+
+            /* roles presentes entre los destinatarios (informativo) */
+            const destinatarios =
+                DESTINATARIOS_PERSONALIZADA_VALIDOS.filter(
+                    (rol) => usuariosDestino.some((usuario) => usuario.rol === rol)
+                );
 
             const validacion =
                 validarPreguntasPersonalizadas(req.body.preguntas);
@@ -11385,34 +11675,71 @@ app.post(
 
             }
 
-const [resultado] =
-    await db.execute(
-        `
-        INSERT INTO evaluacion_personalizada
-            (
+let evaluacionId;
+
+const connection =
+    await db.getConnection();
+
+try {
+
+    await connection.beginTransaction();
+
+    const [resultado] =
+        await connection.execute(
+            `
+            INSERT INTO evaluacion_personalizada
+                (
+                    titulo,
+                    descripcion,
+                    preguntas_json,
+                    destinatarios,
+                    activa,
+                    fecha_cierre,
+                    limite_respuestas,
+                    creado_por
+                )
+            VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+            `,
+            [
                 titulo,
-                descripcion,
-                preguntas_json,
-                destinatarios,
-                activa,
-                fecha_cierre,
-                creado_por
-            )
-        VALUES (?, ?, ?, ?, 1, ?, ?)
+                descripcion || null,
+                JSON.stringify(validacion.preguntas),
+                destinatarios.join(","),
+                fechaCierre,
+                limiteRespuestas,
+                usuarioSolicitante.id
+            ]
+        );
+
+    evaluacionId =
+        resultado.insertId;
+
+    await connection.query(
+        `
+        INSERT INTO evaluacion_personalizada_destinatarios
+            (evaluacion_id, usuario_id)
+        VALUES ?
         `,
         [
-            titulo,
-            descripcion || null,
-            JSON.stringify(validacion.preguntas),
-            destinatarios.join(","),
-            fechaCierre,
-            usuarioSolicitante.id
+            usuariosSolicitados.map((usuarioId) => [evaluacionId, usuarioId])
         ]
     );
 
+    await connection.commit();
 
-const evaluacionId =
-    resultado.insertId;
+}
+catch (errorTransaccion) {
+
+    await connection.rollback();
+
+    throw errorTransaccion;
+
+}
+finally {
+
+    connection.release();
+
+}
 
 
 /*
@@ -11677,12 +12004,15 @@ app.post(
                     `
                     SELECT
                         e.id, e.titulo, e.preguntas_json, e.destinatarios,
-                        ${SQL_VIGENTE_PERSONALIZADA} AS vigente
+                        ${SQL_VIGENTE_PERSONALIZADA} AS vigente,
+                        ${SQL_TOTAL_DESTINATARIOS_PERSONALIZADA} AS total_destinatarios,
+                        ${SQL_ES_DESTINATARIO_PERSONALIZADA} AS es_destinatario
                     FROM evaluacion_personalizada e
                     WHERE e.id = ?
                     LIMIT 1
                     `,
                     [
+                        usuarioSolicitante.id,
                         id
                     ]
                 );
@@ -11709,7 +12039,7 @@ app.post(
 
             }
 
-            if (!parsearDestinatariosPersonalizada(filas[0].destinatarios).includes(usuarioSolicitante.rol)) {
+            if (!esDestinatarioPersonalizada(filas[0], usuarioSolicitante)) {
                 return respuestaSinPermiso(res);
             }
 
@@ -11736,6 +12066,52 @@ app.post(
             try {
 
                 await connection.beginTransaction();
+
+                /*
+                 * Bloquea la fila de la evaluación para que dos
+                 * respuestas simultáneas no rebasen el límite.
+                 */
+                const [[bloqueada]] =
+                    await connection.execute(
+                        `
+                        SELECT limite_respuestas
+                        FROM evaluacion_personalizada
+                        WHERE id = ?
+                        FOR UPDATE
+                        `,
+                        [
+                            id
+                        ]
+                    );
+
+                if (bloqueada.limite_respuestas !== null) {
+
+                    const [[{ total }]] =
+                        await connection.execute(
+                            `
+                            SELECT COUNT(*) AS total
+                            FROM evaluacion_personalizada_respuestas
+                            WHERE evaluacion_id = ?
+                            `,
+                            [
+                                id
+                            ]
+                        );
+
+                    if (Number(total) >= Number(bloqueada.limite_respuestas)) {
+
+                        await connection.rollback();
+
+                        return res
+                            .status(400)
+                            .json({
+                                ok: false,
+                                mensaje: "Esta evaluación ya alcanzó el límite de respuestas."
+                            });
+
+                    }
+
+                }
 
                 await connection.execute(
                     `
@@ -11878,8 +12254,9 @@ app.get(
                     `
                     SELECT
                         e.id, e.titulo, e.descripcion, e.preguntas_json, e.destinatarios,
-                        e.activa, e.fecha_cierre, e.creado_en,
-                        ${SQL_VIGENTE_PERSONALIZADA} AS vigente
+                        e.activa, e.fecha_cierre, e.limite_respuestas, e.creado_en,
+                        ${SQL_VIGENTE_PERSONALIZADA} AS vigente,
+                        ${SQL_TOTAL_DESTINATARIOS_PERSONALIZADA} AS total_destinatarios
                     FROM evaluacion_personalizada e
                     WHERE e.id = ?
                     LIMIT 1
@@ -11903,6 +12280,9 @@ app.get(
             const evaluacion =
                 evaluacionPersonalizadaFormatear(filas[0]);
 
+            const conDestinatariosExactos =
+                Number(filas[0].total_destinatarios) > 0;
+
             const todas =
                 await cargarRespuestasPersonalizadas(id, null, null);
 
@@ -11914,20 +12294,33 @@ app.get(
                 );
 
             /*
-             * Participación: solo cuentan los usuarios activos de
-             * los roles a los que se dirige la evaluación.
+             * Participación: solo cuentan los usuarios activos a los
+             * que se envió la evaluación (destinatarios exactos o,
+             * en evaluaciones anteriores, los de sus roles).
              */
             const [[{ elegibles }]] =
-                await db.execute(
-                    `
-                    SELECT COUNT(*) AS elegibles
-                    FROM usuarios
-                    WHERE activo = 1 AND FIND_IN_SET(rol, ?) > 0
-                    `,
-                    [
-                        evaluacion.destinatarios.join(",")
-                    ]
-                );
+                conDestinatariosExactos
+                    ? await db.execute(
+                        `
+                        SELECT COUNT(*) AS elegibles
+                        FROM evaluacion_personalizada_destinatarios d
+                        INNER JOIN usuarios u ON u.id = d.usuario_id
+                        WHERE d.evaluacion_id = ? AND u.activo = 1
+                        `,
+                        [
+                            id
+                        ]
+                    )
+                    : await db.execute(
+                        `
+                        SELECT COUNT(*) AS elegibles
+                        FROM usuarios
+                        WHERE activo = 1 AND FIND_IN_SET(rol, ?) > 0
+                        `,
+                        [
+                            evaluacion.destinatarios.join(",")
+                        ]
+                    );
 
             const preguntas =
                 evaluacion.preguntas.map(
@@ -11944,6 +12337,28 @@ app.get(
                             texto: pregunta.texto,
                             totalRespuestas: contestadas.length
                         };
+
+                        /*
+                         * Promedio de puntos obtenidos en la pregunta
+                         * (solo entre quienes la contestaron).
+                         */
+                        if (preguntaConPuntajePersonalizada(pregunta)) {
+
+                            const sumaPuntos =
+                                contestadas.reduce(
+                                    (suma, fila) => suma + puntajeRespuestaPersonalizada(pregunta, fila.respuestas[pregunta.id]),
+                                    0
+                                );
+
+                            base.puntajeMaximo =
+                                puntajeMaximoPreguntaPersonalizada(pregunta);
+
+                            base.promedio =
+                                contestadas.length
+                                    ? Math.round((sumaPuntos / contestadas.length) * 100) / 100
+                                    : null;
+
+                        }
 
                         if (pregunta.tipo === "opcion_multiple" || pregunta.tipo === "casillas") {
 
@@ -11967,6 +12382,7 @@ app.get(
                                 pregunta.opciones.map((opcion) => ({
                                     id: opcion.id,
                                     texto: opcion.texto,
+                                    valor: valorOpcionPersonalizada(opcion),
                                     cantidad: conteo[opcion.id] || 0
                                 }));
 
@@ -11974,27 +12390,21 @@ app.get(
                         else if (pregunta.tipo === "likert") {
 
                             const distribucion = {};
-                            let suma = 0;
 
                             VALORES_LIKERT_VALIDOS.forEach((valor) => { distribucion[valor] = 0; });
 
                             contestadas.forEach(
                                 (fila) => {
 
-                                    const valor = fila.respuestas[pregunta.id];
-
-                                    distribucion[valor] += 1;
-                                    suma += PUNTAJE_LIKERT[valor];
+                                    distribucion[fila.respuestas[pregunta.id]] += 1;
 
                                 }
                             );
 
                             base.distribucion = distribucion;
 
-                            base.promedio =
-                                contestadas.length
-                                    ? Math.round((suma / contestadas.length) * 100) / 100
-                                    : null;
+                            base.valoresLikert =
+                                valoresLikertPersonalizada(pregunta);
 
                         }
                         else {
@@ -12012,10 +12422,37 @@ app.get(
                     }
                 );
 
-            const promediosLikert =
-                preguntas
-                    .filter((pregunta) => pregunta.tipo === "likert" && pregunta.promedio !== null)
-                    .map((pregunta) => pregunta.promedio);
+            /*
+             * Puntaje total por respuesta enviada (suma de los
+             * valores de las opciones elegidas).
+             */
+            let puntaje = null;
+
+            if (usaPuntajePersonalizada(evaluacion.preguntas)) {
+
+                const totales =
+                    filtradas.map((fila) => puntajeTotalPersonalizada(evaluacion.preguntas, fila.respuestas));
+
+                const redondear = (numero) =>
+                    Math.round(numero * 100) / 100;
+
+                puntaje = {
+                    maximoPosible:
+                        redondear(
+                            evaluacion.preguntas.reduce(
+                                (suma, pregunta) => suma + puntajeMaximoPreguntaPersonalizada(pregunta),
+                                0
+                            )
+                        ),
+                    promedio:
+                        totales.length
+                            ? redondear(totales.reduce((a, b) => a + b, 0) / totales.length)
+                            : null,
+                    minimo: totales.length ? Math.min(...totales) : null,
+                    maximo: totales.length ? Math.max(...totales) : null
+                };
+
+            }
 
             return res.json({
 
@@ -12028,6 +12465,7 @@ app.get(
                     activa: evaluacion.activa,
                     vigente: evaluacion.vigente,
                     fechaCierre: evaluacion.fechaCierre,
+                    limiteRespuestas: evaluacion.limiteRespuestas,
                     destinatarios: evaluacion.destinatarios
                 },
 
@@ -12037,10 +12475,7 @@ app.get(
 
                 elegibles: Number(elegibles),
 
-                promedioLikertGlobal:
-                    promediosLikert.length
-                        ? Math.round((promediosLikert.reduce((a, b) => a + b, 0) / promediosLikert.length) * 100) / 100
-                        : null,
+                puntaje,
 
                 filtros: {
                     departamentos: [...new Set(todas.map((fila) => fila.departamento).filter(Boolean))].sort(),
@@ -12113,6 +12548,9 @@ app.get(
 
             }
 
+            const preguntas =
+                parsearJSONColumna(filas[0].preguntas_json, []);
+
             const respuestas =
                 await cargarRespuestasPersonalizadas(
                     id,
@@ -12120,11 +12558,19 @@ app.get(
                     req.query.area
                 );
 
+            const usaPuntaje =
+                usaPuntajePersonalizada(preguntas);
+
             return res.json({
                 ok: true,
                 titulo: filas[0].titulo,
-                preguntas: parsearJSONColumna(filas[0].preguntas_json, []),
-                respuestas
+                preguntas,
+                usaPuntaje,
+                respuestas:
+                    respuestas.map((fila) => ({
+                        ...fila,
+                        puntaje: usaPuntaje ? puntajeTotalPersonalizada(preguntas, fila.respuestas) : null
+                    }))
             });
 
         }

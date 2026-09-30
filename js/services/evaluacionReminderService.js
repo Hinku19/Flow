@@ -128,13 +128,78 @@ function crearTransportadorCorreo() {
 /* =========================================================
    OBTENER DESTINATARIOS
    ---------------------------------------------------------
-   Obtiene los usuarios activos cuyo rol esté incluido
-   en la configuración de la evaluación.
+   Si la evaluación tiene destinatarios exactos
+   (evaluacion_personalizada_destinatarios), solo esos
+   usuarios activos. Las evaluaciones anteriores a esa
+   tabla se dirigen a los usuarios activos de sus roles.
    ========================================================= */
 
 async function obtenerDestinatariosEvaluacion(
+    evaluacionId,
     destinatarios
 ) {
+
+    const [exactos] =
+        await db.execute(
+            `
+            SELECT
+
+                u.id,
+
+                u.nombre,
+
+                u.rol,
+
+                u.departamento,
+
+                u.correo_electronico
+
+            FROM evaluacion_personalizada_destinatarios d
+
+            INNER JOIN usuarios u
+                ON u.id = d.usuario_id
+
+            WHERE
+
+                d.evaluacion_id = ?
+
+                AND u.activo = 1
+
+                AND u.correo_electronico IS NOT NULL
+
+                AND TRIM(
+                    u.correo_electronico
+                ) <> ''
+
+            ORDER BY
+
+                u.nombre ASC
+            `,
+            [
+                evaluacionId
+            ]
+        );
+
+
+    const [[{ totalExactos }]] =
+        await db.execute(
+            `
+            SELECT COUNT(*) AS totalExactos
+            FROM evaluacion_personalizada_destinatarios
+            WHERE evaluacion_id = ?
+            `,
+            [
+                evaluacionId
+            ]
+        );
+
+
+    if (
+        Number(totalExactos) > 0
+    ) {
+        return exactos;
+    }
+
 
     const roles =
         Array.isArray(destinatarios)
@@ -406,6 +471,7 @@ async function enviarNotificacionNuevaEvaluacion(
 
         const usuarios =
             await obtenerDestinatariosEvaluacion(
+                evaluacion.id,
                 roles
             );
 
@@ -574,6 +640,15 @@ async function obtenerEvaluacionesPendientes() {
                     OR e.fecha_cierre >= CURDATE()
                 )
 
+                AND (
+                    e.limite_respuestas IS NULL
+                    OR (
+                        SELECT COUNT(*)
+                        FROM evaluacion_personalizada_respuestas r
+                        WHERE r.evaluacion_id = e.id
+                    ) < e.limite_respuestas
+                )
+
             ORDER BY
 
                 e.id ASC
@@ -656,20 +731,15 @@ async function enviarRecordatoriosEvaluaciones() {
                 );
 
 
-            if (
-                roles.length === 0
-            ) {
-                continue;
-            }
-
-
             /*
-             * Obtener usuarios que pertenecen
-             * a los roles configurados.
+             * Obtener los destinatarios exactos de la
+             * evaluación (o, si es anterior, los usuarios
+             * de los roles configurados).
              */
 
             const usuarios =
                 await obtenerDestinatariosEvaluacion(
+                    evaluacion.id,
                     roles
                 );
 

@@ -39,6 +39,16 @@ const TIPOS_PREGUNTA = [
 
 const MAX_PREGUNTAS = 50;
 const MAX_OPCIONES = 12;
+const MAX_VALOR_RESPUESTA = 1000;
+const MAX_LIMITE_RESPUESTAS = 100000;
+
+/* roles que pueden responder evaluaciones (los administradores no) */
+const ROLES_DESTINATARIOS = [
+
+    { valor: "lider", etiqueta: "Líder" },
+    { valor: "operador", etiqueta: "Operador" }
+
+];
 
 
 export function initEvaluacionesPersonalizadas() {
@@ -67,6 +77,16 @@ export function initEvaluacionesPersonalizadas() {
     let cargando = false;
 
     let borrador = null;
+
+    /* usuarios que pueden recibir la evaluación y filtros del editor */
+    let usuariosDestino = [];
+    let filtroDestino = {
+        departamento: "",
+        area: "",
+        rol: "",
+        busqueda: ""
+    };
+
     let evaluacionActiva = null;
     let resultados = null;
     let filtroDepartamento = "todos";
@@ -262,7 +282,12 @@ export function initEvaluacionesPersonalizadas() {
         const estado =
             abierta
                 ? `<span class="eval-card__estado eval-card__estado--activa">● Activa</span>`
-                : `<span class="eval-card__estado eval-card__estado--cerrada">● Cerrada</span>`;
+                : `<span class="eval-card__estado eval-card__estado--cerrada">● Cerrada${evaluacion.activa && evaluacion.limiteAlcanzado ? " · límite alcanzado" : ""}</span>`;
+
+        const respuestasTexto =
+            evaluacion.limiteRespuestas !== null
+                ? `${evaluacion.totalRespuestas} / ${evaluacion.limiteRespuestas} respuestas`
+                : `${evaluacion.totalRespuestas} respuesta${evaluacion.totalRespuestas === 1 ? "" : "s"}`;
 
         const cierre =
             evaluacion.fechaCierre
@@ -317,7 +342,8 @@ export function initEvaluacionesPersonalizadas() {
                 <p class="eval-card__meta">
                     ${evaluacion.creadoEn ? `Creada el ${escaparHTML(formatearCreacion(evaluacion.creadoEn))} · ` : ""}
                     ${evaluacion.preguntas.length} pregunta${evaluacion.preguntas.length === 1 ? "" : "s"}
-                    ${puedeVerResultados ? ` · ${evaluacion.totalRespuestas} respuesta${evaluacion.totalRespuestas === 1 ? "" : "s"}` : ""}
+                    ${puedeVerResultados ? ` · ${respuestasTexto}` : ""}
+                    ${puedeAdministrar && evaluacion.totalDestinatarios ? ` · enviada a ${evaluacion.totalDestinatarios} usuario${evaluacion.totalDestinatarios === 1 ? "" : "s"}` : ""}
                 </p>
 
                 <div class="innovation-card__files eval-card__acciones">
@@ -568,6 +594,25 @@ export function initEvaluacionesPersonalizadas() {
        EDITOR
        ===================================================== */
 
+    function opcionNueva(posicion) {
+
+        return {
+            texto: `Opción ${posicion}`,
+            valor: 0
+        };
+
+    }
+
+
+    function valoresLikertPorDefecto() {
+
+        return Object.fromEntries(
+            ESCALA_LIKERT.map((opcion) => [opcion.valor, opcion.puntaje])
+        );
+
+    }
+
+
     function preguntaNueva(tipo = "opcion_multiple") {
 
         return {
@@ -578,24 +623,65 @@ export function initEvaluacionesPersonalizadas() {
 
             opciones:
                 tipo === "opcion_multiple" || tipo === "casillas"
-                    ? ["Opción 1", "Opción 2"]
-                    : []
+                    ? [opcionNueva(1), opcionNueva(2)]
+                    : [],
+
+            valoresLikert: valoresLikertPorDefecto()
 
         };
 
     }
 
 
-    function abrirEditor() {
+    async function abrirEditor() {
+
+        try {
+
+            const data =
+                await pedir("/usuarios");
+
+            usuariosDestino =
+                (data.usuarios || [])
+                    .filter(
+                        (usuario) =>
+                            Number(usuario.activo) === 1 &&
+                            ROLES_DESTINATARIOS.some((rol) => rol.valor === usuario.rol)
+                    )
+                    .map((usuario) => ({
+                        id: Number(usuario.id),
+                        nombre: usuario.nombre || "",
+                        departamento: String(usuario.departamento || "").trim(),
+                        area: String(usuario.area || "").trim(),
+                        rol: usuario.rol
+                    }));
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL CARGAR USUARIOS PARA DESTINATARIOS:",
+                error
+            );
+
+            avisar(`No fue posible cargar los usuarios: ${error.message}`);
+
+            return;
+
+        }
+
+        filtroDestino = {
+            departamento: "",
+            area: "",
+            rol: "",
+            busqueda: ""
+        };
 
         borrador = {
             titulo: "",
             descripcion: "",
             fechaCierre: "",
-            destinatarios: {
-                lider: true,
-                operador: true
-            },
+            limiteRespuestas: "",
+            usuarios: new Set(),
             preguntas: [preguntaNueva()]
         };
 
@@ -621,12 +707,25 @@ export function initEvaluacionesPersonalizadas() {
                                     <span class="eval-editor__marca eval-editor__marca--${pregunta.tipo}"></span>
                                     <input
                                         type="text"
-                                        value="${escaparHTML(opcion)}"
+                                        value="${escaparHTML(opcion.texto)}"
                                         maxlength="200"
                                         data-campo="q-opcion"
                                         data-o="${posicion}"
                                         aria-label="Opción ${posicion + 1}"
                                     >
+                                    <label class="eval-editor__valor" title="Valor (puntos) de esta respuesta">
+                                        <input
+                                            type="number"
+                                            step="any"
+                                            min="-${MAX_VALOR_RESPUESTA}"
+                                            max="${MAX_VALOR_RESPUESTA}"
+                                            value="${escaparHTML(opcion.valor)}"
+                                            data-campo="q-opcion-valor"
+                                            data-o="${posicion}"
+                                            aria-label="Valor de la opción ${posicion + 1}"
+                                        >
+                                        <span>pts</span>
+                                    </label>
                                     <button
                                         type="button"
                                         class="eval-editor__icono"
@@ -649,9 +748,27 @@ export function initEvaluacionesPersonalizadas() {
                 `
                 : pregunta.tipo === "likert"
                     ? `
-                        <div class="evaluations-question__opciones eval-editor__vista-previa">
+                        <div class="eval-editor__opciones">
                             ${ESCALA_LIKERT.map(
-                                (opcion) => `<span class="evaluations-question__opcion">${escaparHTML(opcion.etiqueta)}</span>`
+                                (opcion) => `
+                                    <div class="eval-editor__opcion eval-editor__opcion--likert">
+                                        <span class="eval-editor__marca eval-editor__marca--likert"></span>
+                                        <span class="eval-editor__likert-etiqueta">${escaparHTML(opcion.etiqueta)}</span>
+                                        <label class="eval-editor__valor" title="Valor (puntos) de esta respuesta">
+                                            <input
+                                                type="number"
+                                                step="any"
+                                                min="-${MAX_VALOR_RESPUESTA}"
+                                                max="${MAX_VALOR_RESPUESTA}"
+                                                value="${escaparHTML(pregunta.valoresLikert?.[opcion.valor] ?? opcion.puntaje)}"
+                                                data-campo="q-likert-valor"
+                                                data-nivel="${opcion.valor}"
+                                                aria-label="Valor de ${escaparHTML(opcion.etiqueta)}"
+                                            >
+                                            <span>pts</span>
+                                        </label>
+                                    </div>
+                                `
                             ).join("")}
                         </div>
                     `
@@ -733,45 +850,54 @@ export function initEvaluacionesPersonalizadas() {
                         data-campo="descripcion"
                     >${escaparHTML(borrador.descripcion)}</textarea>
 
-                    <div class="evaluations-resultados__campo">
-                        <label for="eval-editor-cierre">Fecha de cierre (opcional)</label>
-                        <input
-                            type="date"
-                            id="eval-editor-cierre"
-                            value="${escaparHTML(borrador.fechaCierre)}"
-                            data-campo="fechaCierre"
-                        >
+                    <div class="eval-editor__ajustes">
+
+                        <div class="evaluations-resultados__campo">
+                            <label for="eval-editor-cierre">Fecha de cierre (opcional)</label>
+                            <input
+                                type="date"
+                                id="eval-editor-cierre"
+                                value="${escaparHTML(borrador.fechaCierre)}"
+                                data-campo="fechaCierre"
+                            >
+                        </div>
+
+                        <div class="evaluations-resultados__campo">
+                            <label for="eval-editor-limite">Límite de respuestas (opcional)</label>
+                            <input
+                                type="number"
+                                id="eval-editor-limite"
+                                min="1"
+                                max="${MAX_LIMITE_RESPUESTAS}"
+                                step="1"
+                                placeholder="Sin límite"
+                                value="${escaparHTML(borrador.limiteRespuestas)}"
+                                data-campo="limiteRespuestas"
+                            >
+                        </div>
+
                     </div>
 
-                    <div class="eval-editor__destinatarios">
-
-                        <span class="eval-editor__destinatarios-titulo">Enviar a</span>
-
-                        <label class="eval-switch">
-                            <input
-                                type="checkbox"
-                                role="switch"
-                                data-campo="dest-lider"
-                                ${borrador.destinatarios.lider ? "checked" : ""}
-                            >
-                            <span class="eval-switch__pista"></span>
-                            Líderes
-                        </label>
-
-                        <label class="eval-switch">
-                            <input
-                                type="checkbox"
-                                role="switch"
-                                data-campo="dest-operador"
-                                ${borrador.destinatarios.operador ? "checked" : ""}
-                            >
-                            <span class="eval-switch__pista"></span>
-                            Operadores
-                        </label>
-
-                    </div>
+                    <p class="eval-editor__ayuda">
+                        Al llegar al límite de respuestas la evaluación se cierra sola. Asigna a cada respuesta un valor en puntos para obtener un puntaje por evaluación respondida.
+                    </p>
 
                 </div>
+
+                <section class="eval-editor__cabecera eval-destinos" aria-labelledby="eval-destinos-titulo">
+
+                    <div class="eval-destinos__encabezado">
+                        <h3 id="eval-destinos-titulo" class="eval-destinos__titulo">Enviar a</h3>
+                        <span class="eval-destinos__contador"></span>
+                    </div>
+
+                    <div class="eval-destinos__filtros">
+                        ${construirFiltrosDestino()}
+                    </div>
+
+                    <div class="eval-destinos__dinamico"></div>
+
+                </section>
 
                 <div class="eval-editor__lista">
                     ${borrador.preguntas.map(
@@ -795,6 +921,319 @@ export function initEvaluacionesPersonalizadas() {
 
             </div>
         `;
+
+        pintarDestinatarios();
+
+    }
+
+
+    /* =====================================================
+       EDITOR: DESTINATARIOS
+       ---------------------------------------------------------
+       Filtros Departamento → Área → Rol (mismo criterio que la
+       gestión de usuarios: valores tomados de los propios
+       usuarios) y casillas por usuario. La selección se
+       conserva al cambiar los filtros, así que se pueden
+       combinar varios departamentos o áreas.
+       ===================================================== */
+
+    function ordenarTexto(lista) {
+
+        return [...new Set(lista.filter(Boolean))]
+            .sort(
+                (a, b) =>
+                    a.localeCompare(
+                        b,
+                        "es",
+                        {
+                            sensitivity: "base"
+                        }
+                    )
+            );
+
+    }
+
+
+    function etiquetaRol(rol) {
+
+        return ROLES_DESTINATARIOS.find((item) => item.valor === rol)?.etiqueta || rol;
+
+    }
+
+
+    function usuariosDestinoFiltrados() {
+
+        const texto =
+            filtroDestino.busqueda.trim().toLowerCase();
+
+        return usuariosDestino.filter(
+            (usuario) =>
+                (!filtroDestino.departamento || usuario.departamento === filtroDestino.departamento) &&
+                (!filtroDestino.area || usuario.area === filtroDestino.area) &&
+                (!filtroDestino.rol || usuario.rol === filtroDestino.rol) &&
+                (!texto || usuario.nombre.toLowerCase().includes(texto))
+        );
+
+    }
+
+
+    function construirFiltrosDestino() {
+
+        const departamentos =
+            ordenarTexto(usuariosDestino.map((usuario) => usuario.departamento));
+
+        const areas =
+            filtroDestino.departamento
+                ? ordenarTexto(
+                    usuariosDestino
+                        .filter((usuario) => usuario.departamento === filtroDestino.departamento)
+                        .map((usuario) => usuario.area)
+                )
+                : [];
+
+        const opciones = (lista, actual, etiquetaTodos, etiqueta = (valor) => valor) =>
+            [`<option value="">${etiquetaTodos}</option>`]
+                .concat(
+                    lista.map(
+                        (valor) => `<option value="${escaparHTML(valor)}" ${valor === actual ? "selected" : ""}>${escaparHTML(etiqueta(valor))}</option>`
+                    )
+                )
+                .join("");
+
+        return `
+            <div class="evaluations-resultados__campo">
+                <label for="eval-destino-departamento">Departamento</label>
+                <select id="eval-destino-departamento" data-campo="dest-departamento">
+                    ${opciones(departamentos, filtroDestino.departamento, "Todos los departamentos")}
+                </select>
+            </div>
+
+            <div class="evaluations-resultados__campo">
+                <label for="eval-destino-area">Área</label>
+                <select id="eval-destino-area" data-campo="dest-area" ${areas.length ? "" : "disabled"}>
+                    ${opciones(areas, filtroDestino.area, "Todas las áreas")}
+                </select>
+            </div>
+
+            <div class="evaluations-resultados__campo">
+                <label for="eval-destino-rol">Rol</label>
+                <select id="eval-destino-rol" data-campo="dest-rol">
+                    ${opciones(ROLES_DESTINATARIOS.map((rol) => rol.valor), filtroDestino.rol, "Todos los roles", etiquetaRol)}
+                </select>
+            </div>
+
+            <div class="evaluations-resultados__campo">
+                <label for="eval-destino-busqueda">Buscar</label>
+                <input
+                    type="search"
+                    id="eval-destino-busqueda"
+                    placeholder="Nombre del usuario"
+                    value="${escaparHTML(filtroDestino.busqueda)}"
+                    data-campo="dest-busqueda"
+                >
+            </div>
+        `;
+
+    }
+
+
+    /*
+     * Solo se repinta la lista (no los filtros) para que el
+     * cuadro de búsqueda no pierda el foco al escribir.
+     */
+    function pintarDestinatarios() {
+
+        const zona =
+            contenedor.querySelector(".eval-destinos__dinamico");
+
+        if (!zona || !borrador) return;
+
+        const listaAnterior =
+            zona.querySelector(".eval-destinos__lista");
+
+        const scroll =
+            listaAnterior ? listaAnterior.scrollTop : 0;
+
+        const visibles =
+            usuariosDestinoFiltrados();
+
+        const seleccionadosVisibles =
+            visibles.filter((usuario) => borrador.usuarios.has(usuario.id)).length;
+
+        const todosMarcados =
+            visibles.length > 0 &&
+            seleccionadosVisibles === visibles.length;
+
+        /* resumen de la selección por departamento */
+        const porDepartamento = {};
+
+        usuariosDestino
+            .filter((usuario) => borrador.usuarios.has(usuario.id))
+            .forEach(
+                (usuario) => {
+
+                    const clave =
+                        usuario.departamento || "Sin departamento";
+
+                    porDepartamento[clave] = (porDepartamento[clave] || 0) + 1;
+
+                }
+            );
+
+        const resumen =
+            ordenarTexto(Object.keys(porDepartamento))
+                .map((departamento) => `<span class="eval-destinos__chip">${escaparHTML(departamento)} · ${porDepartamento[departamento]}</span>`)
+                .join("");
+
+        zona.innerHTML = `
+            <div class="eval-destinos__barra">
+
+                <label class="eval-destinos__todos">
+                    <input
+                        type="checkbox"
+                        data-campo="dest-todos"
+                        ${todosMarcados ? "checked" : ""}
+                        ${visibles.length ? "" : "disabled"}
+                    >
+                    Seleccionar todos los mostrados (${visibles.length})
+                </label>
+
+                <button
+                    type="button"
+                    class="eval-destinos__limpiar"
+                    data-accion="dest-limpiar"
+                    ${borrador.usuarios.size ? "" : "disabled"}
+                >Quitar toda la selección</button>
+
+            </div>
+
+            ${
+                visibles.length
+                    ? `
+                        <ul class="eval-destinos__lista">
+                            ${visibles.map(
+                                (usuario) => `
+                                    <li>
+                                        <label class="eval-destinos__usuario">
+                                            <input
+                                                type="checkbox"
+                                                value="${usuario.id}"
+                                                data-campo="dest-usuario"
+                                                ${borrador.usuarios.has(usuario.id) ? "checked" : ""}
+                                            >
+                                            <span class="eval-destinos__nombre">${escaparHTML(usuario.nombre)}</span>
+                                            <span class="eval-destinos__detalle">
+                                                ${escaparHTML(usuario.departamento || "Sin departamento")} · ${escaparHTML(usuario.area || "Sin área")} · ${escaparHTML(etiquetaRol(usuario.rol))}
+                                            </span>
+                                        </label>
+                                    </li>
+                                `
+                            ).join("")}
+                        </ul>
+                    `
+                    : `<p class="evaluations-form__intro">No hay usuarios que coincidan con estos filtros.</p>`
+            }
+
+            ${resumen ? `<div class="eval-destinos__resumen">${resumen}</div>` : ""}
+        `;
+
+        const listaNueva =
+            zona.querySelector(".eval-destinos__lista");
+
+        if (listaNueva) {
+            listaNueva.scrollTop = scroll;
+        }
+
+        const contador =
+            contenedor.querySelector(".eval-destinos__contador");
+
+        if (contador) {
+
+            contador.textContent =
+                `${borrador.usuarios.size} usuario${borrador.usuarios.size === 1 ? "" : "s"} seleccionado${borrador.usuarios.size === 1 ? "" : "s"}`;
+
+        }
+
+    }
+
+
+    /*
+     * Devuelve true si el cambio pertenecía a los destinatarios.
+     * Las casillas y los select disparan "input" y "change":
+     * solo se atiende "change" para no procesarlos dos veces.
+     */
+    function alEditarDestinatarios(event, campo) {
+
+        if (!campo.startsWith("dest-")) return false;
+
+        if (campo === "dest-busqueda") {
+
+            if (event.type === "input") {
+
+                filtroDestino.busqueda = event.target.value;
+
+                pintarDestinatarios();
+
+            }
+
+            return true;
+
+        }
+
+        if (event.type !== "change") return true;
+
+        if (campo === "dest-departamento") {
+
+            filtroDestino.departamento = event.target.value;
+            filtroDestino.area = "";
+
+            contenedor.querySelector(".eval-destinos__filtros").innerHTML =
+                construirFiltrosDestino();
+
+        }
+        else if (campo === "dest-area") {
+
+            filtroDestino.area = event.target.value;
+
+        }
+        else if (campo === "dest-rol") {
+
+            filtroDestino.rol = event.target.value;
+
+        }
+        else if (campo === "dest-usuario") {
+
+            const id =
+                Number(event.target.value);
+
+            if (event.target.checked) {
+                borrador.usuarios.add(id);
+            }
+            else {
+                borrador.usuarios.delete(id);
+            }
+
+        }
+        else if (campo === "dest-todos") {
+
+            usuariosDestinoFiltrados().forEach(
+                (usuario) => {
+
+                    if (event.target.checked) {
+                        borrador.usuarios.add(usuario.id);
+                    }
+                    else {
+                        borrador.usuarios.delete(usuario.id);
+                    }
+
+                }
+            );
+
+        }
+
+        pintarDestinatarios();
+
+        return true;
 
     }
 
@@ -823,7 +1262,12 @@ export function initEvaluacionesPersonalizadas() {
 
         if (!campo) return;
 
-        if (campo === "titulo" || campo === "descripcion" || campo === "fechaCierre") {
+        if (
+            campo === "titulo" ||
+            campo === "descripcion" ||
+            campo === "fechaCierre" ||
+            campo === "limiteRespuestas"
+        ) {
 
             borrador[campo] = event.target.value;
 
@@ -831,14 +1275,7 @@ export function initEvaluacionesPersonalizadas() {
 
         }
 
-        if (campo === "dest-lider" || campo === "dest-operador") {
-
-            borrador.destinatarios[campo.replace("dest-", "")] =
-                event.target.checked;
-
-            return;
-
-        }
+        if (alEditarDestinatarios(event, campo)) return;
 
         const contexto =
             preguntaDesdeElemento(event.target);
@@ -855,8 +1292,23 @@ export function initEvaluacionesPersonalizadas() {
         }
         else if (campo === "q-opcion") {
 
-            pregunta.opciones[Number(event.target.dataset.o)] =
+            pregunta.opciones[Number(event.target.dataset.o)].texto =
                 event.target.value;
+
+        }
+        else if (campo === "q-opcion-valor") {
+
+            pregunta.opciones[Number(event.target.dataset.o)].valor =
+                event.target.value;
+
+        }
+        else if (campo === "q-likert-valor") {
+
+            pregunta.valoresLikert = {
+                ...valoresLikertPorDefecto(),
+                ...pregunta.valoresLikert,
+                [event.target.dataset.nivel]: event.target.value
+            };
 
         }
         else if (campo === "q-requerida") {
@@ -871,7 +1323,7 @@ export function initEvaluacionesPersonalizadas() {
             if (pregunta.tipo === "opcion_multiple" || pregunta.tipo === "casillas") {
 
                 if (pregunta.opciones.length < 2) {
-                    pregunta.opciones = ["Opción 1", "Opción 2"];
+                    pregunta.opciones = [opcionNueva(1), opcionNueva(2)];
                 }
 
             }
@@ -879,6 +1331,10 @@ export function initEvaluacionesPersonalizadas() {
 
                 pregunta.opciones = [];
 
+            }
+
+            if (!pregunta.valoresLikert) {
+                pregunta.valoresLikert = valoresLikertPorDefecto();
             }
 
             pintarEditor();
@@ -958,16 +1414,23 @@ export function initEvaluacionesPersonalizadas() {
 
             if (pregunta.opciones.length < MAX_OPCIONES) {
 
-                pregunta.opciones.push(`Opción ${pregunta.opciones.length + 1}`);
+                pregunta.opciones.push(opcionNueva(pregunta.opciones.length + 1));
 
                 pintarEditor();
 
                 contenedor
-                    .querySelectorAll(`[data-q="${indice}"] .eval-editor__opcion input`)
+                    .querySelectorAll(`[data-q="${indice}"] .eval-editor__opcion input[data-campo="q-opcion"]`)
                     ?.[pregunta.opciones.length - 1]
                     ?.select();
 
             }
+
+        }
+        else if (accion === "dest-limpiar") {
+
+            borrador.usuarios.clear();
+
+            pintarDestinatarios();
 
         }
         else if (accion === "quitar-opcion") {
@@ -1000,9 +1463,24 @@ export function initEvaluacionesPersonalizadas() {
             return "Escribe un título para la evaluación.";
         }
 
-        if (!borrador.destinatarios.lider && !borrador.destinatarios.operador) {
-            return "Activa al menos un destinatario: líderes u operadores.";
+        if (borrador.usuarios.size === 0) {
+            return "Selecciona al menos un usuario en “Enviar a”.";
         }
+
+        if (String(borrador.limiteRespuestas).trim() !== "") {
+
+            const limite =
+                Number(borrador.limiteRespuestas);
+
+            if (!Number.isInteger(limite) || limite < 1 || limite > MAX_LIMITE_RESPUESTAS) {
+                return `El límite de respuestas debe ser un número entero entre 1 y ${MAX_LIMITE_RESPUESTAS}, o dejarse vacío.`;
+            }
+
+        }
+
+        const valorInvalido = (valor) =>
+            String(valor ?? "").trim() !== "" &&
+            (!Number.isFinite(Number(valor)) || Math.abs(Number(valor)) > MAX_VALOR_RESPUESTA);
 
         for (let i = 0; i < borrador.preguntas.length; i++) {
 
@@ -1012,10 +1490,18 @@ export function initEvaluacionesPersonalizadas() {
                 return `La pregunta ${i + 1} no tiene texto.`;
             }
 
+            if (pregunta.tipo === "likert" && Object.values(pregunta.valoresLikert || {}).some(valorInvalido)) {
+                return `Un valor de la escala de la pregunta ${i + 1} no es válido (número entre -${MAX_VALOR_RESPUESTA} y ${MAX_VALOR_RESPUESTA}).`;
+            }
+
             if (pregunta.tipo === "opcion_multiple" || pregunta.tipo === "casillas") {
 
+                if (pregunta.opciones.some((opcion) => valorInvalido(opcion.valor))) {
+                    return `Un valor de la pregunta ${i + 1} no es válido (número entre -${MAX_VALOR_RESPUESTA} y ${MAX_VALOR_RESPUESTA}).`;
+                }
+
                 const opciones =
-                    pregunta.opciones.map((opcion) => opcion.trim());
+                    pregunta.opciones.map((opcion) => opcion.texto.trim());
 
                 if (opciones.some((opcion) => !opcion)) {
                     return `La pregunta ${i + 1} tiene opciones vacías.`;
@@ -1060,16 +1546,33 @@ export function initEvaluacionesPersonalizadas() {
                         titulo: borrador.titulo.trim(),
                         descripcion: borrador.descripcion.trim(),
                         fechaCierre: borrador.fechaCierre || null,
-                        destinatarios:
-                            Object.keys(borrador.destinatarios)
-                                .filter((rol) => borrador.destinatarios[rol]),
+                        limiteRespuestas:
+                            String(borrador.limiteRespuestas).trim() !== ""
+                                ? Number(borrador.limiteRespuestas)
+                                : null,
+                        usuarios: [...borrador.usuarios],
                         preguntas:
                             borrador.preguntas.map(
                                 (pregunta) => ({
                                     tipo: pregunta.tipo,
                                     texto: pregunta.texto.trim(),
                                     requerida: pregunta.requerida,
-                                    opciones: pregunta.opciones.map((opcion) => opcion.trim())
+                                    opciones:
+                                        pregunta.opciones.map((opcion) => ({
+                                            texto: opcion.texto.trim(),
+                                            valor: Number(opcion.valor) || 0
+                                        })),
+                                    ...(
+                                        pregunta.tipo === "likert"
+                                            ? {
+                                                valoresLikert:
+                                                    Object.fromEntries(
+                                                        Object.entries(pregunta.valoresLikert || valoresLikertPorDefecto())
+                                                            .map(([nivel, valor]) => [nivel, Number(valor) || 0])
+                                                    )
+                                            }
+                                            : {}
+                                    )
                                 })
                             )
                     })
@@ -1337,7 +1840,17 @@ export function initEvaluacionesPersonalizadas() {
     }
 
 
+    function formatearPuntos(valor) {
+
+        return `${valor} pt${Math.abs(valor) === 1 ? "" : "s"}`;
+
+    }
+
+
     function construirGrafica(pregunta) {
+
+        const conPuntaje =
+            Boolean(resultados.puntaje);
 
         if (pregunta.tipo === "opcion_multiple" || pregunta.tipo === "casillas") {
 
@@ -1351,7 +1864,10 @@ export function initEvaluacionesPersonalizadas() {
 
                             return `
                                 <div class="eval-grafica__fila">
-                                    <span class="eval-grafica__etiqueta">${escaparHTML(opcion.texto)}</span>
+                                    <span class="eval-grafica__etiqueta">
+                                        ${escaparHTML(opcion.texto)}
+                                        ${conPuntaje ? `<small class="eval-grafica__puntos">${formatearPuntos(opcion.valor)}</small>` : ""}
+                                    </span>
                                     <div class="eval-grafica__pista">
                                         <div class="eval-grafica__relleno" style="width: ${pct}%"></div>
                                     </div>
@@ -1403,6 +1919,7 @@ export function initEvaluacionesPersonalizadas() {
                                     <span class="eval-grafica__etiqueta">
                                         <span class="evaluations-resultados__leyenda-punto eval-punto--${opcion.valor}"></span>
                                         ${escaparHTML(opcion.etiqueta)}
+                                        ${conPuntaje ? `<small class="eval-grafica__puntos">${formatearPuntos(pregunta.valoresLikert?.[opcion.valor] ?? opcion.puntaje)}</small>` : ""}
                                     </span>
                                     <span class="eval-grafica__valor">${cantidad} · ${porcentaje(cantidad, pregunta.totalRespuestas)}%</span>
                                 </div>
@@ -1437,7 +1954,7 @@ export function initEvaluacionesPersonalizadas() {
             total,
             totalGeneral,
             elegibles,
-            promedioLikertGlobal,
+            puntaje,
             filtros,
             preguntas
         } = resultados;
@@ -1487,11 +2004,12 @@ export function initEvaluacionesPersonalizadas() {
                 </div>
 
                 ${
-                    promedioLikertGlobal !== null
+                    puntaje && puntaje.promedio !== null
                         ? `
                             <div class="eval-resumen__tarjeta">
-                                <span class="eval-resumen__valor">${promedioLikertGlobal} <small>/ 5</small></span>
-                                <span class="eval-resumen__etiqueta">Promedio de preguntas Likert</span>
+                                <span class="eval-resumen__valor">${puntaje.promedio} <small>/ ${puntaje.maximoPosible} pts</small></span>
+                                <span class="eval-resumen__etiqueta">Puntaje promedio por respuesta (mín. ${puntaje.minimo} · máx. ${puntaje.maximo})</span>
+                                <div class="eval-grafica__pista"><div class="eval-grafica__relleno" style="width: ${Math.max(0, Math.min(100, porcentaje(puntaje.promedio, puntaje.maximoPosible)))}%"></div></div>
                             </div>
                         `
                         : ""
@@ -1500,6 +2018,11 @@ export function initEvaluacionesPersonalizadas() {
                 <div class="eval-resumen__tarjeta">
                     <span class="eval-resumen__valor eval-resumen__valor--${evaluacion.vigente ? "activa" : "cerrada"}">${evaluacion.vigente ? "Activa" : "Cerrada"}</span>
                     <span class="eval-resumen__etiqueta">${evaluacion.fechaCierre ? `Cierra el ${escaparHTML(formatearFecha(evaluacion.fechaCierre))}` : "Sin fecha de cierre"}</span>
+                    ${
+                        evaluacion.limiteRespuestas !== null
+                            ? `<span class="eval-resumen__etiqueta">Límite: ${totalGeneral} de ${evaluacion.limiteRespuestas} respuestas${totalGeneral >= evaluacion.limiteRespuestas ? " (alcanzado)" : ""}</span>`
+                            : ""
+                    }
                 </div>
 
             </div>
@@ -1536,8 +2059,8 @@ export function initEvaluacionesPersonalizadas() {
                                             <p class="evaluations-resultados__pregunta-texto">${indice + 1}. ${escaparHTML(pregunta.texto)}</p>
                                             <span class="evaluations-resultados__promedio">
                                                 ${
-                                                    pregunta.tipo === "likert"
-                                                        ? (pregunta.promedio !== null ? `${pregunta.promedio} / 5` : "Sin datos")
+                                                    puntaje && pregunta.promedio !== undefined
+                                                        ? (pregunta.promedio !== null ? `${pregunta.promedio} / ${pregunta.puntajeMaximo} pts` : "Sin datos")
                                                         : `${pregunta.totalRespuestas} resp.`
                                                 }
                                             </span>
@@ -1588,6 +2111,7 @@ export function initEvaluacionesPersonalizadas() {
                 "Fecha",
                 "Departamento",
                 "Área",
+                ...(data.usaPuntaje ? ["Puntaje"] : []),
                 ...data.preguntas.map((pregunta) => pregunta.texto)
             ];
 
@@ -1597,6 +2121,7 @@ export function initEvaluacionesPersonalizadas() {
                         formatearFecha(fila.creadoEn),
                         fila.departamento || "",
                         fila.area || "",
+                        ...(data.usaPuntaje ? [fila.puntaje] : []),
                         ...data.preguntas.map(
                             (pregunta) => {
 
