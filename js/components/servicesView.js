@@ -79,7 +79,25 @@ export function initServicesView() {
             areaLabel.textContent = service.area;
             row.append(areaLabel);
         }
-        if (!archived) {
+        if (archived) {
+            const restore = document.createElement("button");
+            restore.type = "button";
+            restore.className = "services-view__restore";
+            restore.textContent = "+";
+            restore.title = "Reactivar Registro";
+            restore.setAttribute("aria-label", "Reactivar Registro");
+            restore.addEventListener("click", async () => {
+                const accepted = await confirmDialog("¿Desea reactivar este servicio?", {
+                    acceptLabel: "Reactivar", cancelLabel: "Cancelar"
+                });
+                if (!accepted) return;
+                try {
+                    await request(`${API_URL}/servicios/${service.id}/reactivar`, { method: "PATCH" });
+                    await loadServices();
+                } catch (error) { setMessage(error.message); }
+            });
+            row.append(restore);
+        } else {
             const remove = document.createElement("button");
             remove.type = "button";
             remove.className = "services-view__remove";
