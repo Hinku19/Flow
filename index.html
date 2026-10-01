@@ -589,10 +589,66 @@
 
                     </button>
 
+
+                    <!-- =========================================
+                         SERVICIOS
+                         ========================================= -->
+
+                    <button
+                        type="button"
+                        class="dashboard-card dashboard-card--services"
+                        data-view="servicios"
+                    >
+
+                        <span class="dashboard-card__icon">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M14.7 6.3a5 5 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a5 5 0 0 0 6.4-6.4l-3.1 3.1-3-3z"></path>
+                            </svg>
+                        </span>
+
+                        <span class="dashboard-card__title">Servicios</span>
+                        <span class="dashboard-card__description">Accede al módulo de servicios.</span>
+
+                    </button>
+
                 </div>
 
             </div>
 
+        </section>
+
+
+        <!-- =====================================================
+             SERVICIOS
+             ===================================================== -->
+
+        <section
+            id="vista-servicios"
+            class="view view--hidden"
+        >
+            <div class="services-view">
+                <header class="services-view__header">
+                    <button type="button" class="services-view__back" data-view="dashboard">
+                        ← Volver al inicio
+                    </button>
+                    <h1 class="services-view__title">Servicios</h1>
+                    <p class="services-view__subtitle">Administra los servicios disponibles por departamento y área.</p>
+                </header>
+                <div class="services-view__panel">
+                    <div class="services-view__toolbar">
+                        <label class="services-view__field">Departamento
+                            <select id="services-department" class="services-view__select"><option value="">Selecciona un departamento</option></select>
+                        </label>
+                        <label class="services-view__field">Área
+                            <select id="services-area" class="services-view__select" disabled><option value="">Selecciona un área</option></select>
+                        </label>
+                        <button id="services-add" class="services-view__action" type="button" disabled>+ Agregar Servicio</button>
+                        <button id="services-history" class="services-view__action services-view__action--secondary" type="button" disabled>Revisar Anteriores</button>
+                    </div>
+                    <p id="services-message" class="services-view__message" role="status" hidden></p>
+                    <div id="services-list" class="services-view__list" aria-live="polite"></div>
+                </div>
+            </div>
         </section>
 
 

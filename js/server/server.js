@@ -2939,6 +2939,123 @@ app.get(
 
 
 /* =========================================================
+   CATÁLOGO DE SERVICIOS
+   ========================================================= */
+
+async function verificarAdministradorServicios(req, res) {
+    const usuario = await obtenerUsuarioSolicitante(req);
+    if (!usuario) {
+        res.status(401).json({ ok: false, mensaje: "No fue posible identificar al usuario." });
+        return false;
+    }
+    if (!esAdmin(usuario)) {
+        respuestaSinPermiso(res);
+        return false;
+    }
+    return true;
+}
+
+app.get("/api/servicios/opciones", async (req, res) => {
+    try {
+        if (!await verificarAdministradorServicios(req, res)) return;
+        const departamento = String(req.query.departamento || "").trim();
+        if (!departamento) {
+            const [filas] = await db.execute(
+                `SELECT DISTINCT TRIM(departamento) AS departamento
+                 FROM usuarios
+                 WHERE activo = 1 AND departamento IS NOT NULL AND TRIM(departamento) <> ''
+                 ORDER BY departamento`
+            );
+            return res.json({ ok: true, departamentos: filas.map((fila) => fila.departamento) });
+        }
+        const [filas] = await db.execute(
+            `SELECT DISTINCT TRIM(area) AS area
+             FROM usuarios
+             WHERE activo = 1 AND TRIM(departamento) = ?
+               AND area IS NOT NULL AND TRIM(area) <> ''
+             ORDER BY area`, [departamento]
+        );
+        return res.json({ ok: true, areas: filas.map((fila) => fila.area) });
+    } catch (error) {
+        console.error("Error al cargar opciones del catálogo de servicios:", error);
+        return res.status(500).json({ ok: false, mensaje: "No fue posible cargar departamentos y áreas." });
+    }
+});
+
+app.get("/api/servicios", async (req, res) => {
+    try {
+        if (!await verificarAdministradorServicios(req, res)) return;
+        const departamento = String(req.query.departamento || "").trim();
+        const area = String(req.query.area || "").trim();
+        const activo = req.query.estado === "inactivo" ? 0 : 1;
+        if (!departamento || !area) {
+            return res.status(400).json({ ok: false, mensaje: "Selecciona departamento y área." });
+        }
+        const [servicios] = await db.execute(
+            `SELECT id, nombre, departamento, area, activo
+             FROM servicios_catalogo
+             WHERE departamento = ? AND area = ? AND activo = ?
+             ORDER BY id ASC`, [departamento, area, activo]
+        );
+        return res.json({ ok: true, servicios });
+    } catch (error) {
+        console.error("Error al consultar el catálogo de servicios:", error);
+        return res.status(500).json({ ok: false, mensaje: "No fue posible consultar los servicios. Verifica que exista la tabla servicios_catalogo." });
+    }
+});
+
+app.post("/api/servicios", async (req, res) => {
+    try {
+        if (!await verificarAdministradorServicios(req, res)) return;
+        const departamento = String(req.body.departamento || "").trim();
+        const area = String(req.body.area || "").trim();
+        const nombre = String(req.body.nombre || "").trim();
+        if (!departamento || !area || !nombre || nombre.length > 150) {
+            return res.status(400).json({ ok: false, mensaje: "Indica departamento, área y un nombre de servicio de hasta 150 caracteres." });
+        }
+        const [areaExiste] = await db.execute(
+            `SELECT 1 FROM usuarios
+             WHERE activo = 1 AND TRIM(departamento) = ? AND TRIM(area) = ? LIMIT 1`,
+            [departamento, area]
+        );
+        if (!areaExiste.length) return res.status(400).json({ ok: false, mensaje: "El área no corresponde al departamento seleccionado." });
+        const [duplicado] = await db.execute(
+            `SELECT id FROM servicios_catalogo
+             WHERE departamento = ? AND area = ? AND activo = 1 AND LOWER(nombre) = LOWER(?) LIMIT 1`,
+            [departamento, area, nombre]
+        );
+        if (duplicado.length) return res.status(409).json({ ok: false, mensaje: "Ya existe un servicio con ese nombre en el área." });
+        const [result] = await db.execute(
+            `INSERT INTO servicios_catalogo (departamento, area, nombre, activo)
+             VALUES (?, ?, ?, 1)`, [departamento, area, nombre]
+        );
+        return res.status(201).json({ ok: true, id: result.insertId, mensaje: "Servicio agregado." });
+    } catch (error) {
+        console.error("Error al agregar servicio:", error);
+        return res.status(500).json({ ok: false, mensaje: "No fue posible guardar el servicio. Verifica que exista la tabla servicios_catalogo." });
+    }
+});
+
+app.delete("/api/servicios/:id", async (req, res) => {
+    try {
+        if (!await verificarAdministradorServicios(req, res)) return;
+        const id = Number(req.params.id);
+        if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ ok: false, mensaje: "Identificador de servicio inválido." });
+        const [result] = await db.execute(
+            `UPDATE servicios_catalogo
+             SET activo = 0, fecha_eliminacion = CURRENT_TIMESTAMP
+             WHERE id = ? AND activo = 1`, [id]
+        );
+        if (!result.affectedRows) return res.status(404).json({ ok: false, mensaje: "El servicio no existe o ya fue eliminado." });
+        return res.json({ ok: true, mensaje: "Servicio eliminado del catálogo." });
+    } catch (error) {
+        console.error("Error al dar de baja un servicio:", error);
+        return res.status(500).json({ ok: false, mensaje: "No fue posible eliminar el servicio. Verifica que exista la tabla servicios_catalogo." });
+    }
+});
+
+
+/* =========================================================
    REPORTES GENERALES DE COMPROMISOS
    ========================================================= */
 

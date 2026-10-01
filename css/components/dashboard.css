@@ -644,6 +644,63 @@
     color: #e20505;
 }
 
+
+/* ---------------------------------------------------------
+   SERVICIOS
+   --------------------------------------------------------- */
+
+.dashboard-card--services {
+    background:
+        linear-gradient(
+            135deg,
+            var(--color-accent-500) 0%,
+            var(--color-accent-800) 100%
+        );
+}
+
+.dashboard-card--services
+.dashboard-card__icon {
+    color: var(--color-accent-700);
+}
+
+.services-view {
+    width: min(1400px, 100%);
+    margin: 0 auto;
+    padding: var(--space-xl) var(--space-lg) var(--space-2xl);
+    box-sizing: border-box;
+}
+
+.services-view__header {
+    padding-left: var(--space-md);
+    border-left: 4px solid var(--color-accent-500);
+}
+
+.services-view__back {
+    border: 1px solid var(--color-accent-500);
+    border-radius: var(--radius-sm);
+    padding: 9px 13px;
+    color: var(--color-accent-700);
+    background: var(--color-surface);
+    font: inherit;
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+}
+
+.services-view__back:hover {
+    background: var(--color-surface-alt);
+}
+
+.services-view__title {
+    margin: var(--space-md) 0 var(--space-2xs);
+    color: var(--color-text);
+    font-size: var(--text-2xl);
+}
+
+.services-view__subtitle {
+    margin: 0;
+    color: var(--color-text-second);
+}
+
 /* =========================================================
    VISTA DE USUARIOS
    ========================================================= */
