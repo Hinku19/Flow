@@ -2955,6 +2955,11 @@ async function verificarAdministradorServicios(req, res) {
     return true;
 }
 
+// Oficinas Generales corresponde a SubsidiaryId 30 y requiere área.
+function serviciosRequierenArea(departamento) {
+    return String(departamento || "").trim().toLocaleLowerCase("es-MX") === "oficinas generales";
+}
+
 app.get("/api/servicios/opciones", async (req, res) => {
     try {
         if (!await verificarAdministradorServicios(req, res)) return;
@@ -2975,7 +2980,11 @@ app.get("/api/servicios/opciones", async (req, res) => {
                AND area IS NOT NULL AND TRIM(area) <> ''
              ORDER BY area`, [departamento]
         );
-        return res.json({ ok: true, areas: filas.map((fila) => fila.area) });
+        return res.json({
+            ok: true,
+            areas: filas.map((fila) => fila.area),
+            requiereArea: serviciosRequierenArea(departamento)
+        });
     } catch (error) {
         console.error("Error al cargar opciones del catálogo de servicios:", error);
         return res.status(500).json({ ok: false, mensaje: "No fue posible cargar departamentos y áreas." });
@@ -2988,14 +2997,14 @@ app.get("/api/servicios", async (req, res) => {
         const departamento = String(req.query.departamento || "").trim();
         const area = String(req.query.area || "").trim();
         const activo = req.query.estado === "inactivo" ? 0 : 1;
-        if (!departamento || !area) {
-            return res.status(400).json({ ok: false, mensaje: "Selecciona departamento y área." });
+        if (!departamento || (serviciosRequierenArea(departamento) && !area)) {
+            return res.status(400).json({ ok: false, mensaje: "Selecciona departamento y el área requerida." });
         }
         const [servicios] = await db.execute(
             `SELECT id, nombre, departamento, area, activo
              FROM servicios_catalogo
-             WHERE departamento = ? AND area = ? AND activo = ?
-             ORDER BY id ASC`, [departamento, area, activo]
+             WHERE departamento = ? AND (? = '' OR area = ?) AND activo = ?
+             ORDER BY id ASC`, [departamento, area, area, activo]
         );
         return res.json({ ok: true, servicios });
     } catch (error) {
@@ -3010,15 +3019,23 @@ app.post("/api/servicios", async (req, res) => {
         const departamento = String(req.body.departamento || "").trim();
         const area = String(req.body.area || "").trim();
         const nombre = String(req.body.nombre || "").trim();
-        if (!departamento || !area || !nombre || nombre.length > 150) {
-            return res.status(400).json({ ok: false, mensaje: "Indica departamento, área y un nombre de servicio de hasta 150 caracteres." });
+        const requiereArea = serviciosRequierenArea(departamento);
+        if (!departamento || (requiereArea && !area) || !nombre || nombre.length > 150) {
+            return res.status(400).json({ ok: false, mensaje: "Indica departamento, el área requerida y un nombre de servicio de hasta 150 caracteres." });
         }
-        const [areaExiste] = await db.execute(
-            `SELECT 1 FROM usuarios
-             WHERE activo = 1 AND TRIM(departamento) = ? AND TRIM(area) = ? LIMIT 1`,
-            [departamento, area]
+        const [departamentoExiste] = await db.execute(
+            `SELECT 1 FROM usuarios WHERE activo = 1 AND TRIM(departamento) = ? LIMIT 1`,
+            [departamento]
         );
-        if (!areaExiste.length) return res.status(400).json({ ok: false, mensaje: "El área no corresponde al departamento seleccionado." });
+        if (!departamentoExiste.length) return res.status(400).json({ ok: false, mensaje: "El departamento seleccionado no es válido." });
+        if (area) {
+            const [areaExiste] = await db.execute(
+                `SELECT 1 FROM usuarios
+                 WHERE activo = 1 AND TRIM(departamento) = ? AND TRIM(area) = ? LIMIT 1`,
+                [departamento, area]
+            );
+            if (!areaExiste.length) return res.status(400).json({ ok: false, mensaje: "El área no corresponde al departamento seleccionado." });
+        }
         const [duplicado] = await db.execute(
             `SELECT id FROM servicios_catalogo
              WHERE departamento = ? AND area = ? AND activo = 1 AND LOWER(nombre) = LOWER(?) LIMIT 1`,

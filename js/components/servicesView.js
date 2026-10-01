@@ -11,6 +11,7 @@ export function initServicesView() {
     const message = document.querySelector("#services-message");
     let showingHistory = false;
     let adding = false;
+    let areaRequired = true;
 
     async function request(url, options = {}) {
         const response = await fetch(url, {
@@ -28,7 +29,7 @@ export function initServicesView() {
     }
 
     function selectedScope() {
-        return department.value && area.value;
+        return department.value && (!areaRequired || area.value);
     }
 
     function updateButtons() {
@@ -50,16 +51,19 @@ export function initServicesView() {
         option(area, "", "Selecciona un área");
         area.disabled = true;
         if (!department.value) {
+            areaRequired = true;
             updateButtons();
             list.replaceChildren();
             return;
         }
         const data = await request(`${API_URL}/servicios/opciones?departamento=${encodeURIComponent(department.value)}`);
+        areaRequired = Boolean(data.requiereArea);
+        area.options[0].textContent = areaRequired ? "Selecciona un área" : "Sin área (opcional)";
         for (const name of data.areas || []) option(area, name, name);
         area.disabled = false;
         updateButtons();
         list.replaceChildren();
-        if (!data.areas?.length) setMessage("No se encontraron áreas para este departamento.");
+        if (areaRequired && !data.areas?.length) setMessage("No se encontraron áreas para este departamento.");
     }
 
     function makeServiceRow(service, archived = false) {
@@ -69,6 +73,12 @@ export function initServicesView() {
         name.className = "services-view__name";
         name.textContent = service.nombre;
         row.append(name);
+        if (!area.value && service.area) {
+            const areaLabel = document.createElement("small");
+            areaLabel.className = "services-view__area-label";
+            areaLabel.textContent = service.area;
+            row.append(areaLabel);
+        }
         if (!archived) {
             const remove = document.createElement("button");
             remove.type = "button";

@@ -91,6 +91,13 @@
     color: #173a50;
 }
 
+.services-view__area-label {
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: #f3f1ff;
+    color: #5146b3;
+}
+
 .services-view__remove {
     display: inline-grid;
     width: 34px;
