@@ -171,6 +171,27 @@
     font-size: var(--text-sm);
 }
 
+/*
+ * La tarjeta en sí no hace nada al hacer clic (a diferencia de
+ * la lista dentro de la reunión), así que la manita solo se
+ * muestra sobre los controles editables.
+ */
+
+.commitments-view__list .commitment-card {
+    cursor: default;
+}
+
+.commitments-view__estado-edit,
+.commitments-view__fecha-edit {
+    cursor: pointer;
+}
+
+.commitments-view__fecha-edit:disabled {
+    cursor: not-allowed;
+
+    opacity: 0.7;
+}
+
 .commitments-view__estado-edit:focus,
 .commitments-view__fecha-edit:focus {
     outline: none;

@@ -278,6 +278,8 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     form.elements.descripcion.value = data.descripcion;
     form.elements.fechaInicio.value = data.fechaInicio || "";
     form.elements.fechaLimite.value = data.fechaLimite || "";
+    // Una vez establecida, la fecha límite ya no se puede cambiar.
+    form.elements.fechaLimite.readOnly = Boolean(data.fechaLimite);
     form.elements.estado.value = data.estado;
     form.elements.prioridad.value = data.prioridad;
   }
@@ -285,6 +287,7 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
   function openDialogForNew(descripcionInicial, origen) {
     editingId = null;
     origenPunto = origen || null;
+    form.elements.fechaLimite.readOnly = false;
     formTitle.textContent = "Nuevo compromiso";
         saveBtn.textContent = "Guardar"
 

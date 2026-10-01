@@ -479,6 +479,27 @@ export function initActivitiesView() {
                     puntoAvance
                 );
 
+
+                if (punto.prioridad) {
+
+                    const puntoPrioridad =
+                        document.createElement(
+                            "span"
+                        );
+
+                    puntoPrioridad.classList.add(
+                        "activity__punto-prioridad"
+                    );
+
+                    puntoPrioridad.textContent =
+                        " - Actividad Prioritaria";
+
+                    puntoItem.appendChild(
+                        puntoPrioridad
+                    );
+
+                }
+
                 puntos.appendChild(
                     puntoItem
                 );

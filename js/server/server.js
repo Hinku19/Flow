@@ -3361,7 +3361,8 @@ app.get(
                         (r.ReunionId IS NULL OR r.Estado <> 'Cancelada')
                         ${filtroRol}
                     ORDER BY
-                        c.FechaFinEstimada ASC
+                        c.FechaInicioEstimada DESC,
+                        c.CompromisoId DESC
                     `,
                     parametrosFiltro
                 );
@@ -3429,6 +3430,13 @@ app.get(
                                 row.Status,
                                 row.Aprobado
                             ),
+
+                        /*
+                         * Solo informativo: el estado real se
+                         * conserva en estadoReal.
+                         */
+                        vencido:
+                            Number(row.StatusEfectivo) === 4,
 
                         aprobado:
                             Boolean(row.Aprobado),
@@ -3942,6 +3950,12 @@ app.patch(
                 ).trim();
 
 
+            /*
+             * La fecha límite solo se puede establecer una vez:
+             * si el compromiso ya tiene una, se conserva (ver el
+             * COALESCE del UPDATE) aunque llegue otra distinta.
+             */
+
             const fechaLimite =
                 req.body.fechaLimite ||
                 null;
@@ -4035,7 +4049,7 @@ app.patch(
                     UPDATE compromisos
                     SET
                         Status = ?,
-                        FechaFinEstimada = ?,
+                        FechaFinEstimada = COALESCE(FechaFinEstimada, ?),
                         FechaFinReal = ?,
                         Aprobado = ?,
                         FechaAprobacion = CASE WHEN ? THEN FechaAprobacion ELSE NULL END,
@@ -7227,7 +7241,10 @@ function calcularAvanceObjetivo(
                         punto.texto || "",
 
                     avance:
-                        Number(punto.avance) || 0
+                        Number(punto.avance) || 0,
+
+                    prioridad:
+                        Boolean(punto.prioridad)
 
                 })
             ),
@@ -9172,9 +9189,6 @@ app.post(
                 responsableNombre:
                     campos.responsableNombre,
 
-                responsableApellido:
-                    campos.responsableApellido,
-
                 nombre:
                     campos.nombre,
 
@@ -9318,7 +9332,7 @@ app.post(
                         campos.areaId,
                         campos.areaNombre || null,
                         campos.responsableNombre.trim(),
-                        campos.responsableApellido.trim(),
+                        (campos.responsableApellido || "").trim(),
                         campos.nombre.trim(),
                         campos.actividad.trim(),
                         campos.servicio.trim(),

@@ -57,6 +57,36 @@ const ESTADOS_EDITABLES = [
 ];
 
 
+/*
+ * Orden de la lista: de los más recientes a los más viejos, según
+ * la fecha de inicio; sin fecha, o con la misma fecha, el más
+ * recientemente creado (id mayor) va primero.
+ */
+function compararMasRecientePrimero(
+    a,
+    b
+) {
+
+    const fechaA =
+        Date.parse(a.fechaInicio) || 0;
+
+    const fechaB =
+        Date.parse(b.fechaInicio) || 0;
+
+    if (fechaA !== fechaB) {
+
+        return fechaB - fechaA;
+
+    }
+
+    return (
+        Number(b.id) -
+        Number(a.id)
+    );
+
+}
+
+
 /* =========================================================
    INICIALIZAR VISTA
    ========================================================= */
@@ -847,9 +877,29 @@ export function initCommitmentsView() {
             }
 
 
+            /*
+             * "Vencido" es solo informativo: el compromiso conserva
+             * su estado real (pendiente/en progreso/...) para mostrar
+             * y filtrar, y el vencimiento se marca aparte. Se acepta
+             * tanto el campo `vencido` como el formato anterior del
+             * backend (estado === "vencido").
+             */
             compromisos =
-                data.compromisos ||
-                [];
+                (data.compromisos || [])
+                    .map(
+                        (item) => ({
+                            ...item,
+                            vencido:
+                                item.vencido === true ||
+                                item.estado === "vencido",
+                            estado:
+                                item.estadoReal ||
+                                item.estado
+                        })
+                    )
+                    .sort(
+                        compararMasRecientePrimero
+                    );
 
         }
         catch (error) {
@@ -1021,6 +1071,31 @@ export function initCommitmentsView() {
         );
 
 
+        if (data.vencido) {
+
+            const vencidoBadge =
+                document.createElement(
+                    "span"
+                );
+
+            vencidoBadge.classList.add(
+                "commitment-card__badge",
+                "commitment-card__badge--vencido"
+            );
+
+            vencidoBadge.textContent =
+                "Vencido";
+
+            vencidoBadge.title =
+                "La fecha límite ya pasó";
+
+            actions.append(
+                vencidoBadge
+            );
+
+        }
+
+
         const deleteBtn =
             document.createElement("button");
 
@@ -1181,6 +1256,17 @@ export function initCommitmentsView() {
         inputFecha.value =
             aValorInputFecha(
                 data.fechaLimite
+            );
+
+
+        /*
+         * Una vez establecida, la fecha límite ya no se
+         * puede cambiar.
+         */
+
+        inputFecha.disabled =
+            Boolean(
+                inputFecha.value
             );
 
         campoFecha.appendChild(

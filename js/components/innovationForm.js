@@ -57,11 +57,6 @@ export function initInnovationForm() {
             "#innovacion-responsable-nombre"
         );
 
-    const inputResponsableApellido =
-        form.querySelector(
-            "#innovacion-responsable-apellido"
-        );
-
     const feedback =
         form.querySelector(
             ".innovation-form__feedback"
@@ -362,11 +357,6 @@ export function initInnovationForm() {
         formData.append(
             "responsableNombre",
             inputResponsableNombre.value.trim()
-        );
-
-        formData.append(
-            "responsableApellido",
-            inputResponsableApellido.value.trim()
         );
 
         [
