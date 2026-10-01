@@ -106,6 +106,10 @@ import {
 } from "./components/reportsView.js";
 
 import {
+    initServicesView
+} from "./components/servicesView.js";
+
+import {
     initActivitiesView
 } from "./components/activitiesView.js";
 
@@ -241,6 +245,16 @@ function inicializarNavegacion() {
         vista
     ) {
 
+        if (vista === "servicios" && !esAdmin()) {
+
+            avisoDialog(
+                "Su usuario no cuenta con el tipo de Rol necesario para acceder a esta opción."
+            );
+
+            return;
+
+        }
+
         if (
             vista === "reportes" &&
             getUsuarioActual()?.rol === "operador"
@@ -269,6 +283,10 @@ function inicializarNavegacion() {
 
             reportsView.render();
 
+        }
+
+        if (vista === "servicios") {
+            servicesView.render();
         }
 
 
@@ -1798,6 +1816,9 @@ const commitmentsView =
 const reportsView =
     initReportsView();
 
+const servicesView =
+    initServicesView();
+
 
 /* =========================================================
    VISOR DE ACTIVIDADES POR USUARIO
@@ -2151,6 +2172,23 @@ initNavegacionHistorial({
     onPopState:
         async (vista) => {
 
+            if (vista === "servicios" && !esAdmin()) {
+
+                const vistaActual = getCurrentView() || "dashboard";
+
+                history.pushState(
+                    { flowView: vistaActual },
+                    ""
+                );
+
+                avisoDialog(
+                    "Su usuario no cuenta con el tipo de Rol necesario para acceder a esta opción."
+                );
+
+                return;
+
+            }
+
             if (getCurrentView() === "reunion") {
 
                 /*
@@ -2203,6 +2241,10 @@ initNavegacionHistorial({
             }
 
             aplicarVistaDesdeHistorial(vista);
+
+            if (vista === "servicios") {
+                servicesView.render();
+            }
 
         }
 

@@ -29,6 +29,7 @@
 
 /* Dashboard */
 @import "components/dashboard.css";
+@import "components/services-view.css";
 
 /* Reunión */
 @import "components/editable-list.css";
