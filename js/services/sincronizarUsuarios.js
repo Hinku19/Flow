@@ -84,15 +84,21 @@ async function sincronizar() {
 
       await conexion.execute(
         `INSERT INTO usuarios
-          (EmployeeID, nombre, departamento, area, correo_electronico, activo)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+          (EmployeeID, nombre, departamento, area, correo_electronico, password_hash, activo,
+          fecha_registro, fecha_actualizacion, foto_mime, foto_contenido)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           empleado.EmployeeID,
           empleado.nombre,
           empleado.departamento,
           empleado.area,
           empleado.correo_electronico,
-          empleado.activo,
+          null,
+          0,
+          null,
+          null,
+          null,
+          null
         ]
       );
 
