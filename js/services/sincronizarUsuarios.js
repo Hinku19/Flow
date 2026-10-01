@@ -36,7 +36,7 @@ async function sincronizar() {
       pe.EmployeeName AS nombre,
       ss.SubsidiaryName AS departamento,
       sat.Description AS area,
-      pe.Email AS correo_electronico,
+      NULLIF(NULLIF(LTRIM(RTRIM(pe.Email)), ''), '?') AS correo_electronico,
       pe.IsActive AS activo
     FROM Pay_Employees pe
     JOIN Str_Subsidiaries ss
