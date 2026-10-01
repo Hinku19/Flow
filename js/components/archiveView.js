@@ -388,7 +388,11 @@ export function createArchiveView() {
                             } (${
                                 bloque.avance ??
                                 0
-                            }%)`;
+                            }%)${
+                                bloque.prioridad
+                                    ? " - Actividad Prioritaria"
+                                    : ""
+                            }`;
 
 
                         cont.appendChild(

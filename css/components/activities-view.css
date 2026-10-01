@@ -311,6 +311,14 @@
 }
 
 
+.activity__punto-prioridad {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+
+    color: var(--color-danger);
+}
+
+
 .activity__sin-puntos {
     margin: var(--space-xs) 0 0;
 
