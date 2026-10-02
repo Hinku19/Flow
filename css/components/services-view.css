@@ -118,6 +118,26 @@
     background: #b91720;
 }
 
+.services-view__restore {
+    display: inline-grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: #249447;
+    color: #fff;
+    font-family: inherit;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.services-view__restore:hover {
+    background: #187536;
+}
+
 .services-view__input {
     flex: 1;
     min-width: 130px;

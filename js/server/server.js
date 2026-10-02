@@ -3071,6 +3071,48 @@ app.delete("/api/servicios/:id", async (req, res) => {
     }
 });
 
+app.patch("/api/servicios/:id/reactivar", async (req, res) => {
+    try {
+        if (!await verificarAdministradorServicios(req, res)) return;
+        const id = Number(req.params.id);
+        if (!Number.isSafeInteger(id) || id < 1) {
+            return res.status(400).json({ ok: false, mensaje: "Identificador de servicio inválido." });
+        }
+        const [servicioRows] = await db.execute(
+            `SELECT id, departamento, area, nombre
+             FROM servicios_catalogo WHERE id = ? AND activo = 0 LIMIT 1`, [id]
+        );
+        if (!servicioRows.length) {
+            return res.status(404).json({ ok: false, mensaje: "El servicio no existe o ya está activo." });
+        }
+        const servicio = servicioRows[0];
+        const [duplicado] = await db.execute(
+            `SELECT id FROM servicios_catalogo
+             WHERE departamento = ? AND area = ? AND activo = 1
+               AND LOWER(nombre) = LOWER(?) LIMIT 1`,
+            [servicio.departamento, servicio.area, servicio.nombre]
+        );
+        if (duplicado.length) {
+            return res.status(409).json({
+                ok: false,
+                mensaje: "Ya existe un servicio activo con ese nombre en esta área; no se puede reactivar el registro duplicado."
+            });
+        }
+        const [result] = await db.execute(
+            `UPDATE servicios_catalogo
+             SET activo = 1, fecha_eliminacion = NULL
+             WHERE id = ? AND activo = 0`, [id]
+        );
+        if (!result.affectedRows) {
+            return res.status(409).json({ ok: false, mensaje: "El servicio cambió de estado. Actualiza la lista e inténtalo de nuevo." });
+        }
+        return res.json({ ok: true, mensaje: "Servicio reactivado." });
+    } catch (error) {
+        console.error("Error al reactivar servicio:", error);
+        return res.status(500).json({ ok: false, mensaje: "No fue posible reactivar el servicio." });
+    }
+});
+
 
 /* =========================================================
    REPORTES GENERALES DE COMPROMISOS
