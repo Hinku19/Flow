@@ -457,7 +457,9 @@ async function obtenerCompromisosPendientes(
 
        FechaFinEstimada = 25/09/2026
 
-   y el compromiso tiene Status = 4 (vencido).
+   y el compromiso sigue sin completarse (Status 1 o 2): el
+   "vencido" no se guarda en la tabla, se calcula con la fecha
+   límite (ver SQL_ESTADO_COMPROMISO en server.js).
 
    Se incluyen los compromisos del departamento del líder.
    ========================================================= */
@@ -516,7 +518,7 @@ async function obtenerCompromisosVencidosAyer(
                     INTERVAL 1 DAY
                 )
 
-                AND c.Status = 4
+                AND c.Status IN (1, 2)
 
             ORDER BY
 

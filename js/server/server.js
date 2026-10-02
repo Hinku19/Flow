@@ -3159,7 +3159,7 @@ app.get("/api/reportes/compromisos", async (req, res) => {
         if (colaboradorId && colaboradorId !== "todos" && (!/^\d+$/.test(colaboradorId) || Number(colaboradorId) < 1)) {
             return res.status(400).json({ ok: false, mensaje: "El colaborador seleccionado no es válido." });
         }
-        const estadosPermitidos = ["todos", "pendiente", "en-progreso", "completado", "vencido"];
+        const estadosPermitidos = ["todos", ...ESTADOS_COMPROMISO];
         if (!estados.length || estados.some((estado) => !estadosPermitidos.includes(estado))) {
             return res.status(400).json({ ok: false, mensaje: "El estatus seleccionado no es válido." });
         }
@@ -3193,25 +3193,17 @@ app.get("/api/reportes/compromisos", async (req, res) => {
             condiciones.push("DATE(c.FechaFinEstimada) <= ?");
             parametros.push(hasta);
         }
-        const expresionEstado = `CASE
-            WHEN c.Status IN (1, 2) AND c.FechaFinEstimada IS NOT NULL AND DATE(c.FechaFinEstimada) < CURDATE() THEN 4
-            ELSE c.Status END`;
-        const filtrosEstado = {
-            pendiente: `${expresionEstado} = 1`,
-            "en-progreso": `${expresionEstado} = 2`,
-            completado: "c.Status = 3 AND COALESCE(c.Aprobado, 0) = 1",
-            vencido: `${expresionEstado} = 4`
-        };
         if (!estados.includes("todos")) {
-            const filtrosSeleccionados = estados.map((estado) => filtrosEstado[estado]);
-            condiciones.push(`(${filtrosSeleccionados.join(" OR ")})`);
+            condiciones.push(`(${SQL_ESTADO_COMPROMISO}) IN (${estados.map(() => "?").join(", ")})`);
+            parametros.push(...estados);
         }
 
         const [filas] = await db.execute(
             `SELECT c.CompromisoId AS id, c.Titulo AS titulo, c.Descripcion AS descripcion,
                     c.Prioridad AS prioridad, c.FechaInicioEstimada AS fechaInicio,
                     c.FechaFinEstimada AS fechaLimite, c.FechaFinReal AS fechaCompletado,
-                    ${expresionEstado} AS statusEfectivo, c.Status AS statusOriginal, c.Aprobado AS aprobado,
+                    c.FechaAprobacion AS fechaAprobacion,
+                    ${SQL_ESTADO_COMPROMISO} AS estadoClave, c.Aprobado AS aprobado,
                     u.nombre AS colaborador, u.departamento AS departamento, u.area AS area,
                     r.Titulo AS reunion
              FROM compromisos c
@@ -3221,7 +3213,13 @@ app.get("/api/reportes/compromisos", async (req, res) => {
              ORDER BY u.departamento, u.nombre, c.FechaFinEstimada, c.CompromisoId`,
             parametros
         );
-        const etiquetas = { 1: "Pendiente", 2: "En progreso", 3: "Completado", 4: "Vencido" };
+        const etiquetas = {
+            pendiente: "Pendiente",
+            vencido: "Vencido",
+            "en-revision": "En espera de visto bueno",
+            completado: "Completado",
+            "completado-destiempo": "Completado a destiempo"
+        };
         return res.json({
             ok: true,
             departamento: departamento || "Todos los departamentos",
@@ -3229,9 +3227,7 @@ app.get("/api/reportes/compromisos", async (req, res) => {
             compromisos: filas.map((fila) => ({
                 ...fila,
                 descripcion: fila.descripcion || fila.titulo,
-                estado: Number(fila.statusOriginal) === 3 && !fila.aprobado
-                    ? "En revisión"
-                    : etiquetas[Number(fila.statusEfectivo)] || "Pendiente"
+                estado: etiquetas[fila.estadoClave] || "Pendiente"
             }))
         });
     } catch (error) {
@@ -3338,39 +3334,62 @@ app.get("/api/reportes/innovaciones", async (req, res) => {
    OBTENER TODOS LOS COMPROMISOS
    ========================================================= */
 
+/*
+ * Status 2 ("en progreso") ya no existe como estatus: los
+ * compromisos que lo tengan cuentan como pendientes (ver
+ * js/server/sql/compromisos_estatus_nuevos.sql).
+ */
 const STATUS_A_ESTADO = {
 
     1: "pendiente",
-    2: "en-progreso",
-    4: "vencido"
+    2: "pendiente"
 
 };
 
 
 /*
- * Status 3 ("completado" a nivel de columna) por sí solo no
- * basta: el operador puede reportarlo, pero solo cuenta como
- * completado de verdad cuando el líder de su departamento dio el visto
- * bueno (columna Aprobado). Sin ese visto bueno se muestra
- * como "en-revision", el mismo patrón que 95%/100% en
- * innovaciones (ver /api/innovaciones/estado-mes).
+ * Los 5 estatus de un compromiso, calculados (alias `c` de la
+ * tabla compromisos):
+ *
+ * - pendiente: no completado y dentro de su fecha límite.
+ * - vencido: no completado y la fecha límite ya pasó.
+ * - en-revision: el responsable lo marcó como completado
+ *   (Status 3) y falta el visto bueno del líder (Aprobado), el
+ *   mismo patrón que 95%/100% en innovaciones.
+ * - completado: con visto bueno, y el responsable lo marcó
+ *   (FechaFinReal) a más tardar en su fecha límite.
+ * - completado-destiempo: con visto bueno, pero el responsable
+ *   lo marcó después de la fecha límite.
  */
-function calcularEstadoCompromiso(
-    status,
-    aprobado
-) {
+const SQL_ESTADO_COMPROMISO = `
+    CASE
+        WHEN c.Status = 3
+            AND COALESCE(c.Aprobado, 0) = 1
+            AND c.FechaFinEstimada IS NOT NULL
+            AND c.FechaFinReal IS NOT NULL
+            AND DATE(c.FechaFinReal) > DATE(c.FechaFinEstimada)
+        THEN 'completado-destiempo'
+        WHEN c.Status = 3
+            AND COALESCE(c.Aprobado, 0) = 1
+        THEN 'completado'
+        WHEN c.Status = 3
+        THEN 'en-revision'
+        WHEN c.FechaFinEstimada IS NOT NULL
+            AND DATE(c.FechaFinEstimada) < CURDATE()
+        THEN 'vencido'
+        ELSE 'pendiente'
+    END
+`;
 
-    if (Number(status) === 3) {
 
-        return aprobado
-            ? "completado"
-            : "en-revision";
-
-    }
-
-    return STATUS_A_ESTADO[status] || "pendiente";
-
-}
+const ESTADOS_COMPROMISO =
+    [
+        "pendiente",
+        "vencido",
+        "en-revision",
+        "completado",
+        "completado-destiempo"
+    ];
 
 
 app.get(
@@ -3479,13 +3498,7 @@ app.get(
                         r.FechaInicio AS ReunionFecha,
                         u.id AS UsuarioAsignadoId,
                         u.nombre AS ResponsableNombre,
-                        CASE
-                            WHEN c.Status IN (1, 2)
-                                AND c.FechaFinEstimada IS NOT NULL
-                                AND DATE(c.FechaFinEstimada) < CURDATE()
-                            THEN 4
-                            ELSE c.Status
-                        END AS StatusEfectivo
+                        ${SQL_ESTADO_COMPROMISO} AS Estado
                     FROM compromisos c
                     LEFT JOIN reuniones r
                         ON r.ReunionId = c.ReunionId
@@ -3554,23 +3567,7 @@ app.get(
                             row.FechaFinReal,
 
                         estado:
-                            calcularEstadoCompromiso(
-                                row.StatusEfectivo,
-                                row.Aprobado
-                            ),
-
-                        estadoReal:
-                            calcularEstadoCompromiso(
-                                row.Status,
-                                row.Aprobado
-                            ),
-
-                        /*
-                         * Solo informativo: el estado real se
-                         * conserva en estadoReal.
-                         */
-                        vencido:
-                            Number(row.StatusEfectivo) === 4,
+                            row.Estado,
 
                         aprobado:
                             Boolean(row.Aprobado),
@@ -4077,10 +4074,18 @@ app.patch(
             }
 
 
+            /*
+             * Sin `estado` (p. ej. solo se fija la fecha límite)
+             * se conserva el estatus actual.
+             */
             const estado =
                 String(
                     req.body.estado ||
-                    ""
+                    (
+                        Number(compromisoActual.Status) === 3
+                            ? "completado"
+                            : "pendiente"
+                    )
                 ).trim();
 
 
@@ -4114,16 +4119,19 @@ app.patch(
 
 
             /*
-             * "Completado" desde aquí es solo el reporte del
-             * operador (Status = 3): igual que con las
+             * "Completado" desde aquí es el reporte del
+             * responsable (Status = 3): igual que con las
              * innovaciones, no cuenta como completado de verdad
-             * hasta que el líder de su departamento da el visto bueno
-             * (POST /api/compromisos/:id/aprobar, que es lo
-             * único que puede poner Aprobado = 1). Por eso,
+             * hasta que el líder de su departamento da el visto
+             * bueno (POST /api/compromisos/:id/aprobar). Por eso,
              * cualquier cambio de estado que no sea "seguir
              * completado" reinicia Aprobado/FechaFinReal: hay
              * que volver a aprobarlo si se reabre y se vuelve a
              * marcar como completado.
+             *
+             * FechaFinReal es el momento en que el responsable lo
+             * marca: contra ella se decide si quedó "completado"
+             * o "completado a destiempo".
              */
 
             const nuevoStatus =
@@ -4133,24 +4141,27 @@ app.patch(
                 nuevoStatus === 3 &&
                 Number(compromisoActual.Status) === 3;
 
+            const seCompleta =
+                nuevoStatus === 3 &&
+                !seMantieneCompletado;
+
+
             /*
              * Solo un responsable del compromiso (cualquiera de
-             * ellos: el estado es compartido) o el líder de su
-             * departamento pueden marcarlo como completado (el visto bueno
-             * sigue siendo aparte: POST /api/compromisos/:id/aprobar).
+             * ellos: el estado es compartido) o un administrador
+             * pueden marcarlo como completado. El líder que no es
+             * responsable solo da el visto bueno, una vez que el
+             * responsable lo completó.
              */
 
             const esResponsable =
                 esResponsableDeCompromiso(usuarioSolicitante, compromisoActual);
 
-            const esLiderDelArea =
-                esLiderDeCompromiso(usuarioSolicitante, compromisoActual);
 
             if (
-                nuevoStatus === 3 &&
-                !seMantieneCompletado &&
+                seCompleta &&
                 !esResponsable &&
-                !esLiderDelArea
+                usuarioSolicitante.rol !== "administrador"
             ) {
 
                 return res
@@ -4160,21 +4171,25 @@ app.patch(
                         ok: false,
 
                         mensaje:
-                            "Solo un responsable del compromiso o el líder de su departamento pueden marcarlo como completado."
+                            "Solo un responsable del compromiso puede marcarlo como completado."
 
                     });
 
             }
 
-            const aprobado =
-                seMantieneCompletado
-                    ? Boolean(compromisoActual.Aprobado)
-                    : false;
 
-            const fechaFinReal =
-                seMantieneCompletado
-                    ? compromisoActual.FechaFinReal
-                    : null;
+            /*
+             * Si quien lo completa es líder (o administrador), no
+             * tiene sentido que se dé el visto bueno a sí mismo:
+             * queda aprobado de una vez.
+             */
+
+            const seApruebaDirecto =
+                seCompleta &&
+                (
+                    usuarioSolicitante.rol === "lider" ||
+                    usuarioSolicitante.rol === "administrador"
+                );
 
 
             const [resultado] =
@@ -4184,20 +4199,25 @@ app.patch(
                     SET
                         Status = ?,
                         FechaFinEstimada = COALESCE(FechaFinEstimada, ?),
-                        FechaFinReal = ?,
-                        Aprobado = ?,
-                        FechaAprobacion = CASE WHEN ? THEN FechaAprobacion ELSE NULL END,
-                        AprobadoPor = CASE WHEN ? THEN AprobadoPor ELSE NULL END,
+                        FechaFinReal = CASE WHEN ? THEN FechaFinReal WHEN ? THEN NOW() ELSE NULL END,
+                        Aprobado = CASE WHEN ? THEN Aprobado WHEN ? THEN 1 ELSE 0 END,
+                        FechaAprobacion = CASE WHEN ? THEN FechaAprobacion WHEN ? THEN NOW() ELSE NULL END,
+                        AprobadoPor = CASE WHEN ? THEN AprobadoPor WHEN ? THEN ? ELSE NULL END,
                         FechaActualizacion = NOW()
                     WHERE CompromisoId = ?
                     `,
                     [
                         nuevoStatus,
                         fechaLimite,
-                        fechaFinReal,
-                        aprobado,
                         seMantieneCompletado,
+                        seCompleta,
                         seMantieneCompletado,
+                        seApruebaDirecto,
+                        seMantieneCompletado,
+                        seApruebaDirecto,
+                        seMantieneCompletado,
+                        seApruebaDirecto,
+                        usuarioSolicitante.id,
                         compromisoId
                     ]
                 );
@@ -4395,7 +4415,7 @@ app.post(
                     Aprobado = 1,
                     FechaAprobacion = NOW(),
                     AprobadoPor = ?,
-                    FechaFinReal = NOW(),
+                    FechaFinReal = COALESCE(FechaFinReal, NOW()),
                     FechaActualizacion = NOW()
                 WHERE CompromisoId = ?
                 `,
@@ -5193,6 +5213,7 @@ app.get(
                         r.FechaFin,
                         r.Lugar,
                         r.Estado,
+                        r.FechaFinalizacion,
                         r.FechaRegistro,
                         r.FechaActualizacion,
                         r.UsuarioCreadorId,
@@ -5341,7 +5362,6 @@ app.get(
 const ESTADO_A_STATUS = {
 
     "pendiente": 1,
-    "en-progreso": 2,
     "completado": 3
 
 };
@@ -5730,10 +5750,20 @@ function mensajeFaltaMigracionCompromisos(
 }
 
 
+/*
+ * `previo` (opcional) es la fila que este compromiso ya tenía
+ * en la tabla (ver resincronizarCompromisos): se reinserta con
+ * el mismo CompromisoId, para que el compromiso conserve su
+ * identidad al pasar de una reunión a la siguiente en vez de
+ * duplicarse. También se conservan la fecha límite (solo se
+ * puede establecer una vez) y, si mientras tanto se reportó
+ * como completado desde el módulo, ese avance y su visto bueno.
+ */
 async function insertarCompromiso(
     connection,
     reunionId,
-    compromiso
+    compromiso,
+    previo = null
 ) {
 
     /*
@@ -5817,17 +5847,85 @@ async function insertarCompromiso(
 
 
     /*
-     * FechaFinReal y Aprobado nunca se toman del cliente: aun
-     * si el compromiso ya llega marcado "completado" desde la
-     * reunión, sigue sin contar como completado de verdad hasta
-     * que el líder de su área lo apruebe (ver
+     * Completado dentro de la reunión: FechaFinReal es cuando el
+     * responsable lo marcó (fechaCompletado), contra la que se
+     * decide si quedó a tiempo o a destiempo. Solo cuenta como
+     * aprobado si quien dio el visto bueno (aprobadoPorId, ver
+     * commitmentList.js) es de verdad líder o administrador; si
+     * no, queda en espera de visto bueno (ver
      * POST /api/compromisos/:id/aprobar).
      */
+
+    const fechaCompletado =
+        status === 3 &&
+        compromiso.fechaCompletado
+            ? new Date(compromiso.fechaCompletado)
+            : null;
+
+    const fechaFinReal =
+        status === 3
+            ? (
+                fechaCompletado &&
+                !Number.isNaN(fechaCompletado.getTime())
+                    ? fechaCompletado
+                    : new Date()
+            )
+            : null;
+
+
+    let aprobadorId =
+        null;
+
+    const fechaAprobacionReunion =
+        compromiso.fechaAprobacion
+            ? new Date(compromiso.fechaAprobacion)
+            : null;
+
+    if (
+        status === 3 &&
+        compromiso.aprobado === true &&
+        Number(compromiso.aprobadoPorId)
+    ) {
+
+        const [aprobadores] =
+            await connection.execute(
+                `
+                SELECT id
+                FROM usuarios
+                WHERE
+                    id = ?
+                    AND rol IN ('lider', 'administrador')
+                LIMIT 1
+                `,
+                [
+                    Number(compromiso.aprobadoPorId)
+                ]
+            );
+
+        aprobadorId =
+            aprobadores.length > 0
+                ? aprobadores[0].id
+                : null;
+
+    }
+
+
+    /*
+     * Si mientras tanto se completó (o aprobó) desde el módulo,
+     * se conserva ese avance en vez de lo que diga la reunión.
+     */
+    const conservaCompletado =
+        Number(previo?.Status) === 3 &&
+        (
+            Number(previo.Aprobado) === 1 ||
+            !aprobadorId
+        );
 
     const [resultado] = await connection.execute(
         `
         INSERT INTO compromisos
         (
+            CompromisoId,
             ReunionId,
             Titulo,
             Descripcion,
@@ -5840,14 +5938,17 @@ async function insertarCompromiso(
             FechaFinEstimada,
             Status,
             FechaFinReal,
-            Aprobado
+            Aprobado,
+            FechaAprobacion,
+            AprobadoPor
         )
         VALUES
         (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
         `,
         [
+            previo?.CompromisoId || null,
             reunionId,
             descripcion.slice(0, 250) || "Compromiso",
             descripcion || null,
@@ -5859,10 +5960,33 @@ async function insertarCompromiso(
             deptoArea.areaId,
             compromiso.prioridad || "media",
             compromiso.fechaInicio || null,
-            compromiso.fechaLimite || null,
-            status,
-            null,
-            0
+            previo?.FechaFinEstimada ||
+                compromiso.fechaLimite ||
+                null,
+            conservaCompletado
+                ? 3
+                : status,
+            conservaCompletado
+                ? previo.FechaFinReal
+                : fechaFinReal,
+            conservaCompletado
+                ? previo.Aprobado
+                : (aprobadorId ? 1 : 0),
+            conservaCompletado
+                ? previo.FechaAprobacion
+                : (
+                    aprobadorId
+                        ? (
+                            fechaAprobacionReunion &&
+                            !Number.isNaN(fechaAprobacionReunion.getTime())
+                                ? fechaAprobacionReunion
+                                : new Date()
+                        )
+                        : null
+                ),
+            conservaCompletado
+                ? previo.AprobadoPor
+                : aprobadorId
         ]
     );
 
@@ -5903,14 +6027,16 @@ async function insertarCompromiso(
 async function insertarCompromisoDeReunion(
     connection,
     reunionId,
-    compromiso
+    compromiso,
+    previo = null
 ) {
 
     const insertado =
         await insertarCompromiso(
             connection,
             reunionId,
-            compromiso
+            compromiso,
+            previo
         );
 
 
@@ -5942,11 +6068,74 @@ async function insertarCompromisoDeReunion(
 }
 
 
+/*
+ * Refleja el arreglo de compromisos de una reunión en la tabla
+ * `compromisos` (se borra y reinserta).
+ *
+ * Los heredados de una reunión anterior traen compromisoOrigenId
+ * (su CompromisoId en la tabla, ver heredar-pendientes): en vez
+ * de insertarse como una fila nueva — que dejaba la original de
+ * la reunión anterior y duplicaba el compromiso en la vista
+ * global, una copia más por cada reunión — se reinsertan con su
+ * mismo CompromisoId, ahora como parte de esta reunión.
+ *
+ * Si la fila original ya no existe es porque se eliminó desde
+ * el módulo de compromisos mientras tanto: se respeta y no se
+ * vuelve a crear.
+ */
 async function resincronizarCompromisos(
     connection,
     reunionId,
     compromisos
 ) {
+
+    const origenIds =
+        [
+            ...new Set(
+                compromisos
+                    .map(
+                        (compromiso) =>
+                            Number(compromiso.compromisoOrigenId)
+                    )
+                    .filter(Boolean)
+            )
+        ];
+
+
+    const [filasPrevias] =
+        origenIds.length > 0
+            ? await connection.query(
+                `
+                SELECT
+                    CompromisoId,
+                    FechaFinEstimada,
+                    Status,
+                    FechaFinReal,
+                    Aprobado,
+                    FechaAprobacion,
+                    AprobadoPor
+                FROM compromisos
+                WHERE
+                    CompromisoId IN (?)
+                    AND ReunionId IS NOT NULL
+                `,
+                [
+                    origenIds
+                ]
+            )
+            : [[]];
+
+
+    const previos =
+        new Map(
+            filasPrevias.map(
+                (fila) => [
+                    Number(fila.CompromisoId),
+                    fila
+                ]
+            )
+        );
+
 
     await connection.execute(
         `
@@ -5959,12 +6148,61 @@ async function resincronizarCompromisos(
     );
 
 
+    /*
+     * Las filas heredadas que todavía están en la reunión
+     * anterior se borran aquí y se reinsertan abajo, con el
+     * mismo CompromisoId, en esta reunión.
+     */
+    if (previos.size > 0) {
+
+        await connection.query(
+            `
+            DELETE FROM compromisos
+            WHERE CompromisoId IN (?)
+            `,
+            [
+                [...previos.keys()]
+            ]
+        );
+
+    }
+
+
+    const origenesUsados =
+        new Set();
+
+
     for (const compromiso of compromisos) {
+
+        const compromisoOrigenId =
+            Number(
+                compromiso.compromisoOrigenId
+            );
+
+
+        if (compromisoOrigenId) {
+
+            if (
+                !previos.has(compromisoOrigenId) ||
+                origenesUsados.has(compromisoOrigenId)
+            ) {
+
+                continue;
+
+            }
+
+            origenesUsados.add(
+                compromisoOrigenId
+            );
+
+        }
+
 
         await insertarCompromisoDeReunion(
             connection,
             reunionId,
-            compromiso
+            compromiso,
+            previos.get(compromisoOrigenId) || null
         );
 
     }
@@ -5976,25 +6214,6 @@ async function migrarCompromisosATabla(
     connection,
     reunionId
 ) {
-
-    /*
-     * Idempotente a propósito: si esta función llegara a
-     * correr más de una vez para la misma reunión (doble
-     * clic en "Terminar", reintento, etc.), sin este borrado
-     * cada corrida agregaría una copia extra de los mismos
-     * compromisos.
-     */
-
-    await connection.execute(
-        `
-        DELETE FROM compromisos
-        WHERE ReunionId = ?
-        `,
-        [
-            reunionId
-        ]
-    );
-
 
     const [seccionRows] =
         await connection.execute(
@@ -6012,15 +6231,10 @@ async function migrarCompromisosATabla(
         );
 
 
-    if (seccionRows.length === 0) {
-
-        return;
-
-    }
-
-
     let contenido =
-        seccionRows[0].Contenido;
+        seccionRows.length > 0
+            ? seccionRows[0].Contenido
+            : [];
 
 
     if (typeof contenido === "string") {
@@ -6047,22 +6261,21 @@ async function migrarCompromisosATabla(
     }
 
 
-    if (!Array.isArray(contenido)) {
+    /*
+     * Idempotente a propósito: resincronizarCompromisos borra
+     * y reinserta, así que si esta función llegara a correr más
+     * de una vez para la misma reunión (doble clic en
+     * "Terminar", reintento, etc.) no agrega copias extra de
+     * los mismos compromisos.
+     */
 
-        return;
-
-    }
-
-
-    for (const compromiso of contenido) {
-
-        await insertarCompromisoDeReunion(
-            connection,
-            reunionId,
-            compromiso
-        );
-
-    }
+    await resincronizarCompromisos(
+        connection,
+        reunionId,
+        Array.isArray(contenido)
+            ? contenido
+            : []
+    );
 
 }
 
@@ -6473,53 +6686,18 @@ const NOMBRE_LEGACY_A_USUARIO_ID = {
 
 
 /*
- * Compromisos creados desde el módulo (ReunionId NULL) que
- * siguen abiertos (pendiente / en progreso) y cuyo responsable
- * es del mismo equipo (departamento y área) que el creador de
- * la reunión destino: el mismo criterio de "equipo" con el que
- * se elige la reunión de origen.
- *
- * Se convierten al formato JSON de la sección de compromisos,
- * guardando compromisoModuloId para que al finalizar la reunión
- * se borre la fila original (ver insertarCompromisoDeReunion).
+ * Convierte filas de la tabla `compromisos` al formato JSON de
+ * la sección de compromisos de una reunión, guardando su
+ * CompromisoId en `llaveOrigen` (compromisoModuloId o
+ * compromisoOrigenId) para que, al finalizar la reunión que los
+ * hereda, no se dupliquen (ver resincronizarCompromisos e
+ * insertarCompromisoDeReunion).
  */
-async function obtenerCompromisosModuloPendientes(
+async function filasACompromisosHeredados(
     connection,
-    usuarioCreadorId
+    rows,
+    llaveOrigen
 ) {
-
-    const [rows] =
-        await connection.execute(
-            `
-            SELECT
-                c.CompromisoId,
-                c.Titulo,
-                c.Descripcion,
-                c.PersonasInvolucradas,
-                c.Prioridad,
-                c.Status,
-                DATE_FORMAT(c.FechaInicioEstimada, '%Y-%m-%d') AS FechaInicio,
-                DATE_FORMAT(c.FechaFinEstimada, '%Y-%m-%d') AS FechaLimite,
-                u.id AS UsuarioAsignadoId,
-                u.nombre AS ResponsableNombre
-            FROM compromisos c
-            INNER JOIN usuarios u
-                ON u.id = c.UsuarioAsignadoId
-            INNER JOIN usuarios uDestino
-                ON uDestino.id = ?
-            WHERE
-                c.ReunionId IS NULL
-                AND c.Status IN (1, 2)
-                AND u.departamento = uDestino.departamento
-                AND u.area = uDestino.area
-            ORDER BY
-                c.FechaFinEstimada ASC
-            `,
-            [
-                usuarioCreadorId
-            ]
-        );
-
 
     const responsablesPorCompromiso =
         await cargarResponsablesDeCompromisos(
@@ -6540,7 +6718,7 @@ async function obtenerCompromisosModuloPendientes(
                 id:
                     crypto.randomUUID(),
 
-                compromisoModuloId:
+                [llaveOrigen]:
                     row.CompromisoId,
 
                 descripcion:
@@ -6590,6 +6768,139 @@ async function obtenerCompromisosModuloPendientes(
             };
 
         }
+    );
+
+}
+
+
+/*
+ * Compromisos de la reunión de origen que siguen abiertos
+ * (pendiente / en progreso), leídos de la tabla `compromisos`
+ * y no del JSON de reunion_secciones: la tabla refleja lo que
+ * se haya cambiado desde el módulo después de la reunión (p. ej.
+ * un compromiso ya completado ahí no se vuelve a heredar como
+ * pendiente).
+ *
+ * Devuelve null si la reunión no tiene ninguna fila en la tabla
+ * (reuniones viejas, de antes de migrar compromisos a la tabla):
+ * en ese caso se hereda del JSON como antes.
+ */
+async function obtenerCompromisosReunionPendientes(
+    connection,
+    reunionOrigenId
+) {
+
+    const [totalRows] =
+        await connection.execute(
+            `
+            SELECT COUNT(*) AS Total
+            FROM compromisos
+            WHERE ReunionId = ?
+            `,
+            [
+                reunionOrigenId
+            ]
+        );
+
+
+    if (Number(totalRows[0].Total) === 0) {
+
+        return null;
+
+    }
+
+
+    const [rows] =
+        await connection.execute(
+            `
+            SELECT
+                c.CompromisoId,
+                c.Titulo,
+                c.Descripcion,
+                c.PersonasInvolucradas,
+                c.Prioridad,
+                c.Status,
+                DATE_FORMAT(c.FechaInicioEstimada, '%Y-%m-%d') AS FechaInicio,
+                DATE_FORMAT(c.FechaFinEstimada, '%Y-%m-%d') AS FechaLimite,
+                u.id AS UsuarioAsignadoId,
+                u.nombre AS ResponsableNombre
+            FROM compromisos c
+            INNER JOIN usuarios u
+                ON u.id = c.UsuarioAsignadoId
+            WHERE
+                c.ReunionId = ?
+                AND c.Status IN (1, 2)
+            ORDER BY
+                c.CompromisoId ASC
+            `,
+            [
+                reunionOrigenId
+            ]
+        );
+
+
+    return filasACompromisosHeredados(
+        connection,
+        rows,
+        "compromisoOrigenId"
+    );
+
+}
+
+
+/*
+ * Compromisos creados desde el módulo (ReunionId NULL) que
+ * siguen abiertos (pendiente / en progreso) y cuyo responsable
+ * es del mismo equipo (departamento y área) que el creador de
+ * la reunión destino: el mismo criterio de "equipo" con el que
+ * se elige la reunión de origen.
+ *
+ * Se convierten al formato JSON de la sección de compromisos,
+ * guardando compromisoModuloId para que al finalizar la reunión
+ * se borre la fila original (ver insertarCompromisoDeReunion).
+ */
+async function obtenerCompromisosModuloPendientes(
+    connection,
+    usuarioCreadorId
+) {
+
+    const [rows] =
+        await connection.execute(
+            `
+            SELECT
+                c.CompromisoId,
+                c.Titulo,
+                c.Descripcion,
+                c.PersonasInvolucradas,
+                c.Prioridad,
+                c.Status,
+                DATE_FORMAT(c.FechaInicioEstimada, '%Y-%m-%d') AS FechaInicio,
+                DATE_FORMAT(c.FechaFinEstimada, '%Y-%m-%d') AS FechaLimite,
+                u.id AS UsuarioAsignadoId,
+                u.nombre AS ResponsableNombre
+            FROM compromisos c
+            INNER JOIN usuarios u
+                ON u.id = c.UsuarioAsignadoId
+            INNER JOIN usuarios uDestino
+                ON uDestino.id = ?
+            WHERE
+                c.ReunionId IS NULL
+                AND c.Status IN (1, 2)
+                AND u.departamento = uDestino.departamento
+                AND u.area = uDestino.area
+            ORDER BY
+                c.FechaFinEstimada ASC
+            `,
+            [
+                usuarioCreadorId
+            ]
+        );
+
+
+    return filasACompromisosHeredados(
+        connection,
+        rows,
+        "compromisoModuloId"
     );
 
 }
@@ -6979,18 +7290,34 @@ app.post(
                COMPROMISOS PENDIENTES (con id nuevo)
                ================================================= */
 
-            let compromisosNuevos =
-                [];
-
             /*
-             * Los compromisos vencidos (vencidoInformativo === true)
-             * se siguen heredando reunión tras reunión mientras no
-             * se marquen como completados: solo "estado === completado"
-             * los saca de la herencia.
+             * Los compromisos vencidos se siguen heredando reunión
+             * tras reunión mientras no se marquen como completados:
+             * solo completarlos los saca de la herencia.
+             *
+             * Se leen de la tabla (ver
+             * obtenerCompromisosReunionPendientes); el JSON de la
+             * reunión de origen solo se usa con reuniones viejas
+             * que no tienen sus compromisos en la tabla.
              */
 
-            const compromisosOrigen =
+            const compromisosOrigenTabla =
                 heredarCompromisos
+                    ? await obtenerCompromisosReunionPendientes(
+                        connection,
+                        reunionOrigenId
+                    )
+                    : null;
+
+
+            let compromisosNuevos =
+                compromisosOrigenTabla ||
+                [];
+
+
+            const compromisosOrigen =
+                heredarCompromisos &&
+                !compromisosOrigenTabla
                     ? (
                         Array.isArray(compromisos)
                             ? compromisos
@@ -8934,6 +9261,91 @@ app.delete(
                     : null;
 
 
+            /*
+             * Los compromisos heredados (compromisoOrigenId) se
+             * mudaron a esta reunión con su mismo CompromisoId al
+             * finalizarla (ver resincronizarCompromisos): en vez
+             * de borrarlos con ella, regresan a la reunión de
+             * origen, que es de donde se volverán a heredar.
+             */
+
+            if (pendientesOrigenId) {
+
+                const [seccionCompromisosRows] =
+                    await connection.execute(
+                        `
+                        SELECT Seccion, Contenido
+                        FROM reunion_secciones
+                        WHERE
+                            ReunionId = ?
+                            AND Seccion = 'compromisos'
+                        `,
+                        [
+                            reunionId
+                        ]
+                    );
+
+
+                let compromisosSeccion =
+                    [];
+
+                try {
+
+                    compromisosSeccion =
+                        contenidoDeSeccion(
+                            seccionCompromisosRows,
+                            "compromisos",
+                            []
+                        );
+
+                }
+                catch (error) {
+
+                    console.error(
+                        "ERROR PARSEANDO COMPROMISOS AL ELIMINAR REUNIÓN:",
+                        error
+                    );
+
+                }
+
+
+                const heredadosIds =
+                    (
+                        Array.isArray(compromisosSeccion)
+                            ? compromisosSeccion
+                            : []
+                    )
+                        .map(
+                            (compromiso) =>
+                                Number(compromiso.compromisoOrigenId)
+                        )
+                        .filter(Boolean);
+
+
+                if (heredadosIds.length > 0) {
+
+                    await connection.query(
+                        `
+                        UPDATE compromisos c
+                        INNER JOIN reuniones rOrigen
+                            ON rOrigen.ReunionId = ?
+                        SET c.ReunionId = rOrigen.ReunionId
+                        WHERE
+                            c.ReunionId = ?
+                            AND c.CompromisoId IN (?)
+                        `,
+                        [
+                            pendientesOrigenId,
+                            reunionId,
+                            heredadosIds
+                        ]
+                    );
+
+                }
+
+            }
+
+
             await connection.execute(
                 `
                 DELETE FROM compromisos
@@ -9383,6 +9795,69 @@ app.post(
             }
 
 
+            /*
+             * Acciones 6 a 10 (opcionales): llegan como un arreglo
+             * JSON en `accionesExtra` y se guardan en la columna
+             * acciones_extra (ver
+             * js/server/sql/innovaciones_acciones_extra.sql).
+             */
+            let accionesExtra;
+
+            try {
+
+                accionesExtra =
+                    JSON.parse(
+                        campos.accionesExtra ||
+                        "[]"
+                    );
+
+            }
+            catch (error) {
+
+                accionesExtra =
+                    null;
+
+            }
+
+            if (!Array.isArray(accionesExtra)) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Las acciones adicionales no son válidas."
+
+                    });
+
+            }
+
+            accionesExtra =
+                accionesExtra
+                    .map(
+                        (accion) =>
+                            String(accion ?? "").trim()
+                    )
+                    .filter(Boolean);
+
+            if (accionesExtra.length > MAX_ACCIONES_EXTRA_INNOVACION) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            `Se pueden capturar como máximo ${5 + MAX_ACCIONES_EXTRA_INNOVACION} acciones.`
+
+                    });
+
+            }
+
+
             let vpnDatos;
 
             try {
@@ -9455,10 +9930,12 @@ app.post(
                         accion_4,
                         accion_5,
                         justificacion_valuacion
+                        ${accionesExtra.length > 0 ? ", acciones_extra" : ""}
                     )
                     VALUES
                     (
                         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                        ${accionesExtra.length > 0 ? ", ?" : ""}
                     )
                     `,
                     [
@@ -9479,7 +9956,12 @@ app.post(
                         campos.accion3.trim(),
                         campos.accion4 ? campos.accion4.trim() : null,
                         campos.accion5 ? campos.accion5.trim() : null,
-                        campos.justificacion.trim()
+                        campos.justificacion.trim(),
+                        ...(
+                            accionesExtra.length > 0
+                                ? [JSON.stringify(accionesExtra)]
+                                : []
+                        )
                     ]
                 );
 
@@ -9665,7 +10147,10 @@ return res
                     ok: false,
 
                     mensaje:
-                        "Error interno al registrar la innovación.",
+                        error?.code === "ER_BAD_FIELD_ERROR" &&
+                        String(error.message).includes("acciones_extra")
+                            ? "La base de datos aún no permite más de 5 acciones. Ejecuta js/server/sql/innovaciones_acciones_extra.sql."
+                            : "Error interno al registrar la innovación.",
 
                     error:
                         error.message
@@ -9965,6 +10450,46 @@ app.get(
    de archivos adjuntos, para el visor de detalle.
    ========================================================= */
 
+/*
+ * Acciones 6 a 10 de una innovación (columna acciones_extra,
+ * JSON). Si la columna todavía no existe (falta la migración) o
+ * viene vacía, no hay acciones extra.
+ */
+const MAX_ACCIONES_EXTRA_INNOVACION =
+    5;
+
+
+function parsearAccionesExtra(
+    valor
+) {
+
+    if (!valor) {
+
+        return [];
+
+    }
+
+    try {
+
+        const acciones =
+            typeof valor === "string"
+                ? JSON.parse(valor)
+                : valor;
+
+        return Array.isArray(acciones)
+            ? acciones.map((accion) => String(accion ?? "").trim()).filter(Boolean)
+            : [];
+
+    }
+    catch (error) {
+
+        return [];
+
+    }
+
+}
+
+
 app.get(
     "/api/innovaciones/:id",
     async (req, res) => {
@@ -10107,7 +10632,10 @@ app.get(
                             innovacion.accion_2,
                             innovacion.accion_3,
                             innovacion.accion_4,
-                            innovacion.accion_5
+                            innovacion.accion_5,
+                            ...parsearAccionesExtra(
+                                innovacion.acciones_extra
+                            )
                         ].filter(Boolean),
 
                     justificacionValuacion:

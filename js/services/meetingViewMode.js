@@ -29,7 +29,7 @@ export function initMeetingViewMode() {
 
   if (!body || !toggleBtn || !pager || !label || !btnAnterior || !btnSiguiente) {
     console.warn("No se encontraron los elementos del modo horizontal de la reunión.");
-    return { reiniciar: () => {} };
+    return { reiniciar: () => {}, irASeccion: () => {} };
   }
 
   /*
@@ -104,7 +104,22 @@ export function initMeetingViewMode() {
     aplicar();
   }
 
+  /*
+   * En modo horizontal, muestra la sección indicada (p. ej.
+   * "desarrollo" al llegar con doble clic desde Objetivos);
+   * en modo normal no hace nada, todas están visibles.
+   */
+  function irASeccion(id) {
+    if (!horizontal) return;
+
+    const nuevoIndice = secciones.findIndex((seccion) => seccion.id === id);
+    if (nuevoIndice === -1) return;
+
+    indice = nuevoIndice;
+    aplicar();
+  }
+
   aplicar();
 
-  return { reiniciar };
+  return { reiniciar, irASeccion };
 }

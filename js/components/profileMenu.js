@@ -293,16 +293,22 @@ export function initProfileMenu() {
      * Los accesos rápidos usan data-view (los navega el
      * listener global de main.js): aquí solo se cierra el
      * diálogo para que no quede flotando sobre la vista nueva.
+     *
+     * En fase de captura (true): el listener de main.js hace
+     * stopPropagation(), así que en burbujeo este nunca se
+     * ejecutaba y el diálogo (showModal) se quedaba encima de la
+     * vista a la que sí se había navegado.
      */
     dialogo.addEventListener(
         "click",
         (event) => {
 
-            if (event.target.matches("[data-view]")) {
+            if (event.target.closest("[data-view]")) {
                 dialogo.close();
             }
 
-        }
+        },
+        true
     );
 
 
@@ -365,10 +371,15 @@ export function initProfileMenu() {
 
                 };
 
+            const estaCompletado =
+                (compromiso) =>
+                    compromiso.estado === "completado" ||
+                    compromiso.estado === "completado-destiempo";
+
             const completados =
                 propios.filter(
                     (compromiso) =>
-                        compromiso.estado === "completado" &&
+                        estaCompletado(compromiso) &&
                         enMesActual(
                             compromiso.fechaCompletado ||
                             compromiso.fechaLimite
@@ -378,7 +389,7 @@ export function initProfileMenu() {
             const pendientes =
                 propios.filter(
                     (compromiso) =>
-                        compromiso.estado !== "completado" &&
+                        !estaCompletado(compromiso) &&
                         enMesActual(
                             compromiso.fechaLimite
                         )

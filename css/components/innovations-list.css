@@ -18,6 +18,42 @@
     color: var(--color-text);
 }
 
+/* Pestañas por mes (Innovaciones del mes) */
+
+.innovations-list__tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-md);
+}
+
+.innovations-list__tabs[hidden] {
+    display: none;
+}
+
+.innovations-list__tab {
+    padding: var(--space-2xs) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: none;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.innovations-list__tab:hover {
+    border-color: var(--color-progress);
+    color: var(--color-progress);
+}
+
+.innovations-list__tab--activo {
+    background-color: var(--color-progress);
+    border-color: var(--color-progress);
+    color: var(--color-text);
+}
+
 .innovations-list__filters {
     margin-bottom: var(--space-lg);
 }

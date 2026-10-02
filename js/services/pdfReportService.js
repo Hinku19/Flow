@@ -15,6 +15,12 @@ import {
     textoInvolucrados
 } from "../utils/responsables.js";
 
+import {
+    ESTADO_LABEL,
+    estadoCompromiso,
+    textoFechasCompromiso
+} from "../components/commitmentList.js";
+
 async function convertirImagenADataURL(url) {
 
     const response = await fetch(url);
@@ -547,8 +553,17 @@ export async function generarHTMLReunionPDF(
 
                                 <td>
                                     ${texto(
-                                        compromiso.estado
+                                        ESTADO_LABEL[
+                                            estadoCompromiso(
+                                                compromiso
+                                            )
+                                        ]
                                     )}
+                                    ${
+                                        textoFechasCompromiso(compromiso)
+                                            ? `<br><small>${escaparHTML(textoFechasCompromiso(compromiso))}</small>`
+                                            : ""
+                                    }
                                 </td>
 
                             </tr>

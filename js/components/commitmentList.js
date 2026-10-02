@@ -9,11 +9,61 @@ import { generarUUID } from "../utils/generarUUID.js";
 
 export const ESTADO_LABEL = {
   "pendiente": "Pendiente",
-  "en-progreso": "En progreso",
+  "vencido": "Vencido",
   "en-revision": "En espera de visto bueno",
   "completado": "Completado",
-  "vencido": "Vencido",
+  "completado-destiempo": "Completado a destiempo",
 };
+
+function fechaLocalISO(fecha) {
+  const d = new Date(fecha);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+/*
+ * Estatus visible de un compromiso de la reunión (mismo criterio
+ * que el servidor, ver SQL_ESTADO_COMPROMISO en server.js). En el
+ * JSON solo se guarda "pendiente"/"completado" más `aprobado`; el
+ * resto se calcula: a tiempo o a destiempo según la fecha en que
+ * el responsable lo marcó (fechaCompletado) contra la fecha límite.
+ */
+export function estadoCompromiso(data) {
+  if (data.estado === "completado") {
+    if (!data.aprobado) return "en-revision";
+
+    const completadoEl = data.fechaCompletado ? fechaLocalISO(data.fechaCompletado) : "";
+
+    return data.fechaLimite && completadoEl && completadoEl > data.fechaLimite
+      ? "completado-destiempo"
+      : "completado";
+  }
+
+  return data.fechaLimite && data.fechaLimite < fechaLocalISO(new Date())
+    ? "vencido"
+    : "pendiente";
+}
+
+/*
+ * "Completado: ... · Visto bueno: ..." para vistas de solo
+ * lectura (Archivo, PDF de la reunión).
+ */
+export function textoFechasCompromiso(data) {
+  if (data.estado !== "completado") return "";
+
+  return [
+    data.fechaCompletado ? `Completado: ${formatearFechaCompletado(data.fechaCompletado)}` : "",
+    data.aprobado && data.fechaAprobacion ? `Visto bueno: ${formatearFechaCompletado(data.fechaAprobacion)}` : "",
+  ].filter(Boolean).join(" · ");
+}
+
+function esLiderOAdmin(usuario) {
+  return usuario?.rol === "lider" || usuario?.rol === "administrador";
+}
 
 export const PRIORIDAD_LABEL = {
   "alta": "Prioridad alta",
@@ -86,13 +136,15 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
 
   /*
    * Solo un responsable del compromiso (cualquiera, si tiene
-   * varios) o un líder pueden marcarlo como completado.
+   * varios) o un administrador pueden marcarlo como completado.
+   * El líder que no es responsable solo da el visto bueno, una
+   * vez que el responsable lo completó.
    */
   function puedeCompletar(data) {
     const usuario = getUsuarioActual();
 
     return (
-      usuario?.rol === "lider" ||
+      usuario?.rol === "administrador" ||
       esResponsable(data, usuario?.id)
     );
   }
@@ -119,10 +171,12 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     const actions = document.createElement("div");
     actions.classList.add("commitment-card__actions");
 
+    const estado = estadoCompromiso(data);
+
     const badge = document.createElement("span");
     badge.classList.add("commitment-card__badge");
-    badge.classList.add(`commitment-card__badge--${data.vencidoInformativo ? "vencido" : data.estado}`);
-    badge.textContent = data.vencidoInformativo ? "Vencido" : ESTADO_LABEL[data.estado];
+    badge.classList.add(`commitment-card__badge--${estado}`);
+    badge.textContent = ESTADO_LABEL[estado];
 
     actions.append(badge);
 
@@ -138,10 +192,7 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     header.append(title, actions);
     card.append(header);
 
-    if (
-      (data.vencidoInformativo || data.estado !== "completado") &&
-      puedeCompletar(data)
-    ) {
+    if (data.estado !== "completado" && puedeCompletar(data)) {
       const completeBtn = document.createElement("button");
       completeBtn.type = "button";
       completeBtn.classList.add("commitment-card__complete-vencido");
@@ -149,9 +200,17 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
       card.append(completeBtn);
     }
 
+    if (estado === "en-revision" && esLiderOAdmin(getUsuarioActual())) {
+      const aprobarBtn = document.createElement("button");
+      aprobarBtn.type = "button";
+      aprobarBtn.classList.add("commitments-view__aprobar");
+      aprobarBtn.textContent = "Dar visto bueno";
+      card.append(aprobarBtn);
+    }
+
     const meta = document.createElement("div");
     meta.classList.add("commitment-card__meta");
-    meta.textContent = `${nombresResponsables(data) || "?"} · ${data.fechaInicio || "?"} → ${data.fechaLimite || "?"} · ${data.vencidoInformativo ? "Vencido de la reunión anterior" : ESTADO_LABEL[data.estado]} · ${PRIORIDAD_LABEL[data.prioridad]}`;
+    meta.textContent = `${nombresResponsables(data) || "?"} · ${data.fechaInicio || "?"} → ${data.fechaLimite || "?"} · ${data.vencidoInformativo ? "Vencido de la reunión anterior" : ESTADO_LABEL[estado]} · ${PRIORIDAD_LABEL[data.prioridad]}`;
 
     card.append(meta);
 
@@ -162,11 +221,22 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
       card.append(involucrados);
     }
 
+    /*
+     * Dos fechas: cuando el responsable lo marcó como completado
+     * y cuando el líder dio el visto bueno.
+     */
     if (data.estado === "completado" && data.fechaCompletado) {
       const completado = document.createElement("div");
       completado.classList.add("commitment-card__completado");
       completado.textContent = `Completado: ${formatearFechaCompletado(data.fechaCompletado)}`;
       card.append(completado);
+    }
+
+    if (data.estado === "completado" && data.aprobado && data.fechaAprobacion) {
+      const vistoBueno = document.createElement("div");
+      vistoBueno.classList.add("commitment-card__completado");
+      vistoBueno.textContent = `Visto bueno: ${formatearFechaCompletado(data.fechaAprobacion)}`;
+      card.append(vistoBueno);
     }
 
     return card;
@@ -211,7 +281,7 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
   }
 
   function addCommitment(data) {
-    items.push({ id: generarUUID(), ...data });
+    items.push({ id: generarUUID(), estado: "pendiente", ...data });
     render();
   }
 
@@ -230,6 +300,7 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
           : dejaDeCompletado
             ? null
             : item.fechaCompletado,
+        ...(dejaDeCompletado ? { aprobado: false, aprobadoPorId: null, fechaAprobacion: null } : {}),
       };
     });
     render();
@@ -241,12 +312,39 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
   }
 
   /*
-   * Marca un compromiso vencido (heredado de una reunión anterior)
-   * como completado: deja de mostrarse como "Vencido" y ya no se
-   * vuelve a heredar en la siguiente reunión (ver server.js).
+   * El responsable lo marca como completado: queda en espera del
+   * visto bueno, salvo que quien lo marca sea líder (o
+   * administrador), que no se da el visto bueno a sí mismo y
+   * queda aprobado de una vez. Ya no se vuelve a heredar en la
+   * siguiente reunión (ver server.js).
    */
-  function completarVencido(id) {
-    updateCommitment(id, { estado: "completado", vencidoInformativo: false });
+  function completarCompromiso(id) {
+    const usuario = getUsuarioActual();
+
+    updateCommitment(id, {
+      estado: "completado",
+      vencidoInformativo: false,
+      ...(esLiderOAdmin(usuario)
+        ? { aprobado: true, aprobadoPorId: usuario.id, fechaAprobacion: new Date().toISOString() }
+        : {}),
+    });
+  }
+
+  /*
+   * Visto bueno del líder dentro de la reunión: al finalizarla,
+   * el servidor valida que aprobadoPorId sea de verdad líder o
+   * administrador (ver insertarCompromiso en server.js).
+   */
+  function darVistoBueno(id) {
+    const usuario = getUsuarioActual();
+
+    if (!esLiderOAdmin(usuario)) return;
+
+    updateCommitment(id, {
+      aprobado: true,
+      aprobadoPorId: usuario.id,
+      fechaAprobacion: new Date().toISOString(),
+    });
   }
 
   /*
@@ -266,7 +364,6 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
       descripcion: formData.get("descripcion").trim(),
       fechaInicio: formData.get("fechaInicio"),
       fechaLimite: formData.get("fechaLimite"),
-      estado: formData.get("estado"),
       prioridad: formData.get("prioridad"),
 
     };
@@ -280,7 +377,6 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     form.elements.fechaLimite.value = data.fechaLimite || "";
     // Una vez establecida, la fecha límite ya no se puede cambiar.
     form.elements.fechaLimite.readOnly = Boolean(data.fechaLimite);
-    form.elements.estado.value = data.estado;
     form.elements.prioridad.value = data.prioridad;
   }
 
@@ -356,21 +452,6 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
       return;
     }
 
-    const original = items.find((item) => item.id === editingId);
-    const seCompleta =
-      data.estado === "completado" &&
-      original?.estado !== "completado";
-
-    if (seCompleta && !puedeCompletar({ ...original, ...data })) {
-      avisoDialog("Solo el responsable del compromiso o un líder pueden marcarlo como completado.");
-      return;
-    }
-
-    if (editingId === null && data.estado === "completado" && !puedeCompletar(data)) {
-      avisoDialog("Solo el responsable del compromiso o un líder pueden marcarlo como completado.");
-      return;
-    }
-
     if (editingId === null) {
       addCommitment(data);
 
@@ -405,7 +486,12 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     }
 
     if (event.target.matches(".commitment-card__complete-vencido")) {
-      completarVencido(card.dataset.id);
+      completarCompromiso(card.dataset.id);
+      return;
+    }
+
+    if (event.target.matches(".commitments-view__aprobar")) {
+      darVistoBueno(card.dataset.id);
     }
   });
 

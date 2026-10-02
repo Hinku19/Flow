@@ -16,6 +16,10 @@ import {
     avisoDialog
 } from "../services/confirmDialog.js";
 
+import {
+    capitalizar
+} from "../utils/capitalize.js";
+
 
 export function initInnovationsList({
 
@@ -34,7 +38,19 @@ export function initInnovationsList({
         "#filtro-innovaciones-texto",
 
     soloMesActual =
-        false
+        false,
+
+    /*
+     * Con soloMesActual, contenedor donde se pintan las
+     * pestañas por mes: el mes actual y cada mes anterior
+     * que tenga al menos una innovación registrada.
+     */
+
+    pestanasSelector =
+        null,
+
+    tituloSelector =
+        null
 
 } = {}) {
 
@@ -49,6 +65,20 @@ export function initInnovationsList({
 
     const filtroTexto =
         document.querySelector(filtroSelector);
+
+    const pestanas =
+        pestanasSelector
+            ? document.querySelector(pestanasSelector)
+            : null;
+
+    const titulo =
+        tituloSelector
+            ? document.querySelector(tituloSelector)
+            : null;
+
+    const textoEmptyOriginal =
+        empty?.querySelector("p")?.textContent.trim() ||
+        "";
 
 
     if (!grid) {
@@ -69,6 +99,13 @@ export function initInnovationsList({
        ===================================================== */
 
     let innovaciones = [];
+
+    /*
+     * Mes elegido en las pestañas, como "AAAA-MM".
+     * null = mes actual.
+     */
+
+    let mesSeleccionado = null;
 
 
     /* =====================================================
@@ -140,6 +177,14 @@ export function initInnovationsList({
                 data.innovaciones ||
                 [];
 
+            if (soloMesActual) {
+
+                renderPestanas();
+
+                actualizarTextos();
+
+            }
+
             aplicarFiltro();
 
         }
@@ -182,24 +227,204 @@ export function initInnovationsList({
        FILTRO
        ===================================================== */
 
-    function esDeEsteMes(
+    function claveMes(
+        fecha
+    ) {
+
+        return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`;
+
+    }
+
+
+    function claveMesInnovacion(
         innovacion
     ) {
 
-        if (!innovacion.fechaCreacion) return false;
+        if (!innovacion.fechaCreacion) return null;
 
         const fecha =
             new Date(innovacion.fechaCreacion);
 
-        if (Number.isNaN(fecha.getTime())) return false;
+        if (Number.isNaN(fecha.getTime())) return null;
 
-        const hoy =
-            new Date();
-
-        return (
-            fecha.getFullYear() === hoy.getFullYear() &&
-            fecha.getMonth() === hoy.getMonth()
+        return claveMes(
+            fecha
         );
+
+    }
+
+
+    function claveMesActual() {
+
+        return claveMes(
+            new Date()
+        );
+
+    }
+
+
+    function nombreMes(
+        clave
+    ) {
+
+        const [anio, mes] =
+            clave.split("-").map(Number);
+
+        return capitalizar(
+            new Date(anio, mes - 1, 1).toLocaleDateString(
+                "es-MX",
+                {
+                    month:
+                        "long",
+                    year:
+                        "numeric"
+                }
+            )
+        );
+
+    }
+
+
+    function mesVisible() {
+
+        return mesSeleccionado ||
+            claveMesActual();
+
+    }
+
+
+    function esDelMesVisible(
+        innovacion
+    ) {
+
+        return claveMesInnovacion(innovacion) === mesVisible();
+
+    }
+
+
+    /* =====================================================
+       PESTAÑAS POR MES
+       ===================================================== */
+
+    function renderPestanas() {
+
+        if (!pestanas) return;
+
+        const actual =
+            claveMesActual();
+
+        /*
+         * El mes actual siempre aparece (aunque todavía no
+         * tenga innovaciones); los anteriores, solo si
+         * tienen alguna. Del más reciente al más antiguo.
+         */
+
+        const meses =
+            [
+                ...new Set(
+                    [
+                        actual,
+                        ...innovaciones
+                            .map(claveMesInnovacion)
+                            .filter(
+                                (clave) =>
+                                    clave &&
+                                    clave <= actual
+                            )
+                    ]
+                )
+            ].sort().reverse();
+
+
+        if (!meses.includes(mesVisible())) {
+
+            mesSeleccionado = null;
+
+        }
+
+
+        pestanas.replaceChildren();
+
+        pestanas.hidden =
+            meses.length <= 1;
+
+
+        meses.forEach(
+            (clave) => {
+
+                const boton =
+                    document.createElement(
+                        "button"
+                    );
+
+                const activo =
+                    clave === mesVisible();
+
+                boton.type =
+                    "button";
+
+                boton.classList.add(
+                    "innovations-list__tab"
+                );
+
+                boton.classList.toggle(
+                    "innovations-list__tab--activo",
+                    activo
+                );
+
+                boton.setAttribute(
+                    "role",
+                    "tab"
+                );
+
+                boton.setAttribute(
+                    "aria-selected",
+                    String(activo)
+                );
+
+                boton.dataset.mes =
+                    clave;
+
+                boton.textContent =
+                    clave === actual
+                        ? `Este mes (${nombreMes(clave)})`
+                        : nombreMes(clave);
+
+                pestanas.appendChild(
+                    boton
+                );
+
+            }
+        );
+
+    }
+
+
+    function actualizarTextos() {
+
+        const esMesActual =
+            mesVisible() === claveMesActual();
+
+        if (titulo) {
+
+            titulo.textContent =
+                esMesActual
+                    ? "Innovaciones subidas este mes"
+                    : `Innovaciones de ${nombreMes(mesVisible()).toLowerCase()}`;
+
+        }
+
+        const parrafo =
+            empty?.querySelector("p");
+
+        if (parrafo) {
+
+            parrafo.textContent =
+                esMesActual
+                    ? textoEmptyOriginal
+                    : "No hay innovaciones que coincidan con la búsqueda.";
+
+        }
 
     }
 
@@ -217,7 +442,7 @@ export function initInnovationsList({
 
                     if (
                         soloMesActual &&
-                        !esDeEsteMes(innovacion)
+                        !esDelMesVisible(innovacion)
                     ) {
 
                         return false;
@@ -451,6 +676,34 @@ export function initInnovationsList({
         filtroTexto.addEventListener(
             "input",
             aplicarFiltro
+        );
+
+    }
+
+
+    if (pestanas) {
+
+        pestanas.addEventListener(
+            "click",
+            (event) => {
+
+                const boton =
+                    event.target.closest(".innovations-list__tab");
+
+                if (!boton) return;
+
+                mesSeleccionado =
+                    boton.dataset.mes === claveMesActual()
+                        ? null
+                        : boton.dataset.mes;
+
+                renderPestanas();
+
+                actualizarTextos();
+
+                aplicarFiltro();
+
+            }
         );
 
     }

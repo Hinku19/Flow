@@ -460,11 +460,29 @@ function createInsertButton(tipo, label, index) {
     }
   }
 
+  /*
+   * Los puntos de un objetivo eliminado se guardan aquí (solo en
+   * memoria) en vez de descartarse: si se deshace la eliminación
+   * del objetivo (mismo id, ver deshacerEliminacion en
+   * editableList.js), se restauran con él.
+   */
+  const contenidosEliminados = {};
+
   function limpiarHuerfanos() {
     const idsValidos = objetivos.map((obj) => obj.id);
 
+    idsValidos.forEach((id) => {
+      if (contenidosEliminados[id] && !contenidos[id]) {
+        contenidos[id] = contenidosEliminados[id];
+      }
+      delete contenidosEliminados[id];
+    });
+
     Object.keys(contenidos).forEach((id) => {
-      if (!idsValidos.includes(id)) delete contenidos[id];
+      if (!idsValidos.includes(id)) {
+        contenidosEliminados[id] = contenidos[id];
+        delete contenidos[id];
+      }
     });
 
     persist();

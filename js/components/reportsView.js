@@ -13,6 +13,19 @@ function fechaCorta(value) {
     }).format(date);
 }
 
+/*
+ * Para fechas con hora (completado, visto bueno): en hora local,
+ * no UTC, para que algo marcado en la noche no salga con el día
+ * siguiente.
+ */
+function fechaCortaLocal(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("es-MX", {
+        day: "2-digit", month: "2-digit", year: "numeric"
+    }).format(date);
+}
+
 export function initReportsView() {
     const view = document.querySelector("#vista-reportes");
     if (!view) return { render: async () => {} };
@@ -252,6 +265,8 @@ export function initReportsView() {
                 <td>${escapeHTML(item.area)}</td>
                 <td>${escapeHTML(item.estado)}</td>
                 <td>${escapeHTML(fechaCorta(item.fechaLimite))}</td>
+                <td>${escapeHTML(item.fechaCompletado ? fechaCortaLocal(item.fechaCompletado) : "—")}</td>
+                <td>${escapeHTML(item.aprobado && item.fechaAprobacion ? fechaCortaLocal(item.fechaAprobacion) : "—")}</td>
                 <td>${escapeHTML(item.reunion || "Compromiso independiente")}</td>
             </tr>
         `).join("");
@@ -268,7 +283,7 @@ export function initReportsView() {
             </div>
             ${compromisos.length ? `
                 <div class="report-output__table-wrap"><table class="report-output__table">
-                    <thead><tr><th>Compromiso</th><th>Colaborador</th><th>Departamento</th><th>Área</th><th>Estatus</th><th>Fecha límite</th><th>Reunión</th></tr></thead>
+                    <thead><tr><th>Compromiso</th><th>Colaborador</th><th>Departamento</th><th>Área</th><th>Estatus</th><th>Fecha límite</th><th>Completado</th><th>Visto bueno</th><th>Reunión</th></tr></thead>
                     <tbody>${filas}</tbody>
                 </table></div>
             ` : '<p class="report-output__empty">No se encontraron compromisos con los filtros seleccionados.</p>'}

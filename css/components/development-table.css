@@ -10,7 +10,14 @@
  * secciones en modo horizontal (fondo, esquinas, sombra), para
  * que se note como un bloque independiente dentro de Desarrollo.
  */
+/*
+ * scroll-margin-top: al llegar con doble clic desde Objetivos
+ * (irAObjetivo, scrollIntoView), la cabecera global fija (64px,
+ * ver .app-header) tapaba el inicio de la sección y parecía que
+ * el desplazamiento quedaba "más abajo".
+ */
 .development__row {
+  scroll-margin-top: calc(64px + var(--space-md));
   display: grid;
   grid-template-columns: 1fr 2fr;
   gap: var(--space-md);

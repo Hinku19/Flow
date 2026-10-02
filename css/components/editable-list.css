@@ -49,6 +49,29 @@
     background-color: var(--color-accent-hover);
 }
 
+/* "Deshacer eliminación" (solo Objetivos, mientras la reunión está activa) */
+.editable-list__undo{
+    align-self: flex-start;
+    margin-top: var(--space-xs);
+    padding: var(--space-2xs) var(--space-sm);
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-md);
+    background: none;
+    color: var(--color-text-second);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.editable-list__undo:hover{
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+}
+
+.editable-list__undo[hidden]{
+    display: none;
+}
+
 .editable-list__item {
   display: flex;
   align-items: center;

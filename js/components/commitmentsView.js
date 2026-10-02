@@ -38,22 +38,35 @@ import {
 } from "../utils/selectorResponsables.js";
 
 
+/*
+ * "Activos" (filtro por defecto): los que todavía requieren
+ * algo, del responsable o del líder.
+ */
 const ESTADOS_ACTIVOS = [
     "pendiente",
-    "en-progreso",
+    "vencido",
     "en-revision"
 ];
 
+
 /*
- * Únicos estados que se pueden asignar manualmente desde esta
- * vista. "vencido" no está aquí porque no es un valor guardado
- * en la base de datos: se calcula solo (ver server.js), así que
- * no tiene sentido poder "elegirlo".
+ * Estatus en los que el responsable ya lo marcó como completado
+ * (con o sin visto bueno todavía).
  */
-const ESTADOS_EDITABLES = [
+const ESTADOS_MARCADOS = [
+    "en-revision",
+    "completado",
+    "completado-destiempo"
+];
+
+
+/*
+ * Estatus en los que el responsable todavía puede marcar el
+ * compromiso como completado.
+ */
+const ESTADOS_SIN_COMPLETAR = [
     "pendiente",
-    "en-progreso",
-    "completado"
+    "vencido"
 ];
 
 
@@ -185,26 +198,11 @@ export function initCommitmentsView() {
 
 
     /*
-     * "en-revision" no es una opción del <select> (no es algo
-     * que se pueda "elegir": es "completado" sin visto bueno
-     * todavía). Para el <select> y para reenviar el estado sin
-     * tocarlo (edición de solo la fecha límite), se trata igual
-     * que "completado".
-     */
-    function estadoEditable(estadoReal) {
-
-        return estadoReal === "en-revision"
-            ? "completado"
-            : estadoReal;
-
-    }
-
-
-    /*
      * Solo un responsable del compromiso (cualquiera de ellos,
-     * el estado es compartido) o un líder pueden marcarlo como
-     * completado (el servidor valida además que el líder sea de
-     * la misma área).
+     * el estado es compartido) o un administrador pueden
+     * marcarlo como completado. El líder que no es responsable
+     * solo da el visto bueno, una vez que el responsable lo
+     * completó (el servidor valida lo mismo).
      */
     function puedeCompletar(data) {
 
@@ -212,7 +210,7 @@ export function initCommitmentsView() {
             getUsuarioActual();
 
         return (
-            usuario?.rol === "lider" ||
+            usuario?.rol === "administrador" ||
             esResponsable(
                 data,
                 usuario?.id
@@ -334,7 +332,7 @@ export function initCommitmentsView() {
 
 
     /* =====================================================
-       GUARDAR EDICIÓN (ESTADO / FECHA LÍMITE)
+       GUARDAR EDICIÓN (COMPLETAR / FECHA LÍMITE)
        ===================================================== */
 
     async function guardarEdicion(
@@ -877,26 +875,8 @@ export function initCommitmentsView() {
             }
 
 
-            /*
-             * "Vencido" es solo informativo: el compromiso conserva
-             * su estado real (pendiente/en progreso/...) para mostrar
-             * y filtrar, y el vencimiento se marca aparte. Se acepta
-             * tanto el campo `vencido` como el formato anterior del
-             * backend (estado === "vencido").
-             */
             compromisos =
                 (data.compromisos || [])
-                    .map(
-                        (item) => ({
-                            ...item,
-                            vencido:
-                                item.vencido === true ||
-                                item.estado === "vencido",
-                            estado:
-                                item.estadoReal ||
-                                item.estado
-                        })
-                    )
                     .sort(
                         compararMasRecientePrimero
                     );
@@ -921,9 +901,92 @@ export function initCommitmentsView() {
        POBLAR FILTRO DE USUARIOS
        ===================================================== */
 
-    function poblarFiltroUsuarios() {
+    /*
+     * Ids de los usuarios activos: el filtro solo ofrece
+     * usuarios activos (aunque uno inactivo siga como
+     * responsable de algún compromiso).
+     */
+    async function cargarUsuariosActivosIds() {
+
+        try {
+
+            const response =
+                await fetch(
+                    `${API_URL}/usuarios`
+                );
+
+            const data =
+                await response.json();
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.mensaje ||
+                    data.error ||
+                    "No fue posible cargar los usuarios."
+                );
+
+            }
+
+            return new Set(
+                (data.usuarios || [])
+                    .filter(
+                        (usuario) =>
+                            Number(usuario.activo) === 1
+                    )
+                    .map(
+                        (usuario) =>
+                            Number(usuario.id)
+                    )
+            );
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR CARGANDO USUARIOS PARA EL FILTRO:",
+                error
+            );
+
+            return null;
+
+        }
+
+    }
+
+
+    /*
+     * El operador solo ve sus propios compromisos (lo filtra
+     * el servidor), así que para él no hay filtro de usuarios.
+     */
+    async function poblarFiltroUsuarios() {
 
         if (!filtroUsuario) {
+
+            return;
+
+        }
+
+
+        const contenedorFiltro =
+            filtroUsuario.closest(
+                ".commitments-filter"
+            );
+
+        const esOperador =
+            getUsuarioActual()?.rol === "operador";
+
+        if (contenedorFiltro) {
+
+            contenedorFiltro.hidden =
+                esOperador;
+
+        }
+
+        if (esOperador) {
+
+            filtroUsuario.value =
+                "";
 
             return;
 
@@ -933,21 +996,44 @@ export function initCommitmentsView() {
         const valorActual =
             filtroUsuario.value;
 
+        const activosIds =
+            await cargarUsuariosActivosIds();
+
+
+        const porId =
+            new Map();
+
+        compromisos
+            .flatMap(
+                (c) =>
+                    obtenerResponsables(c)
+            )
+            .filter(
+                (responsable) =>
+                    responsable.id &&
+                    responsable.nombre &&
+                    (
+                        !activosIds ||
+                        activosIds.has(
+                            Number(responsable.id)
+                        )
+                    )
+            )
+            .forEach(
+                (responsable) =>
+                    porId.set(
+                        String(responsable.id),
+                        responsable.nombre
+                    )
+            );
+
 
         const usuarios =
-            [...new Set(
-                compromisos
-                    .flatMap(
-                        (c) =>
-                            obtenerResponsables(c).map(
-                                (responsable) => responsable.nombre
-                            )
-                    )
-                    .filter(Boolean)
-            )].sort(
-                (a, b) =>
-                    a.localeCompare(b)
-            );
+            [...porId.entries()]
+                .sort(
+                    (a, b) =>
+                        a[1].localeCompare(b[1])
+                );
 
 
         filtroUsuario.innerHTML = `
@@ -958,7 +1044,7 @@ export function initCommitmentsView() {
 
 
         usuarios.forEach(
-            (nombre) => {
+            ([id, nombre]) => {
 
                 const option =
                     document.createElement(
@@ -967,7 +1053,7 @@ export function initCommitmentsView() {
 
 
                 option.value =
-                    nombre;
+                    id;
 
 
                 option.textContent =
@@ -982,16 +1068,10 @@ export function initCommitmentsView() {
         );
 
 
-        if (
-            usuarios.includes(
-                valorActual
-            )
-        ) {
-
-            filtroUsuario.value =
-                valorActual;
-
-        }
+        filtroUsuario.value =
+            porId.has(valorActual)
+                ? valorActual
+                : "";
 
     }
 
@@ -1071,31 +1151,6 @@ export function initCommitmentsView() {
         );
 
 
-        if (data.vencido) {
-
-            const vencidoBadge =
-                document.createElement(
-                    "span"
-                );
-
-            vencidoBadge.classList.add(
-                "commitment-card__badge",
-                "commitment-card__badge--vencido"
-            );
-
-            vencidoBadge.textContent =
-                "Vencido";
-
-            vencidoBadge.title =
-                "La fecha límite ya pasó";
-
-            actions.append(
-                vencidoBadge
-            );
-
-        }
-
-
         const deleteBtn =
             document.createElement("button");
 
@@ -1153,7 +1208,9 @@ export function initCommitmentsView() {
 
 
         /* ---------------------------------------------
-           EDICIÓN: ESTADO Y FECHA LÍMITE
+           EDICIÓN: FECHA LÍMITE
+           (el estatus solo cambia con "Marcar como
+           completado" y "Dar visto bueno")
            --------------------------------------------- */
 
         const edicion =
@@ -1161,71 +1218,6 @@ export function initCommitmentsView() {
 
         edicion.classList.add(
             "commitments-view__edit"
-        );
-
-
-        const campoEstado =
-            document.createElement("label");
-
-        campoEstado.classList.add(
-            "commitments-view__edit-field"
-        );
-
-        campoEstado.textContent =
-            "Estado";
-
-
-        const selectEstado =
-            document.createElement("select");
-
-        selectEstado.classList.add(
-            "commitments-view__estado-edit"
-        );
-
-        selectEstado.dataset.id =
-            data.id;
-
-
-        ESTADOS_EDITABLES.forEach(
-            (valor) => {
-
-                const option =
-                    document.createElement("option");
-
-                option.value =
-                    valor;
-
-                option.textContent =
-                    ESTADO_LABEL[valor];
-
-                if (
-                    valor === "completado" &&
-                    data.estadoReal !== "completado" &&
-                    data.estadoReal !== "en-revision" &&
-                    !puedeCompletar(data)
-                ) {
-
-                    option.disabled =
-                        true;
-
-                }
-
-                if (valor === estadoEditable(data.estadoReal)) {
-
-                    option.selected =
-                        true;
-
-                }
-
-                selectEstado.appendChild(
-                    option
-                );
-
-            }
-        );
-
-        campoEstado.appendChild(
-            selectEstado
         );
 
 
@@ -1275,7 +1267,6 @@ export function initCommitmentsView() {
 
 
         edicion.append(
-            campoEstado,
             campoFecha
         );
 
@@ -1317,9 +1308,8 @@ export function initCommitmentsView() {
 
         if (
             puedeCompletar(data) &&
-            (
-                data.estadoReal === "pendiente" ||
-                data.estadoReal === "en-progreso"
+            ESTADOS_SIN_COMPLETAR.includes(
+                data.estado
             )
         ) {
 
@@ -1346,8 +1336,15 @@ export function initCommitmentsView() {
         }
 
 
+        /*
+         * Dos fechas: cuando el responsable lo marcó como
+         * completado y cuando el líder dio el visto bueno.
+         */
+
         if (
-            data.estadoReal === "completado" &&
+            ESTADOS_MARCADOS.includes(
+                data.estado
+            ) &&
             data.fechaCompletado
         ) {
 
@@ -1368,11 +1365,33 @@ export function initCommitmentsView() {
         }
 
 
+        if (
+            data.aprobado &&
+            data.fechaAprobacion
+        ) {
+
+            const vistoBueno =
+                document.createElement("div");
+
+            vistoBueno.classList.add(
+                "commitment-card__completado"
+            );
+
+            vistoBueno.textContent =
+                `Visto bueno: ${formatearFecha(data.fechaAprobacion)}`;
+
+            card.append(
+                vistoBueno
+            );
+
+        }
+
+
         const usuario =
             getUsuarioActual();
 
         const puedeAprobar =
-            data.estadoReal === "en-revision" &&
+            data.estado === "en-revision" &&
             (
                 usuario?.rol === "administrador" ||
                 usuario?.rol === "lider"
@@ -1432,7 +1451,7 @@ export function initCommitmentsView() {
                     if (
                         usuario &&
                         !obtenerResponsables(item).some(
-                            (responsable) => responsable.nombre === usuario
+                            (responsable) => String(responsable.id) === usuario
                         )
                     ) {
 
@@ -1501,7 +1520,7 @@ export function initCommitmentsView() {
 
         await cargarCompromisos();
 
-        poblarFiltroUsuarios();
+        await poblarFiltroUsuarios();
 
         aplicarFiltros();
 
@@ -1509,27 +1528,17 @@ export function initCommitmentsView() {
 
 
     /* =====================================================
-       EVENTOS DE EDICIÓN (ESTADO / FECHA LÍMITE)
+       EVENTOS DE EDICIÓN (FECHA LÍMITE)
        ===================================================== */
 
     list.addEventListener(
         "change",
         (event) => {
 
-            const esEstado =
-                event.target.matches(
-                    ".commitments-view__estado-edit"
-                );
-
-            const esFecha =
-                event.target.matches(
-                    ".commitments-view__fecha-edit"
-                );
-
-
             if (
-                !esEstado &&
-                !esFecha
+                !event.target.matches(
+                    ".commitments-view__fecha-edit"
+                )
             ) {
 
                 return;
@@ -1554,25 +1563,16 @@ export function initCommitmentsView() {
 
 
             /*
-             * El backend actualiza ambos campos siempre, así
-             * que hay que mandar los dos juntos (el nuevo valor
-             * del que cambió, y el que ya tenía el otro) para
-             * no borrar el que no se tocó.
+             * Sin `estado`, el backend conserva el estatus
+             * actual y solo fija la fecha límite.
              */
 
             guardarEdicion(
                 id,
                 {
 
-                    estado:
-                        esEstado
-                            ? event.target.value
-                            : estadoEditable(item.estadoReal),
-
                     fechaLimite:
-                        esFecha
-                            ? (event.target.value || null)
-                            : aValorInputFecha(item.fechaLimite)
+                        event.target.value || null
 
                 }
             );

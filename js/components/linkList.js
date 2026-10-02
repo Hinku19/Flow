@@ -11,8 +11,19 @@ export function createLinkList({ container, storageKey, reunionId }) {
   const urlInput = container.querySelector(".link-list__url");
   const fileInput = container.querySelector(".link-list__file");
   const addBtn = container.querySelector(".link-list__add");
+  const desplegable = container.querySelector(".link-list__desplegable");
+  const conteo = container.querySelector(".link-list__conteo");
 
   let items = loadData(storageKey);
+
+  /*
+   * El desplegable (material extra) inicia cerrado, salvo que
+   * la reunión ya tenga enlaces o archivos: así se ven sin tener
+   * que abrirlo.
+   */
+  if (desplegable) {
+    desplegable.open = items.length > 0;
+  }
 
   function esUrlValida(url) {
     return url.startsWith("http://") || url.startsWith("https://");
@@ -70,6 +81,11 @@ export function createLinkList({ container, storageKey, reunionId }) {
   function render() {
     const elements = items.map(createItem);
     list.replaceChildren(...elements);
+
+    if (conteo) {
+      conteo.textContent = items.length > 0 ? `(${items.length})` : "";
+    }
+
     saveData(storageKey, items);
   }
 

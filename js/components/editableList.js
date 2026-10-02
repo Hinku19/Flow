@@ -96,7 +96,7 @@ function formatearFechaCompletado(fechaISO){
  * reordenable (opcional): muestra el asa ⋮⋮ para cambiar el orden
  * de los elementos arrastrándolos (ver utils/arrastrarOrdenar.js).
  */
-export function createEditableList({container, itemName, storageKey, onChange, showCheckbox = true, checkCompletado, onNavigate, asignarResponsable, reordenable = false}){
+export function createEditableList({container, itemName, storageKey, onChange, showCheckbox = true, checkCompletado, onNavigate, asignarResponsable, reordenable = false, deshacerEliminacion = false}){
     const list = container.querySelector(".editable-list__list")
     const input = container.querySelector(".editable-list__input")
     const addBtn = container.querySelector(".editable-list__add")
@@ -105,6 +105,56 @@ export function createEditableList({container, itemName, storageKey, onChange, s
     let items  = loadData(storageKey);
     let editingId = null;
     let asignando = false;
+
+    /*
+     * Con deshacerEliminacion: pila de los elementos eliminados
+     * ({ data, indice }), para poder restaurarlos uno por uno
+     * (el último eliminado primero). Vive solo en memoria mientras
+     * la reunión está activa: se vacía al terminarla (ver
+     * limpiarDeshacer en main.js) y una reunión nueva monta una
+     * lista nueva, sin nada que deshacer.
+     */
+    const eliminados = [];
+    let undoBtn = null;
+
+    if (deshacerEliminacion) {
+        undoBtn = document.createElement("button");
+        undoBtn.type = "button";
+        undoBtn.classList.add("editable-list__undo");
+        undoBtn.hidden = true;
+        list.after(undoBtn);
+    }
+
+    function renderDeshacer(){
+        if (!undoBtn) return;
+
+        const ultimo = eliminados[eliminados.length - 1];
+
+        undoBtn.hidden = !ultimo;
+
+        if (ultimo) {
+            undoBtn.textContent = eliminados.length > 1
+                ? `↶ Deshacer eliminación (${eliminados.length})`
+                : "↶ Deshacer eliminación";
+            undoBtn.title = `Restaurar "${ultimo.data.texto}"`;
+        }
+    }
+
+    function deshacer(){
+        const ultimo = eliminados.pop();
+        if (!ultimo) return;
+
+        items.splice(Math.min(ultimo.indice, items.length), 0, ultimo.data);
+        render();
+        renderDeshacer();
+    }
+
+    function limpiarDeshacer(){
+        eliminados.length = 0;
+        renderDeshacer();
+    }
+
+    undoBtn?.addEventListener("click", deshacer);
 
       function createLabel(data){
         const label = document.createElement("span");
@@ -314,8 +364,15 @@ export function createEditableList({container, itemName, storageKey, onChange, s
 
     }
 
+    const indice = items.findIndex((data) => data.id === id);
+
+    if (deshacerEliminacion && indice !== -1) {
+        eliminados.push({ data: items[indice], indice });
+    }
+
     items = items.filter((data) => data.id !== id);
     render();
+    renderDeshacer();
     }
 
     function toggleItem(id){
@@ -449,4 +506,6 @@ export function createEditableList({container, itemName, storageKey, onChange, s
     })
 
     render();
+
+    return { limpiarDeshacer };
 }

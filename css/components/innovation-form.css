@@ -169,6 +169,72 @@
 }
 
 
+/* Acciones 6 a 10 (opcionales) */
+#innovacion-acciones-extra {
+    display: flex;
+    flex-direction: column;
+
+    gap: var(--space-md);
+}
+
+#innovacion-acciones-extra:empty {
+    display: none;
+}
+
+.innovation-form__accion-encabezado {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: var(--space-sm);
+}
+
+.innovation-form__quitar-accion {
+    border: none;
+    background: none;
+
+    padding: 0;
+
+    color: var(--color-danger);
+
+    font-family: inherit;
+    font-size: var(--text-sm);
+
+    cursor: pointer;
+}
+
+.innovation-form__quitar-accion:hover {
+    text-decoration: underline;
+}
+
+.innovation-form__agregar-accion {
+    align-self: flex-start;
+
+    padding: var(--space-xs) var(--space-md);
+
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-md);
+
+    background: none;
+
+    color: var(--color-text-second);
+
+    font-family: inherit;
+    font-size: var(--text-sm);
+
+    cursor: pointer;
+}
+
+.innovation-form__agregar-accion:hover {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+}
+
+.innovation-form__agregar-accion[hidden] {
+    display: none;
+}
+
+
 .innovation-form__required {
     color: var(--color-danger);
 }

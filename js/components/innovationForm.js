@@ -83,6 +83,17 @@ export function initInnovationForm() {
         });
 
 
+    const contenedorAccionesExtra =
+        form.querySelector(
+            "#innovacion-acciones-extra"
+        );
+
+    const botonAgregarAccion =
+        form.querySelector(
+            ".innovation-form__agregar-accion"
+        );
+
+
     let areasCargadas =
         false;
 
@@ -397,6 +408,19 @@ export function initInnovationForm() {
 
 
         formData.append(
+            "accionesExtra",
+            JSON.stringify(
+                accionesExtra()
+                    .map(
+                        (grupo) =>
+                            grupo.querySelector("textarea").value.trim()
+                    )
+                    .filter(Boolean)
+            )
+        );
+
+
+        formData.append(
             "vpnDatos",
             JSON.stringify(
                 vpnCalculator.getDatos()
@@ -445,6 +469,168 @@ export function initInnovationForm() {
         return formData;
 
     }
+
+
+    /* =====================================================
+       ACCIONES ADICIONALES (6 A 10)
+       ---------------------------------------------------------
+       Las 5 primeras son fijas en el HTML (1 a 3 obligatorias).
+       Estas son opcionales: se agregan con "+ Agregar acción"
+       y se pueden quitar; se renumeran al quitar una.
+       ===================================================== */
+
+    const ACCIONES_FIJAS =
+        5;
+
+    const MAX_ACCIONES =
+        10;
+
+
+    function accionesExtra() {
+
+        return contenedorAccionesExtra
+            ? Array.from(
+                contenedorAccionesExtra.querySelectorAll(
+                    ".innovation-form__accion-extra"
+                )
+            )
+            : [];
+
+    }
+
+
+    function renumerarAccionesExtra() {
+
+        accionesExtra().forEach(
+            (grupo, indice) => {
+
+                const numero =
+                    ACCIONES_FIJAS + indice + 1;
+
+                const textarea =
+                    grupo.querySelector(
+                        "textarea"
+                    );
+
+                textarea.id =
+                    `innovacion-accion-${numero}`;
+
+                grupo.querySelector(
+                    "label"
+                ).htmlFor =
+                    textarea.id;
+
+                grupo.querySelector(
+                    ".innovation-form__accion-numero"
+                ).textContent =
+                    `Acción ${numero}`;
+
+            }
+        );
+
+
+        if (botonAgregarAccion) {
+
+            botonAgregarAccion.hidden =
+                ACCIONES_FIJAS + accionesExtra().length >= MAX_ACCIONES;
+
+        }
+
+    }
+
+
+    function agregarAccionExtra() {
+
+        if (
+            !contenedorAccionesExtra ||
+            ACCIONES_FIJAS + accionesExtra().length >= MAX_ACCIONES
+        ) {
+
+            return;
+
+        }
+
+
+        const grupo =
+            document.createElement(
+                "div"
+            );
+
+        grupo.classList.add(
+            "form-group",
+            "innovation-form__accion-extra"
+        );
+
+        grupo.innerHTML = `
+            <div class="innovation-form__accion-encabezado">
+                <label>
+                    <span class="innovation-form__accion-numero"></span>
+                </label>
+                <button
+                    type="button"
+                    class="innovation-form__quitar-accion"
+                >
+                    Quitar
+                </button>
+            </div>
+            <textarea rows="3"></textarea>
+        `;
+
+
+        contenedorAccionesExtra.appendChild(
+            grupo
+        );
+
+        renumerarAccionesExtra();
+
+        grupo.querySelector(
+            "textarea"
+        ).focus();
+
+    }
+
+
+    function limpiarAccionesExtra() {
+
+        accionesExtra().forEach(
+            (grupo) =>
+                grupo.remove()
+        );
+
+        renumerarAccionesExtra();
+
+    }
+
+
+    botonAgregarAccion?.addEventListener(
+        "click",
+        agregarAccionExtra
+    );
+
+
+    contenedorAccionesExtra?.addEventListener(
+        "click",
+        (event) => {
+
+            const boton =
+                event.target.closest(
+                    ".innovation-form__quitar-accion"
+                );
+
+            if (!boton) {
+
+                return;
+
+            }
+
+            boton.closest(
+                ".innovation-form__accion-extra"
+            ).remove();
+
+            renumerarAccionesExtra();
+
+        }
+    );
 
 
     /* =====================================================
@@ -518,6 +704,8 @@ export function initInnovationForm() {
                 );
 
                 form.reset();
+
+                limpiarAccionesExtra();
 
                 vpnCalculator.reset();
 

@@ -40,7 +40,10 @@ import {
 } from "./developmentTable.js";
 
 import {
-    createCommitmentList
+    createCommitmentList,
+    ESTADO_LABEL,
+    estadoCompromiso,
+    textoFechasCompromiso
 } from "./commitmentList.js";
 
 import {
@@ -66,24 +69,6 @@ let reunionActual =
 
 let seccionesActuales =
     {};
-
-
-/* =========================================================
-   ETIQUETAS DE ESTADO
-   ========================================================= */
-
-const ESTADO_LABEL = {
-
-    pendiente:
-        "Pendiente",
-
-    "en-progreso":
-        "En progreso",
-
-    completado:
-        "Completado"
-
-};
 
 
 /* =========================================================
@@ -1146,9 +1131,10 @@ seccionesActuales =
 
                         const estado =
                             ESTADO_LABEL[
-                                compromiso.estado
+                                estadoCompromiso(
+                                    compromiso
+                                )
                             ] ||
-                            compromiso.estado ||
                             "—";
 
 
@@ -1163,6 +1149,11 @@ seccionesActuales =
                             ` [${
                                 estado
                             }]` +
+                            `${
+                                textoFechasCompromiso(compromiso)
+                                    ? ` · ${textoFechasCompromiso(compromiso)}`
+                                    : ""
+                            }` +
                             `${
                                 textoInvolucrados(compromiso)
                                     ? ` · Involucrados: ${textoInvolucrados(compromiso)}`

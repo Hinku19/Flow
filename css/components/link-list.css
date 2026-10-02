@@ -1,7 +1,53 @@
+/* Desplegable de Competitividad: material extra de la reunión */
+.link-list__desplegable {
+  margin-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.link-list__resumen {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-second);
+  cursor: pointer;
+  list-style: none;
+}
+
+.link-list__resumen::-webkit-details-marker {
+  display: none;
+}
+
+.link-list__resumen::before {
+  content: "▸";
+  transition: transform var(--transition-fast);
+}
+
+.link-list__desplegable[open] > .link-list__resumen::before {
+  transform: rotate(90deg);
+}
+
+.link-list__resumen:hover {
+  color: var(--color-accent);
+}
+
+.link-list__conteo {
+  color: var(--color-text-subtle);
+  font-weight: normal;
+}
+
 .link-list {
   margin-top: var(--space-md);
   padding-top: var(--space-md);
   border-top: 1px solid var(--color-border);
+}
+
+.link-list__desplegable .link-list {
+  margin-top: 0;
+  padding-top: var(--space-xs);
+  border-top: none;
 }
 
 .link-list__list {

@@ -186,10 +186,27 @@
     cursor: pointer;
 }
 
+/*
+ * Chrome le da a <input type="date"> un ancho fijo mayor que la
+ * fecha, y deshabilitado (la fecha límite ya fijada no se puede
+ * cambiar) oculta el ícono del calendario pero deja su espacio:
+ * la caja se veía grande para su contenido. Se ajusta a la fecha.
+ */
+.commitments-view__fecha-edit {
+    width: 128px;
+    height: 28px;
+}
+
 .commitments-view__fecha-edit:disabled {
+    width: 96px;
+
     cursor: not-allowed;
 
     opacity: 0.7;
+}
+
+.commitments-view__fecha-edit:disabled::-webkit-calendar-picker-indicator {
+    display: none;
 }
 
 .commitments-view__estado-edit:focus,

@@ -664,6 +664,14 @@ async function asignarResponsableObjetivo(
    MONTAR REUNIÓN
    ========================================================= */
 
+/*
+ * Lista de objetivos de la reunión activa: al terminarla se
+ * vacía su "Deshacer eliminación" (ver onEnd).
+ */
+let listaObjetivos =
+    null;
+
+
 function montarReunion() {
 
     console.log(
@@ -699,12 +707,16 @@ function montarReunion() {
      * =====================================================
      */
 
-    createEditableList({
+    listaObjetivos =
+        createEditableList({
 
         container:
             reiniciarContenedor(
                 "#objetivos"
             ),
+
+        deshacerEliminacion:
+            true,
 
         itemName:
             "objetivo",
@@ -731,6 +743,10 @@ function montarReunion() {
 
         onNavigate:
             (id) => {
+
+                meetingViewMode.irASeccion(
+                    "desarrollo"
+                );
 
                 developmentTable.irAObjetivo(
                     id
@@ -1713,6 +1729,9 @@ const meetingLifecycle =
             timer.reset();
 
 
+            listaObjetivos?.limpiarDeshacer();
+
+
             limpiarEncabezado();
 
 
@@ -1875,6 +1894,12 @@ const innovationsListMes =
 
         soloMesActual:
             true,
+
+        pestanasSelector:
+            "#innovaciones-mes-pestanas",
+
+        tituloSelector:
+            "#innovaciones-mes-titulo",
 
         onOpen:
             (innovacionId) => {

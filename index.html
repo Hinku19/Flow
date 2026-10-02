@@ -705,9 +705,10 @@
                             <div class="reports-status__options">
                                 <label><input type="checkbox" name="reporte-estatus" value="todos" checked> Todos</label>
                                 <label><input type="checkbox" name="reporte-estatus" value="pendiente"> Pendiente</label>
-                                <label><input type="checkbox" name="reporte-estatus" value="en-progreso"> En progreso</label>
-                                <label><input type="checkbox" name="reporte-estatus" value="completado"> Completado</label>
                                 <label><input type="checkbox" name="reporte-estatus" value="vencido"> Vencido</label>
+                                <label><input type="checkbox" name="reporte-estatus" value="en-revision"> En espera de visto bueno</label>
+                                <label><input type="checkbox" name="reporte-estatus" value="completado"> Completado</label>
+                                <label><input type="checkbox" name="reporte-estatus" value="completado-destiempo"> Completado a destiempo</label>
                             </div>
                         </fieldset>
                         <fieldset class="reports-status" data-report-type="innovaciones" hidden>
@@ -2152,34 +2153,6 @@
                                 <label class="field">
 
                                     <span class="field__label">
-                                        Estado
-                                    </span>
-
-                                    <select
-                                        name="estado"
-                                        class="field__input"
-                                    >
-
-                                        <option value="pendiente">
-                                            Pendiente
-                                        </option>
-
-                                        <option value="en-progreso">
-                                            En progreso
-                                        </option>
-
-                                        <option value="completado">
-                                            Completado
-                                        </option>
-
-                                    </select>
-
-                                </label>
-
-
-                                <label class="field">
-
-                                    <span class="field__label">
                                         Prioridad
                                     </span>
 
@@ -2267,53 +2240,64 @@
 
                     <div class="text-section"></div>
 
-                    <div class="link-list">
+                    <!-- Material extra de la reunión: desplegable, cerrado
+                         salvo que ya tenga enlaces o archivos (ver linkList.js) -->
+                    <details class="link-list__desplegable">
 
-                        <ul class="link-list__list"></ul>
+                        <summary class="link-list__resumen">
+                            Material de apoyo (opcional)
+                            <span class="link-list__conteo"></span>
+                        </summary>
+
+                        <div class="link-list">
+
+                            <ul class="link-list__list"></ul>
 
 
-                        <div class="link-list__form">
-
-                            <input
-                                type="text"
-                                class="link-list__title"
-                                placeholder="Título del enlace"
-                                aria-label="Título del enlace"
-                            >
-
-                            <div class="link-list__form-row">
+                            <div class="link-list__form">
 
                                 <input
-                                    type="url"
-                                    class="link-list__url"
-                                    placeholder="https://..."
-                                    aria-label="URL del enlace"
+                                    type="text"
+                                    class="link-list__title"
+                                    placeholder="Título del enlace"
+                                    aria-label="Título del enlace"
                                 >
 
-                                <span class="link-list__separator">o</span>
+                                <div class="link-list__form-row">
 
-                                <label class="link-list__file-label">
                                     <input
-                                        type="file"
-                                        class="link-list__file"
-                                        accept=".jpg,.jpeg,.png,.webp,.pdf"
-                                        aria-label="Subir imagen o PDF"
+                                        type="url"
+                                        class="link-list__url"
+                                        placeholder="https://..."
+                                        aria-label="URL del enlace"
                                     >
-                                    Subir imagen o PDF
-                                </label>
 
-                                <button
-                                    type="button"
-                                    class="link-list__add"
-                                >
-                                    Agregar
-                                </button>
+                                    <span class="link-list__separator">o</span>
+
+                                    <label class="link-list__file-label">
+                                        <input
+                                            type="file"
+                                            class="link-list__file"
+                                            accept=".jpg,.jpeg,.png,.webp,.pdf"
+                                            aria-label="Subir imagen o PDF"
+                                        >
+                                        Subir imagen o PDF
+                                    </label>
+
+                                    <button
+                                        type="button"
+                                        class="link-list__add"
+                                    >
+                                        Agregar
+                                    </button>
+
+                                </div>
 
                             </div>
 
                         </div>
 
-                    </div>
+                    </details>
 
                 </section>
 
@@ -2453,8 +2437,8 @@
                                     Pendiente
                                 </option>
 
-                                <option value="en-progreso">
-                                    En progreso
+                                <option value="vencido">
+                                    Vencido
                                 </option>
 
                                 <option value="en-revision">
@@ -2463,6 +2447,10 @@
 
                                 <option value="completado">
                                     Completado
+                                </option>
+
+                                <option value="completado-destiempo">
+                                    Completado a destiempo
                                 </option>
 
                                 <option value="todos">
@@ -2964,11 +2952,28 @@
 
                     <header class="innovations-list__header">
 
-                        <h2 class="innovations-list__title">
+                        <h2
+                            id="innovaciones-mes-titulo"
+                            class="innovations-list__title"
+                        >
                             Innovaciones subidas este mes
                         </h2>
 
                     </header>
+
+
+                    <!--
+                        Pestañas por mes: el actual y cada mes
+                        anterior con innovaciones registradas.
+                    -->
+
+                    <div
+                        id="innovaciones-mes-pestanas"
+                        class="innovations-list__tabs"
+                        role="tablist"
+                        aria-label="Innovaciones por mes"
+                        hidden
+                    ></div>
 
 
                     <div class="innovations-list__filters">
@@ -3324,6 +3329,17 @@
                             ></textarea>
 
                         </div>
+
+
+                        <!-- Acciones 6 a 10 (opcionales), ver innovationForm.js -->
+                        <div id="innovacion-acciones-extra"></div>
+
+                        <button
+                            type="button"
+                            class="innovation-form__agregar-accion"
+                        >
+                            + Agregar acción
+                        </button>
 
                     </fieldset>
 
@@ -3862,34 +3878,6 @@
                                 <label class="field">
 
                                     <span class="field__label">
-                                        Estado
-                                    </span>
-
-                                    <select
-                                        name="estado"
-                                        class="field__input"
-                                    >
-
-                                        <option value="pendiente">
-                                            Pendiente
-                                        </option>
-
-                                        <option value="en-progreso">
-                                            En progreso
-                                        </option>
-
-                                        <option value="completado">
-                                            Completado
-                                        </option>
-
-                                    </select>
-
-                                </label>
-
-
-                                <label class="field">
-
-                                    <span class="field__label">
                                         Prioridad
                                     </span>
 
@@ -3969,53 +3957,64 @@
 
                     <div class="text-section"></div>
 
-                    <div class="link-list">
+                    <!-- Material extra de la reunión: desplegable, cerrado
+                         salvo que ya tenga enlaces o archivos (ver linkList.js) -->
+                    <details class="link-list__desplegable">
 
-                        <ul class="link-list__list"></ul>
+                        <summary class="link-list__resumen">
+                            Material de apoyo (opcional)
+                            <span class="link-list__conteo"></span>
+                        </summary>
+
+                        <div class="link-list">
+
+                            <ul class="link-list__list"></ul>
 
 
-                        <div class="link-list__form">
-
-                            <input
-                                type="text"
-                                class="link-list__title"
-                                placeholder="Título del enlace"
-                                aria-label="Título del enlace"
-                            >
-
-                            <div class="link-list__form-row">
+                            <div class="link-list__form">
 
                                 <input
-                                    type="url"
-                                    class="link-list__url"
-                                    placeholder="https://..."
-                                    aria-label="URL del enlace"
+                                    type="text"
+                                    class="link-list__title"
+                                    placeholder="Título del enlace"
+                                    aria-label="Título del enlace"
                                 >
 
-                                <span class="link-list__separator">o</span>
+                                <div class="link-list__form-row">
 
-                                <label class="link-list__file-label">
                                     <input
-                                        type="file"
-                                        class="link-list__file"
-                                        accept=".jpg,.jpeg,.png,.webp,.pdf"
-                                        aria-label="Subir imagen o PDF"
+                                        type="url"
+                                        class="link-list__url"
+                                        placeholder="https://..."
+                                        aria-label="URL del enlace"
                                     >
-                                    Subir imagen o PDF
-                                </label>
 
-                                <button
-                                    type="button"
-                                    class="link-list__add"
-                                >
-                                    Agregar
-                                </button>
+                                    <span class="link-list__separator">o</span>
+
+                                    <label class="link-list__file-label">
+                                        <input
+                                            type="file"
+                                            class="link-list__file"
+                                            accept=".jpg,.jpeg,.png,.webp,.pdf"
+                                            aria-label="Subir imagen o PDF"
+                                        >
+                                        Subir imagen o PDF
+                                    </label>
+
+                                    <button
+                                        type="button"
+                                        class="link-list__add"
+                                    >
+                                        Agregar
+                                    </button>
+
+                                </div>
 
                             </div>
 
                         </div>
 
-                    </div>
+                    </details>
 
                 </section>
 
