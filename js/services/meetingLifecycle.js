@@ -2590,11 +2590,13 @@ async function iniciarReunionProgramada(
 
                         asistio:
                             Boolean(
-                                participante.asistio
+                                participante.asistio ??
+                                participante.Asistio
                             ),
 
                         rol:
                             participante.rol ||
+                            participante.Rol ||
                             ""
 
                     })
