@@ -121,6 +121,30 @@ export function initCommitmentsView() {
             "#compromisos-filtro-usuario"
         );
 
+    /*
+     * El operador solo ve sus propios compromisos: el filtro de
+     * usuario se oculta desde el inicio (no solo al terminar de
+     * cargar) para que no aparezca ni un instante.
+     */
+    if (
+        filtroUsuario &&
+        getUsuarioActual()?.rol === "operador"
+    ) {
+
+        const contenedorFiltroUsuario =
+            filtroUsuario.closest(
+                ".commitments-filter"
+            );
+
+        if (contenedorFiltroUsuario) {
+
+            contenedorFiltroUsuario.hidden =
+                true;
+
+        }
+
+    }
+
     const filtroEstado =
         document.querySelector(
             "#compromisos-filtro-estado"
