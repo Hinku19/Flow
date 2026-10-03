@@ -1898,9 +1898,10 @@ export async function enviarReporteReunionPorCorreo(
 
     if (!response.ok) {
         throw new Error(
-            data.mensaje ||
-            data.error ||
-            "No fue posible enviar el reporte por correo."
+            [
+                data.mensaje || "No fue posible enviar el reporte por correo.",
+                data.error ? `Detalle: ${data.error}` : ""
+            ].filter(Boolean).join(" ")
         );
     }
 

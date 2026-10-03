@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const multer = require("multer");
 const nodemailer = require("nodemailer");
 const puppeteer = require("puppeteer");
+const fs = require("fs");
 const path = require("path");
 const {
     enviarRecordatoriosCompromisos
@@ -91,6 +92,51 @@ function crearTransportadorCorreo() {
         }
     });
 
+}
+
+function buscarNavegadoresParaPDF() {
+    const candidatos = [
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+        process.env.CHROME_EXECUTABLE_PATH
+    ];
+
+    try {
+        candidatos.push(puppeteer.executablePath());
+    } catch (error) {
+        // Puppeteer puede no tener su navegador descargado; se buscan instalaciones del sistema.
+    }
+
+    if (process.platform === "win32") {
+        const carpetas = [
+            process.env.ProgramFiles,
+            process.env["ProgramFiles(x86)"],
+            process.env.LOCALAPPDATA
+        ].filter(Boolean);
+
+        for (const carpeta of carpetas) {
+            candidatos.push(
+                path.join(carpeta, "Google", "Chrome", "Application", "chrome.exe"),
+                path.join(carpeta, "Microsoft", "Edge", "Application", "msedge.exe")
+            );
+        }
+    } else if (process.platform === "darwin") {
+        candidatos.push(
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+        );
+    } else {
+        candidatos.push(
+            "/usr/bin/google-chrome",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/microsoft-edge"
+        );
+    }
+
+    return candidatos.filter((candidato, indice) =>
+        candidatos.indexOf(candidato) === indice &&
+        typeof candidato === "string" && candidato.trim() && fs.existsSync(candidato)
+    );
 }
 
 /* =========================================================
@@ -8736,6 +8782,8 @@ app.post(
         let browser =
             null;
 
+        let fase = "validar la solicitud";
+
 
         try {
 
@@ -8935,26 +8983,53 @@ app.post(
              * =================================================
              */
 
-            browser =
-                await puppeteer.launch({
+            fase = "iniciar Chrome para generar el PDF";
 
-                    headless:
-                        true,
+            const navegadoresDisponibles = buscarNavegadoresParaPDF();
 
-                    args: [
+            if (navegadoresDisponibles.length === 0) {
+                throw new Error(
+                    "No se encontró Chrome ni Edge en el servidor. Instala uno de esos navegadores o configura PUPPETEER_EXECUTABLE_PATH en el entorno del servidor."
+                );
+            }
 
-                        "--no-sandbox",
+            let errorInicioNavegador = null;
+            for (const executablePath of navegadoresDisponibles) {
+                try {
+                    browser = await puppeteer.launch({
 
-                        "--disable-setuid-sandbox"
+                        executablePath,
 
-                    ]
+                        headless:
+                            true,
 
-                });
+                        args: [
+
+                            "--no-sandbox",
+
+                            "--disable-setuid-sandbox"
+
+                        ]
+
+                    });
+                    break;
+                } catch (error) {
+                    errorInicioNavegador = error;
+                    console.error(`No se pudo iniciar el navegador PDF ${executablePath}:`, error.message);
+                }
+            }
+
+            if (!browser) {
+                throw new Error(
+                    `Chrome y Edge están instalados, pero no se pudo iniciar ninguno. ${errorInicioNavegador?.message || ""}`.trim()
+                );
+            }
 
 
             const page =
                 await browser.newPage();
 
+            fase = "preparar el contenido del reporte";
 
             await page.setContent(
                 html,
@@ -8971,6 +9046,7 @@ app.post(
                 "print"
             );
 
+            fase = "convertir el reporte a PDF";
 
             const pdf =
                 await page.pdf({
@@ -8992,6 +9068,8 @@ app.post(
              * CONFIGURAR CORREO
              * =================================================
              */
+
+            fase = "configurar el correo del servidor";
 
             const transporter =
                 crearTransportadorCorreo();
@@ -9179,7 +9257,9 @@ app.post(
                     ok: false,
 
                     mensaje:
-                        "No fue posible generar o enviar el reporte de la reunión.",
+                        `No fue posible ${fase}.`,
+
+                    fase,
 
                     error:
                         error.message
