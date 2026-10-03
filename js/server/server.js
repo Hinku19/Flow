@@ -2765,6 +2765,8 @@ async function adjuntarParticipantesAReuniones(
             SELECT
                 rp.ReunionId,
                 rp.UsuarioId,
+                rp.Asistio,
+                rp.Rol,
                 u.nombre,
                 (u.foto_contenido IS NOT NULL) AS tieneFoto
 
@@ -2808,6 +2810,12 @@ async function adjuntarParticipantesAReuniones(
 
                 nombre:
                     fila.nombre,
+
+                Asistio:
+                    fila.Asistio,
+
+                Rol:
+                    fila.Rol,
 
                 tieneFoto:
                     Boolean(
@@ -8466,6 +8474,110 @@ app.post(
 
     }
 );
+
+function escaparHTMLInvitacion(valor) {
+    return String(valor ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function formatoFechaInvitacion(valor) {
+    const coincidencia = String(valor || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    if (!coincidencia) return String(valor || "Por confirmar");
+    return `${coincidencia[3]}/${coincidencia[2]}/${coincidencia[1]} ${coincidencia[4]}:${coincidencia[5]}`;
+}
+
+app.post("/api/reuniones/:id/enviar-invitaciones", async (req, res) => {
+    try {
+        const reunionId = Number(req.params.id);
+        if (!reunionId) return res.status(400).json({ ok: false, mensaje: "ID de reunión no válido." });
+        if (!await validarAccesoReunion(req, res, reunionId)) return;
+
+        const [reuniones] = await db.execute(
+            `SELECT r.ReunionId, r.Titulo,
+                    DATE_FORMAT(r.FechaInicio, '%Y-%m-%d %H:%i:%s') AS FechaInicio,
+                    DATE_FORMAT(r.FechaFin, '%Y-%m-%d %H:%i:%s') AS FechaFin,
+                    r.Lugar, r.Estado, creador.nombre AS Organizador
+             FROM reuniones r
+             LEFT JOIN usuarios creador ON creador.id = r.UsuarioCreadorId
+             WHERE r.ReunionId = ? LIMIT 1`, [reunionId]
+        );
+        if (!reuniones.length) return res.status(404).json({ ok: false, mensaje: "Reunión no encontrada." });
+        const reunion = reuniones[0];
+        if (reunion.Estado !== "Programada") {
+            return res.status(400).json({ ok: false, mensaje: "Las invitaciones solo se envían al programar una reunión." });
+        }
+
+        const [participantes] = await db.execute(
+            `SELECT u.nombre, u.correo_electronico
+             FROM reunion_participantes rp
+             INNER JOIN usuarios u ON u.id = rp.UsuarioId
+             WHERE rp.ReunionId = ?
+             ORDER BY u.nombre`, [reunionId]
+        );
+        if (!participantes.length) {
+            return res.status(400).json({ ok: false, mensaje: "La reunión no tiene personas involucradas." });
+        }
+
+        const destinatarios = participantes
+            .map((persona) => ({ ...persona, correo_electronico: String(persona.correo_electronico || "").trim() }))
+            .filter((persona) => persona.correo_electronico);
+        const sinCorreo = participantes
+            .filter((persona) => !String(persona.correo_electronico || "").trim())
+            .map((persona) => persona.nombre);
+        if (!destinatarios.length) {
+            return res.status(400).json({ ok: false, mensaje: "Ninguno de los participantes tiene correo electrónico registrado." });
+        }
+
+        const titulo = String(reunion.Titulo || "Reunión FLOW").trim();
+        const inicio = formatoFechaInvitacion(reunion.FechaInicio);
+        const fin = formatoFechaInvitacion(reunion.FechaFin);
+        const listaPersonas = participantes
+            .map((persona) => `<li>${escaparHTMLInvitacion(persona.nombre)}</li>`)
+            .join("");
+        const textoParticipantes = participantes
+            .map((persona) => `- ${persona.nombre}`)
+            .join("\n");
+        const transportador = crearTransportadorCorreo();
+        const from = String(process.env.SMTP_FROM || process.env.SMTP_USER).trim();
+
+        const resultados = await Promise.all(destinatarios.map(async (persona) => {
+            try {
+                await transportador.sendMail({
+                    from,
+                    to: persona.correo_electronico,
+                    subject: `Invitación a reunión: ${titulo}`,
+                    text: `Hola ${persona.nombre},\n\nHas sido invitado(a) a la reunión "${titulo}".\n\nFecha y hora de inicio: ${inicio}\nFecha y hora de término: ${fin}\nLugar: ${reunion.Lugar || "Por confirmar"}\nOrganizador: ${reunion.Organizador || "FLOW"}\n\nPersonas involucradas:\n${textoParticipantes}\n\nEste mensaje fue generado automáticamente por FLOW.`,
+                    html: `<div style="font-family:Arial,sans-serif;color:#15384d;line-height:1.55;max-width:680px;margin:auto"><h2 style="color:#08749a">Invitación a reunión</h2><p>Hola ${escaparHTMLInvitacion(persona.nombre)}, has sido invitado(a) a la siguiente reunión:</p><h3>${escaparHTMLInvitacion(titulo)}</h3><p><strong>Fecha y hora de inicio:</strong> ${escaparHTMLInvitacion(inicio)}<br><strong>Fecha y hora de término:</strong> ${escaparHTMLInvitacion(fin)}<br><strong>Lugar:</strong> ${escaparHTMLInvitacion(reunion.Lugar || "Por confirmar")}<br><strong>Organizador:</strong> ${escaparHTMLInvitacion(reunion.Organizador || "FLOW")}</p><p><strong>Personas involucradas:</strong></p><ul>${listaPersonas}</ul><hr><small>Este mensaje fue generado automáticamente por FLOW.</small></div>`
+                });
+                return { correo: persona.correo_electronico, enviado: true };
+            } catch (error) {
+                console.error(`ERROR ENVIANDO INVITACIÓN A ${persona.correo_electronico}:`, error);
+                return { correo: persona.correo_electronico, enviado: false };
+            }
+        }));
+
+        const enviados = resultados.filter((item) => item.enviado).map((item) => item.correo);
+        const fallidos = resultados.filter((item) => !item.enviado).map((item) => item.correo);
+        return res.json({
+            ok: true,
+            mensaje: fallidos.length ? "La reunión quedó programada, pero algunas invitaciones no se pudieron enviar." : "Invitaciones enviadas correctamente.",
+            enviados,
+            fallidos,
+            sinCorreo
+        });
+    } catch (error) {
+        console.error("ERROR ENVIANDO INVITACIONES DE REUNIÓN:", error);
+        return res.status(500).json({
+            ok: false,
+            mensaje: "La reunión quedó guardada, pero no fue posible enviar las invitaciones.",
+            error: error.message
+        });
+    }
+});
 
 /* =========================================================
    ACTUALIZAR ASISTENCIA Y ROL DE PARTICIPANTE

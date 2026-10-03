@@ -453,10 +453,18 @@ export async function generarHTMLReunionPDF(
                     "Usuario";
 
 
+                const valorAsistencia =
+                    participante.Asistio ??
+                    participante.asistio;
+
                 const asistio =
-                    Number(
-                        participante.Asistio
-                    ) === 1;
+                    valorAsistencia === true ||
+                    Number(valorAsistencia) === 1;
+
+                const rol =
+                    participante.Rol ||
+                    participante.rol ||
+                    "—";
 
 
                 return `
@@ -477,7 +485,9 @@ export async function generarHTMLReunionPDF(
                         </td>
 
                         <td>
-                            —
+                            ${texto(
+                                rol
+                            )}
                         </td>
 
                     </tr>

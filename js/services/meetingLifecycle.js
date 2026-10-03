@@ -2338,6 +2338,33 @@ catch (error) {
 }
 
 
+let avisoErrorInvitacion = "";
+
+try {
+    const resultadoInvitacion = await enviarInvitacionesReunionBD(reunionId);
+    const fallidos = Array.isArray(resultadoInvitacion.fallidos)
+        ? resultadoInvitacion.fallidos
+        : [];
+    const sinCorreo = Array.isArray(resultadoInvitacion.sinCorreo)
+        ? resultadoInvitacion.sinCorreo
+        : [];
+    const motivos = [];
+
+    if (fallidos.length > 0) {
+        motivos.push(`No se pudieron enviar a: ${fallidos.join(", ")}.`);
+    }
+    if (sinCorreo.length > 0) {
+        motivos.push(`Sin correo registrado: ${sinCorreo.join(", ")}.`);
+    }
+    if (motivos.length > 0) {
+        avisoErrorInvitacion = `La reunión se programó. ${motivos.join(" ")}`;
+    }
+} catch (error) {
+    console.error("ERROR ENVIANDO INVITACIONES DE REUNIÓN:", error);
+    avisoErrorInvitacion =
+        `La reunión se programó, pero no fue posible enviar las invitaciones. ${error.message || "Revisa la configuración del correo del servidor."}`;
+}
+
         closeDialog();
 
 
@@ -2346,6 +2373,10 @@ catch (error) {
                 "flow:reunion-programada"
             )
         );
+
+        if (avisoErrorInvitacion) {
+            await avisoDialog(avisoErrorInvitacion);
+        }
 
     }
 
@@ -2403,6 +2434,28 @@ async function guardarParticipantesBD(
 
     return data;
 
+}
+
+
+async function enviarInvitacionesReunionBD(reunionId) {
+    const response = await fetch(
+        `${API_URL}/reuniones/${reunionId}/enviar-invitaciones`,
+        {
+            method: "POST",
+            headers: headerUsuario()
+        }
+    );
+
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(
+            [data.mensaje, data.error ? `Detalle: ${data.error}` : ""]
+                .filter(Boolean)
+                .join(" ") || "No fue posible enviar las invitaciones."
+        );
+    }
+
+    return data;
 }
 
 
