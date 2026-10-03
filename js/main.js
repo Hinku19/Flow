@@ -2083,9 +2083,9 @@ if (!esAdmin()) {
 
 
 /*
- * La tuerquita de configuración solo se muestra a
- * administrador y líder — operador no tiene ningún
- * elemento dentro del menú, así que ni se le muestra.
+ * El engrane queda visible para que los roles sin permiso
+ * reciban el aviso al intentarlo. El menú solo se abre para
+ * administradores desde settingsMenu.js.
  */
 
 if (
@@ -2100,16 +2100,6 @@ if (
     if (tarjetaReportes) {
 
         tarjetaReportes.hidden =
-            true;
-
-    }
-
-    const settingsMenu =
-        document.querySelector(".settings-menu");
-
-    if (settingsMenu) {
-
-        settingsMenu.hidden =
             true;
 
     }
