@@ -198,6 +198,8 @@ export function initMeetingLifecycle({
             ".start-dialog__form"
         );
 
+    let programacionEnCurso = false;
+
 
     const cancelBtn =
         dialog.querySelector(
@@ -1309,7 +1311,13 @@ export function initMeetingLifecycle({
 
 
         confirmBtn.disabled =
-            faltanParticipantes;
+            faltanParticipantes ||
+            programacionEnCurso;
+
+        confirmBtn.textContent =
+            programacionEnCurso
+                ? "Programando..."
+                : "Programar";
 
 
         if (avisoParticipantes) {
@@ -2086,6 +2094,10 @@ async function crearReunionBD(
 
     async function programarReunion() {
 
+        if (programacionEnCurso) {
+            return;
+        }
+
         if (
             usuariosInvitadosActuales.length <
             2
@@ -2270,6 +2282,9 @@ console.log(
 
 let reunionId;
 
+programacionEnCurso = true;
+actualizarBotonProgramar();
+
 
 try {
 
@@ -2286,6 +2301,9 @@ try {
 
 }
 catch (error) {
+
+    programacionEnCurso = false;
+    actualizarBotonProgramar();
 
     console.error(
         "ERROR CREANDO REUNIÓN:",
@@ -2322,6 +2340,9 @@ try {
 }
 catch (error) {
 
+    programacionEnCurso = false;
+    actualizarBotonProgramar();
+
     console.error(
         "ERROR GUARDANDO PARTICIPANTES:",
         error
@@ -2338,6 +2359,36 @@ catch (error) {
 }
 
 
+let avisoErrorInvitacion = "";
+
+try {
+    const resultadoInvitacion = await enviarInvitacionesReunionBD(reunionId);
+    const fallidos = Array.isArray(resultadoInvitacion.fallidos)
+        ? resultadoInvitacion.fallidos
+        : [];
+    const sinCorreo = Array.isArray(resultadoInvitacion.sinCorreo)
+        ? resultadoInvitacion.sinCorreo
+        : [];
+    const motivos = [];
+
+    if (fallidos.length > 0) {
+        motivos.push(`No se pudieron enviar a: ${fallidos.join(", ")}.`);
+    }
+    if (sinCorreo.length > 0) {
+        motivos.push(`Sin correo registrado: ${sinCorreo.join(", ")}.`);
+    }
+    if (motivos.length > 0) {
+        avisoErrorInvitacion = `La reunión se programó. ${motivos.join(" ")}`;
+    }
+} catch (error) {
+    console.error("ERROR ENVIANDO INVITACIONES DE REUNIÓN:", error);
+    avisoErrorInvitacion =
+        `La reunión se programó, pero no fue posible enviar las invitaciones. ${error.message || "Revisa la configuración del correo del servidor."}`;
+}
+
+        programacionEnCurso = false;
+        actualizarBotonProgramar();
+
         closeDialog();
 
 
@@ -2346,6 +2397,10 @@ catch (error) {
                 "flow:reunion-programada"
             )
         );
+
+        if (avisoErrorInvitacion) {
+            await avisoDialog(avisoErrorInvitacion);
+        }
 
     }
 
@@ -2403,6 +2458,28 @@ async function guardarParticipantesBD(
 
     return data;
 
+}
+
+
+async function enviarInvitacionesReunionBD(reunionId) {
+    const response = await fetch(
+        `${API_URL}/reuniones/${reunionId}/enviar-invitaciones`,
+        {
+            method: "POST",
+            headers: headerUsuario()
+        }
+    );
+
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(
+            [data.mensaje, data.error ? `Detalle: ${data.error}` : ""]
+                .filter(Boolean)
+                .join(" ") || "No fue posible enviar las invitaciones."
+        );
+    }
+
+    return data;
 }
 
 
@@ -2590,11 +2667,13 @@ async function iniciarReunionProgramada(
 
                         asistio:
                             Boolean(
-                                participante.asistio
+                                participante.asistio ??
+                                participante.Asistio
                             ),
 
                         rol:
                             participante.rol ||
+                            participante.Rol ||
                             ""
 
                     })

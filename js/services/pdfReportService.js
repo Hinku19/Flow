@@ -453,10 +453,18 @@ export async function generarHTMLReunionPDF(
                     "Usuario";
 
 
+                const valorAsistencia =
+                    participante.Asistio ??
+                    participante.asistio;
+
                 const asistio =
-                    Number(
-                        participante.Asistio
-                    ) === 1;
+                    valorAsistencia === true ||
+                    Number(valorAsistencia) === 1;
+
+                const rol =
+                    participante.Rol ||
+                    participante.rol ||
+                    "—";
 
 
                 return `
@@ -477,7 +485,9 @@ export async function generarHTMLReunionPDF(
                         </td>
 
                         <td>
-                            —
+                            ${texto(
+                                rol
+                            )}
                         </td>
 
                     </tr>
@@ -1898,9 +1908,10 @@ export async function enviarReporteReunionPorCorreo(
 
     if (!response.ok) {
         throw new Error(
-            data.mensaje ||
-            data.error ||
-            "No fue posible enviar el reporte por correo."
+            [
+                data.mensaje || "No fue posible enviar el reporte por correo.",
+                data.error ? `Detalle: ${data.error}` : ""
+            ].filter(Boolean).join(" ")
         );
     }
 

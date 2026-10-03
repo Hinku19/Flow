@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const multer = require("multer");
 const nodemailer = require("nodemailer");
 const puppeteer = require("puppeteer");
+const fs = require("fs");
 const path = require("path");
 const {
     enviarRecordatoriosCompromisos
@@ -91,6 +92,51 @@ function crearTransportadorCorreo() {
         }
     });
 
+}
+
+function buscarNavegadoresParaPDF() {
+    const candidatos = [
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+        process.env.CHROME_EXECUTABLE_PATH
+    ];
+
+    try {
+        candidatos.push(puppeteer.executablePath());
+    } catch (error) {
+        // Puppeteer puede no tener su navegador descargado; se buscan instalaciones del sistema.
+    }
+
+    if (process.platform === "win32") {
+        const carpetas = [
+            process.env.ProgramFiles,
+            process.env["ProgramFiles(x86)"],
+            process.env.LOCALAPPDATA
+        ].filter(Boolean);
+
+        for (const carpeta of carpetas) {
+            candidatos.push(
+                path.join(carpeta, "Google", "Chrome", "Application", "chrome.exe"),
+                path.join(carpeta, "Microsoft", "Edge", "Application", "msedge.exe")
+            );
+        }
+    } else if (process.platform === "darwin") {
+        candidatos.push(
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+        );
+    } else {
+        candidatos.push(
+            "/usr/bin/google-chrome",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/microsoft-edge"
+        );
+    }
+
+    return candidatos.filter((candidato, indice) =>
+        candidatos.indexOf(candidato) === indice &&
+        typeof candidato === "string" && candidato.trim() && fs.existsSync(candidato)
+    );
 }
 
 /* =========================================================
@@ -2719,6 +2765,8 @@ async function adjuntarParticipantesAReuniones(
             SELECT
                 rp.ReunionId,
                 rp.UsuarioId,
+                rp.Asistio,
+                rp.Rol,
                 u.nombre,
                 (u.foto_contenido IS NOT NULL) AS tieneFoto
 
@@ -2762,6 +2810,12 @@ async function adjuntarParticipantesAReuniones(
 
                 nombre:
                     fila.nombre,
+
+                Asistio:
+                    fila.Asistio,
+
+                Rol:
+                    fila.Rol,
 
                 tieneFoto:
                     Boolean(
@@ -8421,6 +8475,158 @@ app.post(
     }
 );
 
+function escaparHTMLInvitacion(valor) {
+    return String(valor ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function formatoFechaInvitacion(valor) {
+    const coincidencia = String(valor || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    if (!coincidencia) return String(valor || "Por confirmar");
+    return `${coincidencia[3]}/${coincidencia[2]}/${coincidencia[1]} ${coincidencia[4]}:${coincidencia[5]}`;
+}
+
+app.post("/api/reuniones/:id/enviar-invitaciones", async (req, res) => {
+    try {
+        const reunionId = Number(req.params.id);
+        if (!reunionId) return res.status(400).json({ ok: false, mensaje: "ID de reunión no válido." });
+        if (!await validarAccesoReunion(req, res, reunionId)) return;
+
+        const [reuniones] = await db.execute(
+            `SELECT r.ReunionId, r.Titulo,
+                    DATE_FORMAT(r.FechaInicio, '%Y-%m-%d %H:%i:%s') AS FechaInicio,
+                    DATE_FORMAT(r.FechaFin, '%Y-%m-%d %H:%i:%s') AS FechaFin,
+                    r.Lugar, r.Estado, creador.nombre AS Organizador
+             FROM reuniones r
+             LEFT JOIN usuarios creador ON creador.id = r.UsuarioCreadorId
+             WHERE r.ReunionId = ? LIMIT 1`, [reunionId]
+        );
+        if (!reuniones.length) return res.status(404).json({ ok: false, mensaje: "Reunión no encontrada." });
+        const reunion = reuniones[0];
+        if (reunion.Estado !== "Programada") {
+            return res.status(400).json({ ok: false, mensaje: "Las invitaciones solo se envían al programar una reunión." });
+        }
+
+        const [participantes] = await db.execute(
+            `SELECT u.nombre, u.correo_electronico
+             FROM reunion_participantes rp
+             INNER JOIN usuarios u ON u.id = rp.UsuarioId
+             WHERE rp.ReunionId = ?
+             ORDER BY u.nombre`, [reunionId]
+        );
+        if (!participantes.length) {
+            return res.status(400).json({ ok: false, mensaje: "La reunión no tiene personas involucradas." });
+        }
+
+        const destinatariosPorCorreo = new Map();
+        participantes.forEach((persona) => {
+            const correo = String(persona.correo_electronico || "").trim();
+            if (correo && !destinatariosPorCorreo.has(correo.toLowerCase())) {
+                destinatariosPorCorreo.set(correo.toLowerCase(), {
+                    ...persona,
+                    correo_electronico: correo
+                });
+            }
+        });
+        const destinatarios = Array.from(destinatariosPorCorreo.values());
+        const sinCorreo = participantes
+            .filter((persona) => !String(persona.correo_electronico || "").trim())
+            .map((persona) => persona.nombre);
+        if (!destinatarios.length) {
+            return res.status(400).json({ ok: false, mensaje: "Ninguno de los participantes tiene correo electrónico registrado." });
+        }
+
+        const titulo = String(reunion.Titulo || "Reunión FLOW").trim();
+        const inicio = formatoFechaInvitacion(reunion.FechaInicio);
+        const fin = formatoFechaInvitacion(reunion.FechaFin);
+        const listaPersonas = participantes
+            .map((persona) => `<li>${escaparHTMLInvitacion(persona.nombre)}</li>`)
+            .join("");
+        const textoParticipantes = participantes
+            .map((persona) => `- ${persona.nombre}`)
+            .join("\n");
+        const transportador = crearTransportadorCorreo();
+        const from = String(process.env.SMTP_FROM || process.env.SMTP_USER).trim();
+
+        const resultados = await Promise.all(destinatarios.map(async (persona) => {
+            const correoNormalizado = persona.correo_electronico.toLowerCase();
+            const [reserva] = await db.execute(
+                `INSERT IGNORE INTO reunion_invitaciones
+                    (ReunionId, CorreoNormalizado, CorreoDestino, Estado)
+                 VALUES (?, ?, ?, 'enviando')`,
+                [reunionId, correoNormalizado, persona.correo_electronico]
+            );
+
+            if (!reserva.affectedRows) {
+                return {
+                    correo: persona.correo_electronico,
+                    enviado: false,
+                    omitido: true
+                };
+            }
+
+            try {
+                await transportador.sendMail({
+                    from,
+                    to: persona.correo_electronico,
+                    subject: `Invitación a reunión: ${titulo}`,
+                    text: `Hola ${persona.nombre},\n\nHas sido invitado(a) a la reunión "${titulo}".\n\nFecha y hora de inicio: ${inicio}\nFecha y hora de término: ${fin}\nLugar: ${reunion.Lugar || "Por confirmar"}\nOrganizador: ${reunion.Organizador || "FLOW"}\n\nPersonas involucradas:\n${textoParticipantes}\n\nEste mensaje fue generado automáticamente por FLOW.`,
+                    html: `<div style="font-family:Arial,sans-serif;color:#15384d;line-height:1.55;max-width:680px;margin:auto"><h2 style="color:#08749a">Invitación a reunión</h2><p>Hola ${escaparHTMLInvitacion(persona.nombre)}, has sido invitado(a) a la siguiente reunión:</p><h3>${escaparHTMLInvitacion(titulo)}</h3><p><strong>Fecha y hora de inicio:</strong> ${escaparHTMLInvitacion(inicio)}<br><strong>Fecha y hora de término:</strong> ${escaparHTMLInvitacion(fin)}<br><strong>Lugar:</strong> ${escaparHTMLInvitacion(reunion.Lugar || "Por confirmar")}<br><strong>Organizador:</strong> ${escaparHTMLInvitacion(reunion.Organizador || "FLOW")}</p><p><strong>Personas involucradas:</strong></p><ul>${listaPersonas}</ul><hr><small>Este mensaje fue generado automáticamente por FLOW.</small></div>`
+                });
+                await db.execute(
+                    `UPDATE reunion_invitaciones
+                     SET Estado = 'enviado', DetalleError = NULL
+                     WHERE ReunionId = ? AND CorreoNormalizado = ?`,
+                    [reunionId, correoNormalizado]
+                );
+                return { correo: persona.correo_electronico, enviado: true };
+            } catch (error) {
+                console.error(`ERROR ENVIANDO INVITACIÓN A ${persona.correo_electronico}:`, error);
+                try {
+                    await db.execute(
+                        `UPDATE reunion_invitaciones
+                         SET Estado = 'fallido', DetalleError = ?
+                         WHERE ReunionId = ? AND CorreoNormalizado = ?`,
+                        [String(error.message || error).slice(0, 500), reunionId, correoNormalizado]
+                    );
+                } catch (errorRegistro) {
+                    console.error("No fue posible guardar el resultado de la invitación:", errorRegistro);
+                }
+                return { correo: persona.correo_electronico, enviado: false };
+            }
+        }));
+
+        const enviados = resultados.filter((item) => item.enviado).map((item) => item.correo);
+        const fallidos = resultados.filter((item) => !item.enviado && !item.omitido).map((item) => item.correo);
+        const omitidos = resultados.filter((item) => item.omitido).map((item) => item.correo);
+        const yaProcesado = omitidos.length > 0 && enviados.length === 0 && fallidos.length === 0;
+        return res.json({
+            ok: true,
+            mensaje: yaProcesado
+                ? "La invitación ya está procesada o en curso; no se enviaron correos duplicados."
+                : fallidos.length
+                    ? "La reunión quedó programada, pero algunas invitaciones no se pudieron enviar."
+                    : "Invitaciones enviadas correctamente.",
+            enviados,
+            fallidos,
+            omitidos,
+            sinCorreo,
+            yaProcesado
+        });
+    } catch (error) {
+        console.error("ERROR ENVIANDO INVITACIONES DE REUNIÓN:", error);
+        return res.status(500).json({
+            ok: false,
+            mensaje: "La reunión quedó guardada, pero no fue posible enviar las invitaciones.",
+            error: error.message
+        });
+    }
+});
+
 /* =========================================================
    ACTUALIZAR ASISTENCIA Y ROL DE PARTICIPANTE
    ========================================================= */
@@ -8736,6 +8942,8 @@ app.post(
         let browser =
             null;
 
+        let fase = "validar la solicitud";
+
 
         try {
 
@@ -8935,26 +9143,53 @@ app.post(
              * =================================================
              */
 
-            browser =
-                await puppeteer.launch({
+            fase = "iniciar Chrome para generar el PDF";
 
-                    headless:
-                        true,
+            const navegadoresDisponibles = buscarNavegadoresParaPDF();
 
-                    args: [
+            if (navegadoresDisponibles.length === 0) {
+                throw new Error(
+                    "No se encontró Chrome ni Edge en el servidor. Instala uno de esos navegadores o configura PUPPETEER_EXECUTABLE_PATH en el entorno del servidor."
+                );
+            }
 
-                        "--no-sandbox",
+            let errorInicioNavegador = null;
+            for (const executablePath of navegadoresDisponibles) {
+                try {
+                    browser = await puppeteer.launch({
 
-                        "--disable-setuid-sandbox"
+                        executablePath,
 
-                    ]
+                        headless:
+                            true,
 
-                });
+                        args: [
+
+                            "--no-sandbox",
+
+                            "--disable-setuid-sandbox"
+
+                        ]
+
+                    });
+                    break;
+                } catch (error) {
+                    errorInicioNavegador = error;
+                    console.error(`No se pudo iniciar el navegador PDF ${executablePath}:`, error.message);
+                }
+            }
+
+            if (!browser) {
+                throw new Error(
+                    `Chrome y Edge están instalados, pero no se pudo iniciar ninguno. ${errorInicioNavegador?.message || ""}`.trim()
+                );
+            }
 
 
             const page =
                 await browser.newPage();
 
+            fase = "preparar el contenido del reporte";
 
             await page.setContent(
                 html,
@@ -8971,6 +9206,7 @@ app.post(
                 "print"
             );
 
+            fase = "convertir el reporte a PDF";
 
             const pdf =
                 await page.pdf({
@@ -8992,6 +9228,8 @@ app.post(
              * CONFIGURAR CORREO
              * =================================================
              */
+
+            fase = "configurar el correo del servidor";
 
             const transporter =
                 crearTransportadorCorreo();
@@ -9179,7 +9417,9 @@ app.post(
                     ok: false,
 
                     mensaje:
-                        "No fue posible generar o enviar el reporte de la reunión.",
+                        `No fue posible ${fase}.`,
+
+                    fase,
 
                     error:
                         error.message
