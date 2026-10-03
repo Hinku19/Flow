@@ -198,6 +198,8 @@ export function initMeetingLifecycle({
             ".start-dialog__form"
         );
 
+    let programacionEnCurso = false;
+
 
     const cancelBtn =
         dialog.querySelector(
@@ -1309,7 +1311,13 @@ export function initMeetingLifecycle({
 
 
         confirmBtn.disabled =
-            faltanParticipantes;
+            faltanParticipantes ||
+            programacionEnCurso;
+
+        confirmBtn.textContent =
+            programacionEnCurso
+                ? "Programando..."
+                : "Programar";
 
 
         if (avisoParticipantes) {
@@ -2086,6 +2094,10 @@ async function crearReunionBD(
 
     async function programarReunion() {
 
+        if (programacionEnCurso) {
+            return;
+        }
+
         if (
             usuariosInvitadosActuales.length <
             2
@@ -2270,6 +2282,9 @@ console.log(
 
 let reunionId;
 
+programacionEnCurso = true;
+actualizarBotonProgramar();
+
 
 try {
 
@@ -2286,6 +2301,9 @@ try {
 
 }
 catch (error) {
+
+    programacionEnCurso = false;
+    actualizarBotonProgramar();
 
     console.error(
         "ERROR CREANDO REUNIÓN:",
@@ -2321,6 +2339,9 @@ try {
 
 }
 catch (error) {
+
+    programacionEnCurso = false;
+    actualizarBotonProgramar();
 
     console.error(
         "ERROR GUARDANDO PARTICIPANTES:",
@@ -2364,6 +2385,9 @@ try {
     avisoErrorInvitacion =
         `La reunión se programó, pero no fue posible enviar las invitaciones. ${error.message || "Revisa la configuración del correo del servidor."}`;
 }
+
+        programacionEnCurso = false;
+        actualizarBotonProgramar();
 
         closeDialog();
 
