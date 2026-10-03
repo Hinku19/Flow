@@ -110,6 +110,10 @@ import {
 } from "./components/servicesView.js";
 
 import {
+    initMinutesView
+} from "./components/minutesView.js";
+
+import {
     initActivitiesView
 } from "./components/activitiesView.js";
 
@@ -287,6 +291,10 @@ function inicializarNavegacion() {
 
         if (vista === "servicios") {
             servicesView.render();
+        }
+
+        if (vista === "minutas") {
+            minutesView.render();
         }
 
 
@@ -1838,6 +1846,9 @@ const reportsView =
 const servicesView =
     initServicesView();
 
+const minutesView =
+    initMinutesView();
+
 
 /* =========================================================
    VISOR DE ACTIVIDADES POR USUARIO
@@ -2259,6 +2270,10 @@ initNavegacionHistorial({
 
             if (vista === "servicios") {
                 servicesView.render();
+            }
+
+            if (vista === "minutas") {
+                minutesView.render();
             }
 
         }
