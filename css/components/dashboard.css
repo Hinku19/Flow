@@ -663,6 +663,14 @@
     color: var(--color-accent-700);
 }
 
+.dashboard-card--minutes {
+    background: linear-gradient(135deg, #a79df5 0%, #7165d8 100%);
+}
+
+.dashboard-card--minutes .dashboard-card__icon {
+    color: #7165d8;
+}
+
 .services-view {
     width: min(1400px, 100%);
     margin: 0 auto;

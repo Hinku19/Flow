@@ -611,10 +611,49 @@
 
                     </button>
 
+                    <button type="button" class="dashboard-card dashboard-card--minutes" data-view="minutas">
+                        <span class="dashboard-card__icon">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M6 2h9l5 5v15H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"></path>
+                                <path d="M14 2v6h6M8 13h8M8 17h8"></path>
+                            </svg>
+                        </span>
+                        <span class="dashboard-card__title">Minutas</span>
+                        <span class="dashboard-card__description">Consulta e imprime minutas de reuniones finalizadas.</span>
+                    </button>
+
                 </div>
 
             </div>
 
+        </section>
+
+
+        <!-- =====================================================
+             HISTORIAL DE MINUTAS
+             ===================================================== -->
+        <section id="vista-minutas" class="view view--hidden">
+            <div class="minutes-view">
+                <header class="minutes-view__header">
+                    <button type="button" class="minutes-view__back" data-view="dashboard">← Volver al inicio</button>
+                    <h1 class="minutes-view__title">Minutas de reuniones</h1>
+                    <p class="minutes-view__subtitle">Consulta, previsualiza e imprime los reportes enviados al terminar cada reunión.</p>
+                </header>
+                <div class="minutes-view__panel">
+                    <p id="minutes-message" class="minutes-view__message" role="status" hidden></p>
+                    <div class="minutes-view__layout">
+                        <div id="minutes-list" class="minutes-view__list" aria-label="Minutas guardadas"></div>
+                        <section class="minutes-view__preview" aria-label="Vista previa de minuta">
+                            <div class="minutes-view__preview-toolbar">
+                                <h2 id="minutes-preview-title">Selecciona una minuta</h2>
+                                <button id="minutes-print" type="button" disabled>Imprimir</button>
+                            </div>
+                            <iframe id="minutes-pdf" title="Vista previa de la minuta" hidden></iframe>
+                            <p id="minutes-preview-empty" class="minutes-view__empty">Selecciona una reunión de la lista para abrir su PDF.</p>
+                        </section>
+                    </div>
+                </div>
+            </div>
         </section>
 
 

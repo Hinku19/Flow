@@ -9,6 +9,9 @@ const vistas = {
     servicios:
         document.querySelector("#vista-servicios"),
 
+    minutas:
+        document.querySelector("#vista-minutas"),
+
     historial:
         document.querySelector("#vista-historial"),
 
@@ -58,6 +61,7 @@ const VISTAS_CON_HISTORIAL = [
     "dashboard",
     "reportes",
     "servicios",
+    "minutas",
     "historial",
     "usuarios",
     "reunion",

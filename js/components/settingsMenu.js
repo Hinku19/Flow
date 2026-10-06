@@ -1,3 +1,6 @@
+import { esAdmin } from "../services/auth.service.js";
+import { avisoDialog } from "../services/confirmDialog.js";
+
 /* =========================================================
    MENÚ DE CONFIGURACIÓN (TUERCA)
    ========================================================= */
@@ -61,6 +64,14 @@ export function initSettingsMenu() {
         (event) => {
 
             event.stopPropagation();
+
+            if (!esAdmin()) {
+                cerrar();
+                avisoDialog(
+                    "Su usuario no cuenta con el tipo de Rol necesario para acceder a esta opción."
+                );
+                return;
+            }
 
             if (panel.hidden) {
                 abrir();

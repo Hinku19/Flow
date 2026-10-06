@@ -30,6 +30,7 @@
 /* Dashboard */
 @import "components/dashboard.css";
 @import "components/services-view.css";
+@import "components/minutes-view.css";
 
 /* Reunión */
 @import "components/editable-list.css";

@@ -9950,6 +9950,7 @@ app.post(
                     SELECT
                         ReunionId,
                         Titulo,
+                        FechaInicio,
                         Estado
                     FROM reuniones
                     WHERE ReunionId = ?
@@ -10305,6 +10306,31 @@ app.post(
 
 
             /*
+             * Guardar una copia de la minuta cuando al menos un
+             * participante recibió el correo. Una minuta por reunión;
+             * los reenvíos actualizan el PDF existente.
+             */
+            if (enviados.length > 0) {
+                fase = "guardar la minuta en el historial";
+                await db.execute(
+                    `
+                    INSERT INTO reunion_minutas
+                        (ReunionId, Titulo, FechaReunion, NombreArchivo, MimeType, Contenido, FechaEnvio)
+                    VALUES (?, ?, ?, ?, 'application/pdf', ?, CURRENT_TIMESTAMP)
+                    ON DUPLICATE KEY UPDATE
+                        Titulo = VALUES(Titulo),
+                        FechaReunion = VALUES(FechaReunion),
+                        NombreArchivo = VALUES(NombreArchivo),
+                        MimeType = VALUES(MimeType),
+                        Contenido = VALUES(Contenido),
+                        FechaEnvio = CURRENT_TIMESTAMP
+                    `,
+                    [reunionId, titulo, reunion.FechaInicio || null, filename, pdf]
+                );
+            }
+
+
+            /*
              * =================================================
              * RESPUESTA
              * =================================================
@@ -10381,6 +10407,63 @@ app.post(
 
     }
 );
+
+
+/* =========================================================
+   HISTORIAL DE MINUTAS PDF
+   ========================================================= */
+
+app.get("/api/minutas", async (req, res) => {
+    try {
+        const usuario = await obtenerUsuarioSolicitante(req);
+        if (!usuario) {
+            return res.status(401).json({ ok: false, mensaje: "No fue posible identificar al usuario." });
+        }
+
+        const alcance = filtroAlcanceReuniones(usuario);
+        const [filas] = await db.execute(
+            `
+            SELECT
+                m.ReunionId,
+                m.Titulo,
+                DATE_FORMAT(COALESCE(m.FechaReunion, r.FechaInicio), '%Y-%m-%d %H:%i:%s') AS FechaReunion,
+                DATE_FORMAT(m.FechaEnvio, '%Y-%m-%d %H:%i:%s') AS FechaEnvio,
+                m.NombreArchivo
+            FROM reunion_minutas m
+            INNER JOIN reuniones r ON r.ReunionId = m.ReunionId
+            WHERE 1 = 1 ${alcance.sql}
+            ORDER BY COALESCE(m.FechaReunion, r.FechaInicio) DESC, m.FechaEnvio DESC
+            `,
+            alcance.parametros
+        );
+        return res.json({ ok: true, minutas: filas });
+    } catch (error) {
+        console.error("ERROR LISTANDO MINUTAS:", error);
+        return res.status(500).json({ ok: false, mensaje: "No fue posible cargar el historial de minutas." });
+    }
+});
+
+app.get("/api/minutas/:id/pdf", async (req, res) => {
+    try {
+        const reunionId = Number(req.params.id);
+        if (!reunionId) return res.status(400).json({ ok: false, mensaje: "ID de reunión no válido." });
+        if (!await validarAccesoReunion(req, res, reunionId)) return;
+
+        const [filas] = await db.execute(
+            "SELECT NombreArchivo, Contenido FROM reunion_minutas WHERE ReunionId = ? LIMIT 1",
+            [reunionId]
+        );
+        if (!filas.length) return res.status(404).json({ ok: false, mensaje: "No se encontró la minuta de esta reunión." });
+
+        const nombre = String(filas[0].NombreArchivo || `minuta-${reunionId}.pdf`).replace(/[\r\n\"\\]/g, "_");
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `inline; filename="${nombre}"`);
+        return res.send(filas[0].Contenido);
+    } catch (error) {
+        console.error("ERROR CARGANDO MINUTA:", error);
+        return res.status(500).json({ ok: false, mensaje: "No fue posible abrir la minuta." });
+    }
+});
 
 
 /* =========================================================
