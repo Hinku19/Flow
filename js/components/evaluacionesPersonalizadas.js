@@ -597,7 +597,7 @@ export function initEvaluacionesPersonalizadas() {
     function opcionNueva(posicion) {
 
         return {
-            texto: `Opción ${posicion}`,
+            texto: ``,
             valor: 0
         };
 
@@ -708,11 +708,14 @@ export function initEvaluacionesPersonalizadas() {
                                     <input
                                         type="text"
                                         value="${escaparHTML(opcion.texto)}"
+                                        placeholder="Opción ${posicion + 1}"
                                         maxlength="200"
                                         data-campo="q-opcion"
                                         data-o="${posicion}"
                                         aria-label="Opción ${posicion + 1}"
                                     >
+
+                                    
                                     <label class="eval-editor__valor" title="Valor (puntos) de esta respuesta">
                                         <input
                                             type="number"

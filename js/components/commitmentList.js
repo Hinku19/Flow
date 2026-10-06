@@ -1,11 +1,12 @@
 import { loadData, saveData } from "../services/storage.service.js";
 import { API_URL } from "./config.js";
 import { capitalizar } from "../utils/capitalize.js";
-import { confirmarEliminacion, avisoDialog } from "../services/confirmDialog.js";
+import { confirmarEliminacion, confirmDialog, avisoDialog } from "../services/confirmDialog.js";
 import { getUsuarioActual, headerUsuario } from "../services/auth.service.js";
 import { obtenerResponsables, nombresResponsables, esResponsable, mismaArea, obtenerInvolucrados, textoInvolucrados } from "../utils/responsables.js";
 import { crearSelectorResponsables } from "../utils/selectorResponsables.js";
 import { generarUUID } from "../utils/generarUUID.js";
+import { reagendarDialog, crearAvisoReagenda, fechaInputReagenda } from "../services/reagendarDialog.js";
 
 export const ESTADO_LABEL = {
   "pendiente": "Pendiente",
@@ -149,6 +150,15 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     );
   }
 
+  function crearBotonSecundario(accion, texto) {
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.classList.add("commitment-card__secundario");
+    boton.dataset.accion = accion;
+    boton.textContent = texto;
+    return boton;
+  }
+
   function createCard(data) {
     const card = document.createElement("li");
     card.classList.add("commitment-card");
@@ -192,20 +202,47 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     header.append(title, actions);
     card.append(header);
 
+    const botones = document.createElement("div");
+    botones.classList.add("commitment-card__botones");
+    const liderOAdmin = esLiderOAdmin(getUsuarioActual());
+
     if (data.estado !== "completado" && puedeCompletar(data)) {
       const completeBtn = document.createElement("button");
       completeBtn.type = "button";
       completeBtn.classList.add("commitment-card__complete-vencido");
       completeBtn.textContent = "Marcar como completado";
-      card.append(completeBtn);
+      botones.append(completeBtn);
     }
 
-    if (estado === "en-revision" && esLiderOAdmin(getUsuarioActual())) {
+    if (estado === "en-revision" && liderOAdmin) {
       const aprobarBtn = document.createElement("button");
       aprobarBtn.type = "button";
       aprobarBtn.classList.add("commitments-view__aprobar");
       aprobarBtn.textContent = "Dar visto bueno";
-      card.append(aprobarBtn);
+      botones.append(aprobarBtn);
+    }
+
+    /*
+     * Deshacer el completado: el responsable (o administrador),
+     * mientras no tenga visto bueno; si ya lo tiene, solo si además
+     * es líder o administrador (quien puede quitar el visto bueno).
+     */
+    if (data.estado === "completado" && puedeCompletar(data) && (!data.aprobado || liderOAdmin)) {
+      botones.append(crearBotonSecundario("deshacer-completado", "↶ Deshacer completado"));
+    }
+
+    if (data.estado === "completado" && data.aprobado && liderOAdmin) {
+      botones.append(crearBotonSecundario("deshacer-visto-bueno", "↶ Deshacer visto bueno"));
+    }
+
+    if (data.estado !== "completado" && liderOAdmin) {
+      const reagendarBtn = crearBotonSecundario("reagendar", "Re-agendar");
+      reagendarBtn.classList.add("commitment-card__reagendar");
+      botones.append(reagendarBtn);
+    }
+
+    if (botones.children.length > 0) {
+      card.append(botones);
     }
 
     const meta = document.createElement("div");
@@ -220,6 +257,9 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
       involucrados.textContent = `Involucrados: ${textoInvolucrados(data)}`;
       card.append(involucrados);
     }
+
+    const avisoReagenda = crearAvisoReagenda(data);
+    if (avisoReagenda) card.append(avisoReagenda);
 
     /*
      * Dos fechas: cuando el responsable lo marcó como completado
@@ -344,6 +384,49 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
       aprobado: true,
       aprobadoPorId: usuario.id,
       fechaAprobacion: new Date().toISOString(),
+    });
+  }
+
+  /*
+   * Quitar el visto bueno dentro de la reunión: vuelve a quedar en
+   * espera de visto bueno (sigue completado, con su fecha).
+   */
+  function deshacerVistoBueno(id) {
+    if (!esLiderOAdmin(getUsuarioActual())) return;
+
+    updateCommitment(id, { aprobado: false, aprobadoPorId: null, fechaAprobacion: null });
+  }
+
+  /*
+   * Re-agendar dentro de la reunión (solo líder / administrador):
+   * conserva la primera fecha límite en fechaLimiteOriginal y
+   * agrega la re-agenda al historial; al finalizar la reunión el
+   * servidor lo pasa a la tabla (ver combinarReagendas en
+   * server.js).
+   */
+  async function reagendarCompromiso(id) {
+    const usuario = getUsuarioActual();
+    const data = items.find((item) => item.id === id);
+    if (!data || !esLiderOAdmin(usuario)) return;
+
+    const resultado = await reagendarDialog(data);
+    if (!resultado) return;
+
+    updateCommitment(id, {
+      fechaLimiteOriginal: data.fechaLimiteOriginal || data.fechaLimite,
+      fechaLimite: resultado.fechaLimite,
+      reagendas: [
+        ...(Array.isArray(data.reagendas) ? data.reagendas : []),
+        {
+          fechaAnterior: fechaInputReagenda(data.fechaLimite) || null,
+          fechaNueva: resultado.fechaLimite,
+          motivo: resultado.motivo,
+          usuarioId: usuario.id,
+          usuarioNombre: usuario.nombre,
+          fecha: new Date().toISOString(),
+        },
+      ],
+      vencidoInformativo: resultado.fechaLimite < fechaLocalISO(new Date()),
     });
   }
 
@@ -492,6 +575,27 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
 
     if (event.target.matches(".commitments-view__aprobar")) {
       darVistoBueno(card.dataset.id);
+      return;
+    }
+
+    const accion = event.target.closest("[data-accion]")?.dataset.accion;
+
+    if (accion === "deshacer-completado") {
+      confirmDialog("¿Deshacer el completado? El compromiso vuelve a quedar pendiente.").then((confirmado) => {
+        if (confirmado) updateCommitment(card.dataset.id, { estado: "pendiente" });
+      });
+      return;
+    }
+
+    if (accion === "deshacer-visto-bueno") {
+      confirmDialog("¿Quitar el visto bueno? El compromiso vuelve a quedar en espera de visto bueno.").then((confirmado) => {
+        if (confirmado) deshacerVistoBueno(card.dataset.id);
+      });
+      return;
+    }
+
+    if (accion === "reagendar") {
+      reagendarCompromiso(card.dataset.id);
     }
   });
 

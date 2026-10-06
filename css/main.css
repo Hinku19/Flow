@@ -61,6 +61,7 @@
 /* Diálogos */
 @import "components/confirm-dialog.css";
 @import "components/asignar-dialog.css";
+@import "components/reagendar.css";
 @import "components/arrastrar-ordenar.css";
 
 /* Visor de actividades */

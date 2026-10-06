@@ -24,6 +24,14 @@ import {
     capitalizar
 } from "../utils/capitalize.js";
 
+import {
+    mismaArea
+} from "../utils/responsables.js";
+
+import {
+    crearSelectorResponsables
+} from "../utils/selectorResponsables.js";
+
 
 export function initActivitiesView() {
 
@@ -71,9 +79,82 @@ export function initActivitiesView() {
             ".activities-view__lista"
         );
 
+    const filtroNombre =
+        vista.querySelector(
+            "#actividades-filtro-nombre"
+        );
+
+    const filtroDesde =
+        vista.querySelector(
+            "#actividades-filtro-desde"
+        );
+
+    const filtroHasta =
+        vista.querySelector(
+            "#actividades-filtro-hasta"
+        );
+
+    const botonLimpiar =
+        vista.querySelector(
+            "#actividades-filtro-limpiar"
+        );
+
+    const dialogCompromiso =
+        vista.querySelector(
+            "#actividades-compromiso-dialog"
+        );
+
+    const formCompromiso =
+        vista.querySelector(
+            "#actividades-compromiso-form"
+        );
+
+    const errorCompromiso =
+        vista.querySelector(
+            "#actividades-compromiso-error"
+        );
+
 
     let usuariosCargados =
         false;
+
+
+    /* lo último que mandó el servidor, antes de los filtros */
+    let actividadesCargadas =
+        [];
+
+
+    /* punto (y su actividad) que se está convirtiendo en compromiso */
+    let actividadAConvertir =
+        null;
+
+    let puntoAConvertir =
+        null;
+
+
+    const selectorResponsables =
+        crearSelectorResponsables(
+            formCompromiso.querySelector(
+                ".commitment-list__responsables"
+            )
+        );
+
+    const selectorInvolucrados =
+        crearSelectorResponsables(
+            formCompromiso.querySelector(
+                ".commitment-list__involucrados"
+            ),
+            {
+                etiqueta:
+                    "Personas involucradas",
+                singular:
+                    "Involucrado",
+                plural:
+                    "involucrados",
+                conFiltros:
+                    true
+            }
+        );
 
 
     /* =========================================================
@@ -143,6 +224,62 @@ export function initActivitiesView() {
             );
 
         return `${String(fecha.getDate()).padStart(2, "0")}/${mes}/${fecha.getFullYear()}`;
+
+    }
+
+
+    /* "YYYY-MM-DD" en hora local, para comparar con los filtros */
+    function fechaLocalISO(
+        valor
+    ) {
+
+        const fecha =
+            new Date(
+                valor
+            );
+
+        if (Number.isNaN(fecha.getTime())) {
+
+            return "";
+
+        }
+
+        return [
+            fecha.getFullYear(),
+            String(fecha.getMonth() + 1).padStart(2, "0"),
+            String(fecha.getDate()).padStart(2, "0")
+        ].join("-");
+
+    }
+
+
+    /*
+     * Fecha de creación de un punto; los puntos viejos (sin
+     * fechaCreacion) toman la fecha de la reunión.
+     */
+    function fechaDePunto(
+        actividad,
+        punto
+    ) {
+
+        return (
+            punto.fechaCreacion ||
+            actividad.reunionFecha
+        );
+
+    }
+
+
+    /* sin acentos ni mayúsculas, para buscar por nombre */
+    function normalizar(
+        texto
+    ) {
+
+        return String(texto || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .trim();
 
     }
 
@@ -457,9 +594,53 @@ export function initActivitiesView() {
                         "li"
                     );
 
+                puntoItem.classList.add(
+                    "activity__punto"
+                );
+
                 puntoItem.textContent =
                     punto.texto ||
                     "(Sin descripción)";
+
+
+                /*
+                 * Igual que el doble clic sobre un punto en el
+                 * desarrollo de la reunión: lo convierte en
+                 * compromiso con todo precargado (líder /
+                 * administrador, una sola vez por punto).
+                 */
+                if (punto.compromisoCreado) {
+
+                    puntoItem.classList.add(
+                        "activity__punto--convertido"
+                    );
+
+                    puntoItem.title =
+                        "Ya convertido en compromiso";
+
+                }
+                else if (
+                    puedeElegirUsuario() &&
+                    punto.id
+                ) {
+
+                    puntoItem.classList.add(
+                        "activity__punto--convertible"
+                    );
+
+                    puntoItem.title =
+                        "Doble clic para convertir en compromiso";
+
+                    puntoItem.addEventListener(
+                        "dblclick",
+                        () =>
+                            abrirConvertir(
+                                actividad,
+                                punto
+                            )
+                    );
+
+                }
 
 
                 const puntoAvance =
@@ -500,6 +681,53 @@ export function initActivitiesView() {
 
                 }
 
+
+                /*
+                 * Fecha de la reunión en que se creó el punto (los
+                 * heredados conservan la de su reunión de origen).
+                 */
+                const puntoFecha =
+                    document.createElement(
+                        "span"
+                    );
+
+                puntoFecha.classList.add(
+                    "activity__punto-fecha"
+                );
+
+                puntoFecha.textContent =
+                    formatearFecha(
+                        fechaDePunto(
+                            actividad,
+                            punto
+                        )
+                    );
+
+                puntoItem.appendChild(
+                    puntoFecha
+                );
+
+
+                if (punto.compromisoCreado) {
+
+                    const puntoCompromiso =
+                        document.createElement(
+                            "span"
+                        );
+
+                    puntoCompromiso.classList.add(
+                        "activity__punto-compromiso"
+                    );
+
+                    puntoCompromiso.textContent =
+                        "Compromiso";
+
+                    puntoItem.appendChild(
+                        puntoCompromiso
+                    );
+
+                }
+
                 puntos.appendChild(
                     puntoItem
                 );
@@ -528,7 +756,9 @@ export function initActivitiesView() {
         if (actividades.length === 0) {
 
             mostrarEstado(
-                "No hay actividades asignadas por el momento."
+                actividadesCargadas.length === 0
+                    ? "No hay actividades asignadas por el momento."
+                    : "No hay actividades con estos filtros."
             );
 
             return;
@@ -750,13 +980,17 @@ export function initActivitiesView() {
             }
 
 
-            pintar(
+            actividadesCargadas =
                 data.actividades ||
-                []
-            );
+                [];
+
+            aplicarFiltros();
 
         }
         catch (error) {
+
+            actividadesCargadas =
+                [];
 
             console.error(
                 "ERROR AL CARGAR ACTIVIDADES:",
@@ -771,6 +1005,438 @@ export function initActivitiesView() {
         }
 
     }
+
+
+    /* =========================================================
+       FILTROS POR NOMBRE Y FECHA (DE LA REUNIÓN)
+       ========================================================= */
+
+    /*
+     * Nombre: si coincide la actividad se muestran todos sus
+     * puntos; si no, solo los puntos que coinciden.
+     * Fecha (desde / hasta): sobre la fecha de cada punto; una
+     * actividad sin puntos usa la fecha de su reunión.
+     * Una actividad se oculta si no le queda nada que mostrar.
+     */
+    function aplicarFiltros() {
+
+        const nombre =
+            normalizar(
+                filtroNombre.value
+            );
+
+        const desde =
+            filtroDesde.value;
+
+        const hasta =
+            filtroHasta.value;
+
+
+        function enRango(
+            valor
+        ) {
+
+            const fecha =
+                fechaLocalISO(
+                    valor
+                );
+
+            return (
+                (
+                    !desde ||
+                    fecha >= desde
+                ) &&
+                (
+                    !hasta ||
+                    fecha <= hasta
+                )
+            );
+
+        }
+
+
+        const hayFiltros =
+            Boolean(
+                nombre ||
+                desde ||
+                hasta
+            );
+
+
+        pintar(
+            actividadesCargadas
+                .map(
+                    (actividad) => {
+
+                        if (!hayFiltros) {
+
+                            return actividad;
+
+                        }
+
+
+                        if (actividad.puntos.length === 0) {
+
+                            return (
+                                (
+                                    !nombre ||
+                                    normalizar(actividad.texto).includes(nombre)
+                                ) &&
+                                enRango(
+                                    actividad.reunionFecha
+                                )
+                            )
+                                ? actividad
+                                : null;
+
+                        }
+
+
+                        const coincideActividad =
+                            !nombre ||
+                            normalizar(actividad.texto).includes(nombre);
+
+                        const puntos =
+                            actividad.puntos.filter(
+                                (punto) =>
+                                    (
+                                        coincideActividad ||
+                                        normalizar(punto.texto).includes(nombre)
+                                    ) &&
+                                    enRango(
+                                        fechaDePunto(
+                                            actividad,
+                                            punto
+                                        )
+                                    )
+                            );
+
+                        return puntos.length > 0
+                            ? {
+                                ...actividad,
+                                puntos
+                            }
+                            : null;
+
+                    }
+                )
+                .filter(Boolean)
+        );
+
+    }
+
+
+    /* =========================================================
+       CONVERTIR UN PUNTO EN COMPROMISO (LÍDER / ADMINISTRADOR)
+       ---------------------------------------------------------
+       Doble clic sobre un punto de desarrollo. Se crea como
+       compromiso del módulo (sin reunión), con la referencia al
+       punto para no convertirlo dos veces (lo valida el
+       servidor en POST /api/compromisos).
+       ========================================================= */
+
+    function mostrarErrorCompromiso(
+        mensaje
+    ) {
+
+        errorCompromiso.hidden =
+            !mensaje;
+
+        errorCompromiso.textContent =
+            mensaje || "";
+
+    }
+
+
+    async function poblarSelectoresCompromiso(
+        actividad
+    ) {
+
+        const usuarioActual =
+            getUsuarioActual();
+
+        try {
+
+            const response =
+                await fetch(
+                    `${API_URL}/usuarios`
+                );
+
+            const data =
+                await response.json();
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.mensaje ||
+                    data.error ||
+                    "No fue posible cargar los usuarios."
+                );
+
+            }
+
+
+            const activos =
+                (data.usuarios || [])
+                    .filter(
+                        (usuario) =>
+                            Number(usuario.activo) === 1
+                    )
+                    .sort(
+                        (a, b) =>
+                            a.nombre.localeCompare(b.nombre)
+                    );
+
+
+            /* responsables: solo del mismo departamento y área */
+            const delArea =
+                activos.filter(
+                    (usuario) =>
+                        mismaArea(
+                            usuario,
+                            usuarioActual
+                        )
+                );
+
+            selectorResponsables.setUsuarios(
+                delArea
+            );
+
+            selectorInvolucrados.setUsuarios(
+                activos
+            );
+
+
+            /*
+             * Se precargan los responsables de la actividad que
+             * se pueden asignar (los de otra área los rechazaría
+             * el servidor).
+             */
+            selectorResponsables.setSeleccionados(
+                (actividad.responsables || [])
+                    .filter(
+                        (responsable) =>
+                            delArea.some(
+                                (usuario) =>
+                                    Number(usuario.id) === Number(responsable.id)
+                            )
+                    )
+            );
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR CARGANDO USUARIOS PARA EL COMPROMISO:",
+                error
+            );
+
+            mostrarErrorCompromiso(
+                error.message
+            );
+
+        }
+
+    }
+
+
+    async function abrirConvertir(
+        actividad,
+        punto
+    ) {
+
+        actividadAConvertir =
+            actividad;
+
+        puntoAConvertir =
+            punto;
+
+        formCompromiso.reset();
+
+        selectorResponsables.limpiar();
+
+        selectorInvolucrados.limpiar();
+
+        formCompromiso.elements.descripcion.value =
+            punto.texto || "";
+
+        formCompromiso.elements.fechaInicio.value =
+            fechaLocalISO(
+                new Date()
+            );
+
+        mostrarErrorCompromiso("");
+
+        dialogCompromiso.showModal();
+
+        await poblarSelectoresCompromiso(
+            actividad
+        );
+
+    }
+
+
+    async function crearCompromisoDesdeActividad() {
+
+        const campos =
+            formCompromiso.elements;
+
+        const responsables =
+            selectorResponsables.getSeleccionados();
+
+        if (
+            responsables.length === 0 ||
+            !campos.descripcion.value.trim() ||
+            !campos.fechaInicio.value ||
+            !campos.fechaLimite.value
+        ) {
+
+            mostrarErrorCompromiso(
+                "Elige al menos un responsable y completa descripción y fechas."
+            );
+
+            return;
+
+        }
+
+        if (campos.fechaLimite.value < campos.fechaInicio.value) {
+
+            mostrarErrorCompromiso(
+                "La fecha límite no puede ser anterior a la fecha de inicio."
+            );
+
+            return;
+
+        }
+
+
+        const botonGuardar =
+            formCompromiso.querySelector(
+                ".commitment-list__save"
+            );
+
+        try {
+
+            botonGuardar.disabled =
+                true;
+
+            const response =
+                await fetch(
+                    `${API_URL}/compromisos`,
+                    {
+
+                        method:
+                            "POST",
+
+                        headers: {
+
+                            "Content-Type":
+                                "application/json",
+
+                            ...headerUsuario()
+
+                        },
+
+                        body:
+                            JSON.stringify({
+
+                                responsablesIds:
+                                    responsables.map(
+                                        (responsable) => responsable.id
+                                    ),
+
+                                personasInvolucradasIds:
+                                    selectorInvolucrados
+                                        .getSeleccionados()
+                                        .map(
+                                            (persona) => persona.id
+                                        ),
+
+                                descripcion:
+                                    campos.descripcion.value.trim(),
+
+                                prioridad:
+                                    campos.prioridad.value,
+
+                                fechaInicio:
+                                    campos.fechaInicio.value,
+
+                                fechaLimite:
+                                    campos.fechaLimite.value,
+
+                                origenReunionId:
+                                    actividadAConvertir.reunionId,
+
+                                origenObjetivoId:
+                                    actividadAConvertir.objetivoId,
+
+                                origenPuntoId:
+                                    puntoAConvertir.id
+
+                            })
+
+                    }
+                );
+
+            const data =
+                await response.json();
+
+            if (!response.ok || !data.ok) {
+
+                throw new Error(
+                    data.mensaje ||
+                    data.error ||
+                    "No fue posible crear el compromiso."
+                );
+
+            }
+
+            dialogCompromiso.close();
+
+            await cargarActividades();
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR CONVIRTIENDO ACTIVIDAD EN COMPROMISO:",
+                error
+            );
+
+            mostrarErrorCompromiso(
+                error.message ||
+                "No fue posible crear el compromiso."
+            );
+
+        }
+        finally {
+
+            botonGuardar.disabled =
+                false;
+
+        }
+
+    }
+
+
+    formCompromiso.addEventListener(
+        "submit",
+        (event) => {
+
+            event.preventDefault();
+
+            crearCompromisoDesdeActividad();
+
+        }
+    );
+
+
+    vista
+        .querySelector("#actividades-compromiso-cancelar")
+        .addEventListener(
+            "click",
+            () => dialogCompromiso.close()
+        );
 
 
     /* =========================================================
@@ -814,6 +1480,40 @@ export function initActivitiesView() {
     filtroUsuario.addEventListener(
         "change",
         cargarActividades
+    );
+
+
+    filtroNombre.addEventListener(
+        "input",
+        aplicarFiltros
+    );
+
+    filtroDesde.addEventListener(
+        "change",
+        aplicarFiltros
+    );
+
+    filtroHasta.addEventListener(
+        "change",
+        aplicarFiltros
+    );
+
+    botonLimpiar.addEventListener(
+        "click",
+        () => {
+
+            filtroNombre.value =
+                "";
+
+            filtroDesde.value =
+                "";
+
+            filtroHasta.value =
+                "";
+
+            aplicarFiltros();
+
+        }
     );
 
 

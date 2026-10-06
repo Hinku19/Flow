@@ -2685,6 +2685,65 @@
                 </div>
 
 
+                <div class="activities-view__busqueda">
+
+                    <label class="activities-view__campo activities-view__campo--nombre">
+
+                        <span class="activities-view__label">
+                            Buscar actividad
+                        </span>
+
+                        <input
+                            type="search"
+                            id="actividades-filtro-nombre"
+                            class="activities-view__select"
+                            placeholder="Nombre de la actividad..."
+                        >
+
+                    </label>
+
+
+                    <label class="activities-view__campo">
+
+                        <span class="activities-view__label">
+                            Desde
+                        </span>
+
+                        <input
+                            type="date"
+                            id="actividades-filtro-desde"
+                            class="activities-view__select"
+                        >
+
+                    </label>
+
+
+                    <label class="activities-view__campo">
+
+                        <span class="activities-view__label">
+                            Hasta
+                        </span>
+
+                        <input
+                            type="date"
+                            id="actividades-filtro-hasta"
+                            class="activities-view__select"
+                        >
+
+                    </label>
+
+
+                    <button
+                        type="button"
+                        id="actividades-filtro-limpiar"
+                        class="activities-view__limpiar"
+                    >
+                        Limpiar filtros
+                    </button>
+
+                </div>
+
+
                 <p
                     class="activities-view__estado"
                     hidden
@@ -2692,6 +2751,158 @@
 
 
                 <div class="activities-view__lista"></div>
+
+
+                <!-- convertir una actividad en compromiso (líder / administrador) -->
+                <dialog
+                    id="actividades-compromiso-dialog"
+                    class="commitment-list__dialog"
+                >
+
+                    <form
+                        id="actividades-compromiso-form"
+                        class="commitment-list__form"
+                        novalidate
+                    >
+
+                        <h3 class="commitment-list__form-title">
+                            Nuevo compromiso
+                        </h3>
+
+
+                        <div class="field">
+
+                            <span class="field__label">
+                                Responsables
+                            </span>
+
+                            <div class="commitment-list__responsables"></div>
+
+                        </div>
+
+
+                        <label class="field">
+
+                            <span class="field__label">
+                                Descripción
+                            </span>
+
+                            <input
+                                type="text"
+                                name="descripcion"
+                                class="field__input"
+                                maxlength="2000"
+                                required
+                            >
+
+                        </label>
+
+
+                        <div class="field">
+
+                            <span class="field__label">
+                                Personas involucradas
+                                <span class="field__opcional">(opcional, de cualquier departamento)</span>
+                            </span>
+
+                            <div class="commitment-list__involucrados"></div>
+
+                        </div>
+
+
+                        <div class="field-row">
+
+                            <label class="field">
+
+                                <span class="field__label">
+                                    Fecha de inicio
+                                </span>
+
+                                <input
+                                    type="date"
+                                    name="fechaInicio"
+                                    class="field__input"
+                                    required
+                                >
+
+                            </label>
+
+
+                            <label class="field">
+
+                                <span class="field__label">
+                                    Fecha límite
+                                </span>
+
+                                <input
+                                    type="date"
+                                    name="fechaLimite"
+                                    class="field__input"
+                                    required
+                                >
+
+                            </label>
+
+                        </div>
+
+
+                        <label class="field">
+
+                            <span class="field__label">
+                                Prioridad
+                            </span>
+
+                            <select
+                                name="prioridad"
+                                class="field__input"
+                            >
+
+                                <option value="alta">
+                                    Alta
+                                </option>
+
+                                <option value="media" selected>
+                                    Media
+                                </option>
+
+                                <option value="baja">
+                                    Baja
+                                </option>
+
+                            </select>
+
+                        </label>
+
+
+                        <p
+                            id="actividades-compromiso-error"
+                            class="commitments-view__form-error"
+                            hidden
+                        ></p>
+
+
+                        <div class="commitment-list__form-actions">
+
+                            <button
+                                type="button"
+                                id="actividades-compromiso-cancelar"
+                                class="commitment-list__cancel"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                type="submit"
+                                class="commitment-list__save"
+                            >
+                                Crear compromiso
+                            </button>
+
+                        </div>
+
+                    </form>
+
+                </dialog>
 
             </div>
 
@@ -4082,6 +4293,117 @@
             </button>
 
         </div>
+
+    </dialog>
+
+
+    <!-- =========================================================
+         DIÁLOGO PARA RE-AGENDAR UN COMPROMISO (LÍDER / ADMIN)
+         ========================================================= -->
+
+    <dialog class="reagendar-dialog">
+
+        <form
+            class="reagendar-dialog__form"
+            method="dialog"
+            novalidate
+        >
+
+            <h2 class="asignar-dialog__titulo">
+                Re-agendar compromiso
+            </h2>
+
+            <p class="asignar-dialog__objetivo reagendar-dialog__compromiso"></p>
+
+
+            <dl class="reagendar-dialog__fechas">
+
+                <div>
+                    <dt>Fecha límite original</dt>
+                    <dd class="reagendar-dialog__original"></dd>
+                </div>
+
+                <div>
+                    <dt>Fecha límite actual</dt>
+                    <dd class="reagendar-dialog__actual"></dd>
+                </div>
+
+            </dl>
+
+
+            <label class="field">
+
+                <span class="field__label">
+                    Nueva fecha límite
+                </span>
+
+                <input
+                    type="date"
+                    name="fechaLimite"
+                    class="field__input"
+                    required
+                >
+
+            </label>
+
+
+            <label class="field">
+
+                <span class="field__label">
+                    ¿Por qué se re-agenda?
+                </span>
+
+                <textarea
+                    name="motivo"
+                    class="field__input reagendar-dialog__motivo"
+                    rows="3"
+                    maxlength="1000"
+                    placeholder="Explica el motivo del cambio de fecha..."
+                    required
+                ></textarea>
+
+            </label>
+
+
+            <p
+                class="asignar-dialog__error reagendar-dialog__error"
+                hidden
+            ></p>
+
+
+            <details
+                class="reagendar-dialog__historial"
+                hidden
+            >
+
+                <summary>
+                    Historial de re-agendas
+                </summary>
+
+                <ol class="reagendar-dialog__lista"></ol>
+
+            </details>
+
+
+            <div class="confirm-dialog__actions">
+
+                <button
+                    type="button"
+                    class="confirm-dialog__cancel reagendar-dialog__cancelar"
+                >
+                    Cancelar
+                </button>
+
+                <button
+                    type="submit"
+                    class="confirm-dialog__accept"
+                >
+                    Re-agendar
+                </button>
+
+            </div>
+
+        </form>
 
     </dialog>
 

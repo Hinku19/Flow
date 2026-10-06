@@ -37,6 +37,11 @@ import {
     crearSelectorResponsables
 } from "../utils/selectorResponsables.js";
 
+import {
+    reagendarDialog,
+    crearAvisoReagenda
+} from "../services/reagendarDialog.js";
+
 
 /*
  * "Activos" (filtro por defecto): los que todavía requieren
@@ -191,6 +196,16 @@ export function initCommitmentsView() {
         [];
 
 
+    /*
+     * Compromisos que el usuario acaba de modificar (completar,
+     * visto bueno, deshacer, re-agendar): se siguen mostrando
+     * aunque ya no entren en el filtro de estado, hasta que salga
+     * del módulo, para que vea el resultado y pueda deshacerlo.
+     */
+    const idsRecientes =
+        new Set();
+
+
     const selectorResponsables =
         formNuevo
             ? crearSelectorResponsables(
@@ -239,6 +254,19 @@ export function initCommitmentsView() {
                 data,
                 usuario?.id
             )
+        );
+
+    }
+
+
+    function esLiderOAdmin() {
+
+        const usuario =
+            getUsuarioActual();
+
+        return (
+            usuario?.rol === "administrador" ||
+            usuario?.rol === "lider"
         );
 
     }
@@ -407,7 +435,14 @@ export function initCommitmentsView() {
             }
 
 
-            await render();
+            idsRecientes.add(
+                String(id)
+            );
+
+            await render({
+                conservarRecientes:
+                    true
+            });
 
         }
         catch (error) {
@@ -467,7 +502,14 @@ export function initCommitmentsView() {
             }
 
 
-            await render();
+            idsRecientes.add(
+                String(id)
+            );
+
+            await render({
+                conservarRecientes:
+                    true
+            });
 
         }
         catch (error) {
@@ -483,6 +525,192 @@ export function initCommitmentsView() {
             );
 
         }
+
+    }
+
+
+    /* =====================================================
+       ACCIÓN SOBRE UN COMPROMISO (POST)
+       ---------------------------------------------------------
+       Quitar visto bueno y re-agendar: mismo manejo de errores
+       que aprobarCompromiso.
+       ===================================================== */
+
+    async function enviarAccion(
+        id,
+        accion,
+        cuerpo,
+        mensajeError
+    ) {
+
+        try {
+
+            const response =
+                await fetch(
+                    `${API_URL}/compromisos/${id}/${accion}`,
+                    {
+
+                        method:
+                            "POST",
+
+                        headers: {
+
+                            "Content-Type":
+                                "application/json",
+
+                            ...headerUsuario()
+
+                        },
+
+                        body:
+                            JSON.stringify(
+                                cuerpo || {}
+                            )
+
+                    }
+                );
+
+
+            const data =
+                await response.json();
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.mensaje ||
+                    data.error ||
+                    mensajeError
+                );
+
+            }
+
+
+            idsRecientes.add(
+                String(id)
+            );
+
+            await render({
+                conservarRecientes:
+                    true
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                `ERROR EN ${accion.toUpperCase()} COMPROMISO:`,
+                error
+            );
+
+            avisoDialog(
+                error.message ||
+                mensajeError
+            );
+
+        }
+
+    }
+
+
+    /* =====================================================
+       DESHACER COMPLETADO / VISTO BUENO
+       ===================================================== */
+
+    async function deshacerCompletado(
+        id
+    ) {
+
+        const confirmado =
+            await confirmDialog(
+                "¿Deshacer el completado? El compromiso vuelve a quedar pendiente."
+            );
+
+        if (!confirmado) {
+
+            return;
+
+        }
+
+
+        guardarEdicion(
+            id,
+            {
+
+                estado:
+                    "pendiente"
+
+            }
+        );
+
+    }
+
+
+    async function deshacerVistoBueno(
+        id
+    ) {
+
+        const confirmado =
+            await confirmDialog(
+                "¿Quitar el visto bueno? El compromiso vuelve a quedar en espera de visto bueno."
+            );
+
+        if (!confirmado) {
+
+            return;
+
+        }
+
+
+        enviarAccion(
+            id,
+            "quitar-visto-bueno",
+            null,
+            "No fue posible quitar el visto bueno."
+        );
+
+    }
+
+
+    /* =====================================================
+       RE-AGENDAR (SOLO LÍDER / ADMINISTRADOR)
+       ===================================================== */
+
+    async function reagendarCompromiso(
+        id
+    ) {
+
+        const item =
+            compromisos.find(
+                (c) =>
+                    String(c.id) === String(id)
+            );
+
+        if (!item) {
+
+            return;
+
+        }
+
+
+        const resultado =
+            await reagendarDialog(
+                item
+            );
+
+        if (!resultado) {
+
+            return;
+
+        }
+
+
+        enviarAccion(
+            id,
+            "reagendar",
+            resultado,
+            "No fue posible re-agendar el compromiso."
+        );
 
     }
 
@@ -1101,6 +1329,41 @@ export function initCommitmentsView() {
 
 
     /* =====================================================
+       BOTÓN SECUNDARIO DE LA TARJETA
+       (re-agendar, deshacer completado / visto bueno)
+       ===================================================== */
+
+    function crearBotonSecundario(
+        id,
+        accion,
+        texto
+    ) {
+
+        const boton =
+            document.createElement("button");
+
+        boton.type =
+            "button";
+
+        boton.classList.add(
+            "commitment-card__secundario"
+        );
+
+        boton.dataset.id =
+            id;
+
+        boton.dataset.accion =
+            accion;
+
+        boton.textContent =
+            texto;
+
+        return boton;
+
+    }
+
+
+    /* =====================================================
        CREAR TARJETA
        ===================================================== */
 
@@ -1228,7 +1491,9 @@ export function initCommitmentsView() {
         origen.textContent =
             data.reunionId
                 ? `${data.reunionTitulo || "Reunión Flow"} · ${formatearFecha(data.reunionFecha)}`
-                : "Creado desde Compromisos";
+                : data.origenReunionId
+                    ? `Creado desde Actividades · ${data.origenReunionTitulo || "Reunión"}`
+                    : "Creado desde Compromisos";
 
 
         /* ---------------------------------------------
@@ -1324,9 +1589,32 @@ export function initCommitmentsView() {
         }
 
 
+        const avisoReagenda =
+            crearAvisoReagenda(
+                data
+            );
+
+        if (avisoReagenda) {
+
+            card.append(
+                avisoReagenda
+            );
+
+        }
+
+
         card.append(
             origen,
             edicion
+        );
+
+
+        /* botones de acción, en una sola fila */
+        const botones =
+            document.createElement("div");
+
+        botones.classList.add(
+            "commitment-card__botones"
         );
 
 
@@ -1353,7 +1641,7 @@ export function initCommitmentsView() {
             completarBtn.dataset.id =
                 data.id;
 
-            card.append(
+            botones.append(
                 completarBtn
             );
 
@@ -1439,8 +1727,86 @@ export function initCommitmentsView() {
             aprobarBtn.dataset.id =
                 data.id;
 
-            card.append(
+            botones.append(
                 aprobarBtn
+            );
+
+        }
+
+
+        /*
+         * Deshacer el completado: el responsable (o
+         * administrador), mientras no tenga visto bueno; si ya lo
+         * tiene, solo si además es líder (o administrador), que es
+         * quien puede quitar ese visto bueno.
+         */
+        if (
+            puedeCompletar(data) &&
+            ESTADOS_MARCADOS.includes(
+                data.estado
+            ) &&
+            (
+                !data.aprobado ||
+                esLiderOAdmin()
+            )
+        ) {
+
+            botones.append(
+                crearBotonSecundario(
+                    data.id,
+                    "deshacer-completado",
+                    "↶ Deshacer completado"
+                )
+            );
+
+        }
+
+
+        if (
+            data.aprobado &&
+            esLiderOAdmin()
+        ) {
+
+            botones.append(
+                crearBotonSecundario(
+                    data.id,
+                    "deshacer-visto-bueno",
+                    "↶ Deshacer visto bueno"
+                )
+            );
+
+        }
+
+
+        if (
+            esLiderOAdmin() &&
+            ESTADOS_SIN_COMPLETAR.includes(
+                data.estado
+            )
+        ) {
+
+            const reagendarBtn =
+                crearBotonSecundario(
+                    data.id,
+                    "reagendar",
+                    "Re-agendar"
+                );
+
+            reagendarBtn.classList.add(
+                "commitment-card__reagendar"
+            );
+
+            botones.append(
+                reagendarBtn
+            );
+
+        }
+
+
+        if (botones.children.length > 0) {
+
+            card.append(
+                botones
             );
 
         }
@@ -1480,6 +1846,17 @@ export function initCommitmentsView() {
                     ) {
 
                         return false;
+
+                    }
+
+
+                    if (
+                        idsRecientes.has(
+                            String(item.id)
+                        )
+                    ) {
+
+                        return true;
 
                     }
 
@@ -1533,7 +1910,23 @@ export function initCommitmentsView() {
        RENDER COMPLETO (recarga desde la API)
        ===================================================== */
 
-    async function render() {
+    /*
+     * Al entrar al módulo (llamada desde main.js, sin opciones) se
+     * olvidan los compromisos recién modificados; las recargas
+     * internas tras una acción los conservan.
+     */
+    async function render(
+        {
+            conservarRecientes = false
+        } = {}
+    ) {
+
+        if (!conservarRecientes) {
+
+            idsRecientes.clear();
+
+        }
+
 
         if (botonNuevo) {
 
@@ -1704,6 +2097,51 @@ export function initCommitmentsView() {
 
 
             aprobarCompromiso(
+                boton.dataset.id
+            );
+
+        }
+    );
+
+
+    /* =====================================================
+       RE-AGENDAR / DESHACER (CLIC)
+       ===================================================== */
+
+    const ACCIONES = {
+
+        "reagendar":
+            reagendarCompromiso,
+
+        "deshacer-completado":
+            deshacerCompletado,
+
+        "deshacer-visto-bueno":
+            deshacerVistoBueno
+
+    };
+
+
+    list.addEventListener(
+        "click",
+        (event) => {
+
+            const boton =
+                event.target.closest(
+                    "[data-accion]"
+                );
+
+            if (
+                !boton ||
+                !ACCIONES[boton.dataset.accion]
+            ) {
+
+                return;
+
+            }
+
+
+            ACCIONES[boton.dataset.accion](
                 boton.dataset.id
             );
 

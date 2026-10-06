@@ -3585,11 +3585,16 @@ app.get(
                         c.Prioridad,
                         c.FechaInicioEstimada,
                         c.FechaFinEstimada,
+                        c.FechaFinOriginal,
+                        c.Reagendas,
                         c.FechaFinReal,
                         c.Status,
                         c.Aprobado,
                         c.FechaAprobacion,
                         c.ReunionId,
+                        c.OrigenReunionId,
+                        c.OrigenObjetivoId,
+                        rOrigen.Titulo AS OrigenReunionTitulo,
                         r.Titulo AS ReunionTitulo,
                         r.FechaInicio AS ReunionFecha,
                         u.id AS UsuarioAsignadoId,
@@ -3598,6 +3603,8 @@ app.get(
                     FROM compromisos c
                     LEFT JOIN reuniones r
                         ON r.ReunionId = c.ReunionId
+                    LEFT JOIN reuniones rOrigen
+                        ON rOrigen.ReunionId = c.OrigenReunionId
                     INNER JOIN usuarios u
                         ON u.id = c.UsuarioAsignadoId
                     WHERE
@@ -3659,6 +3666,19 @@ app.get(
                         fechaLimite:
                             row.FechaFinEstimada,
 
+                        /*
+                         * Solo si se re-agendó: la primera fecha
+                         * límite y el historial (ver
+                         * POST /api/compromisos/:id/reagendar).
+                         */
+                        fechaLimiteOriginal:
+                            row.FechaFinOriginal,
+
+                        reagendas:
+                            parsearReagendas(
+                                row.Reagendas
+                            ),
+
                         fechaCompletado:
                             row.FechaFinReal,
 
@@ -3681,7 +3701,17 @@ app.get(
                             row.ReunionTitulo,
 
                         reunionFecha:
-                            row.ReunionFecha
+                            row.ReunionFecha,
+
+                        /* actividad de la que se creó (módulo de Actividades) */
+                        origenReunionId:
+                            row.OrigenReunionId,
+
+                        origenObjetivoId:
+                            row.OrigenObjetivoId,
+
+                        origenReunionTitulo:
+                            row.OrigenReunionTitulo
 
                     })
                 );
@@ -3830,9 +3860,30 @@ app.post(
             const fechaLimite =
                 req.body.fechaLimite;
 
+            /*
+             * Opcional: el punto de desarrollo (de un objetivo de
+             * una reunión) del que se crea el compromiso, desde el
+             * módulo de Actividades. Un punto solo se convierte una
+             * vez.
+             */
+            const origenReunionId =
+                Number(req.body.origenReunionId) || null;
+
+            const origenObjetivoId =
+                origenReunionId && req.body.origenObjetivoId
+                    ? String(req.body.origenObjetivoId).trim().slice(0, 64)
+                    : null;
+
+            const origenPuntoId =
+                origenReunionId && req.body.origenPuntoId
+                    ? String(req.body.origenPuntoId).trim().slice(0, 64)
+                    : null;
+
 
             const error =
-                !descripcion
+                origenReunionId && (!origenObjetivoId || !origenPuntoId)
+                    ? "Falta el punto de desarrollo de origen."
+                    : !descripcion
                     ? "La descripción es obligatoria."
                     : descripcion.length > 2000
                         ? "La descripción es demasiado larga (máx. 2000 caracteres)."
@@ -3963,6 +4014,38 @@ app.post(
             }
 
 
+            if (origenReunionId) {
+
+                const [yaConvertida] =
+                    await db.execute(
+                        `
+                        SELECT CompromisoId
+                        FROM compromisos
+                        WHERE
+                            OrigenObjetivoId = ?
+                            AND OrigenPuntoId = ?
+                        LIMIT 1
+                        `,
+                        [
+                            origenObjetivoId,
+                            origenPuntoId
+                        ]
+                    );
+
+                if (yaConvertida.length > 0) {
+
+                    return res
+                        .status(409)
+                        .json({
+                            ok: false,
+                            mensaje: "Este punto ya se convirtió en compromiso."
+                        });
+
+                }
+
+            }
+
+
             /* mismo orden en que se eligieron: el primero es el principal */
             const responsablesOrdenados =
                 responsablesIds.map(
@@ -3999,7 +4082,10 @@ app.post(
                             prioridad,
                             fechaInicio,
                             fechaLimite,
-                            estado: "pendiente"
+                            estado: "pendiente",
+                            origenReunionId,
+                            origenObjetivoId,
+                            origenPuntoId
                         }
                     );
 
@@ -4268,6 +4354,59 @@ app.patch(
 
                         mensaje:
                             "Solo un responsable del compromiso puede marcarlo como completado."
+
+                    });
+
+            }
+
+
+            /*
+             * Deshacer el completado (volver a pendiente): lo
+             * puede hacer un responsable (o administrador). Si ya
+             * tenía visto bueno, ese visto bueno solo lo puede
+             * quitar el líder (o administrador), así que un
+             * operador primero necesita que el líder lo deshaga
+             * (POST /api/compromisos/:id/quitar-visto-bueno).
+             */
+
+            const seDescompleta =
+                nuevoStatus !== 3 &&
+                Number(compromisoActual.Status) === 3;
+
+            if (
+                seDescompleta &&
+                !esResponsable &&
+                usuarioSolicitante.rol !== "administrador"
+            ) {
+
+                return res
+                    .status(403)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Solo un responsable del compromiso puede deshacer el completado."
+
+                    });
+
+            }
+
+            if (
+                seDescompleta &&
+                Boolean(compromisoActual.Aprobado) &&
+                usuarioSolicitante.rol !== "administrador" &&
+                !esLiderDeCompromiso(usuarioSolicitante, compromisoActual)
+            ) {
+
+                return res
+                    .status(403)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            "Este compromiso ya tiene el visto bueno: solo el líder puede deshacerlo."
 
                     });
 
@@ -4553,6 +4692,389 @@ app.post(
                         error.message
 
                 });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   QUITAR EL VISTO BUENO (SOLO LÍDER / ADMIN)
+   ---------------------------------------------------------
+   Por si se dio por error: el compromiso vuelve a "En espera
+   de visto bueno" (sigue reportado como completado, con la
+   misma FechaFinReal).
+   ========================================================= */
+
+app.post(
+    "/api/compromisos/:id/quitar-visto-bueno",
+    async (req, res) => {
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (
+                !usuarioSolicitante ||
+                (
+                    usuarioSolicitante.rol !== "lider" &&
+                    usuarioSolicitante.rol !== "administrador"
+                )
+            ) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            const compromisoId =
+                Number(
+                    req.params.id
+                );
+
+            if (!compromisoId) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: "ID de compromiso no válido."
+                    });
+
+            }
+
+
+            const compromisoActual =
+                await obtenerCompromisoParaPermisos(
+                    compromisoId
+                );
+
+            if (!compromisoActual) {
+
+                return res
+                    .status(404)
+                    .json({
+                        ok: false,
+                        mensaje: "Compromiso no encontrado."
+                    });
+
+            }
+
+
+            if (
+                usuarioSolicitante.rol === "lider" &&
+                !esLiderDeCompromiso(usuarioSolicitante, compromisoActual)
+            ) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            if (
+                Number(compromisoActual.Status) !== 3 ||
+                !Boolean(compromisoActual.Aprobado)
+            ) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: "Este compromiso no tiene visto bueno."
+                    });
+
+            }
+
+
+            await db.execute(
+                `
+                UPDATE compromisos
+                SET
+                    Aprobado = 0,
+                    FechaAprobacion = NULL,
+                    AprobadoPor = NULL,
+                    FechaActualizacion = NOW()
+                WHERE CompromisoId = ?
+                `,
+                [
+                    compromisoId
+                ]
+            );
+
+
+            return res.json({
+                ok: true,
+                mensaje: "Se quitó el visto bueno del compromiso."
+            });
+
+        }
+        catch (error) {
+
+            console.error(
+                "ERROR AL QUITAR EL VISTO BUENO DEL COMPROMISO:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+                    ok: false,
+                    mensaje:
+                        mensajeFaltaMigracionCompromisos(error) ||
+                            "No fue posible quitar el visto bueno.",
+                    error: error.message
+                });
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   RE-AGENDAR UN COMPROMISO (SOLO LÍDER / ADMIN)
+   ---------------------------------------------------------
+   Cambia la fecha límite con un motivo obligatorio. La primera
+   fecha límite se conserva en FechaFinOriginal y cada cambio se
+   agrega al historial (Reagendas). El estatus (vencido, a
+   tiempo / a destiempo) se calcula contra la fecha nueva.
+
+   No aplica a compromisos ya reportados como completados:
+   primero hay que deshacer el completado.
+   ========================================================= */
+
+app.post(
+    "/api/compromisos/:id/reagendar",
+    async (req, res) => {
+
+        let connection;
+
+        try {
+
+            const usuarioSolicitante =
+                await obtenerUsuarioSolicitante(req);
+
+            if (
+                !usuarioSolicitante ||
+                (
+                    usuarioSolicitante.rol !== "lider" &&
+                    usuarioSolicitante.rol !== "administrador"
+                )
+            ) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            const compromisoId =
+                Number(
+                    req.params.id
+                );
+
+            const fechaNueva =
+                String(req.body.fechaLimite || "").trim();
+
+            const motivo =
+                String(req.body.motivo || "").trim();
+
+
+            const error =
+                !compromisoId
+                    ? "ID de compromiso no válido."
+                    : !fechaISOValida(fechaNueva)
+                        ? "La nueva fecha límite no es válida."
+                        : !motivo
+                            ? "Explica el motivo del re-agendado."
+                            : motivo.length > MAX_MOTIVO_REAGENDA
+                                ? `El motivo es demasiado largo (máx. ${MAX_MOTIVO_REAGENDA} caracteres).`
+                                : null;
+
+            if (error) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: error
+                    });
+
+            }
+
+
+            const compromisoActual =
+                await obtenerCompromisoParaPermisos(
+                    compromisoId
+                );
+
+            if (!compromisoActual) {
+
+                return res
+                    .status(404)
+                    .json({
+                        ok: false,
+                        mensaje: "Compromiso no encontrado."
+                    });
+
+            }
+
+
+            if (
+                usuarioSolicitante.rol === "lider" &&
+                !esLiderDeCompromiso(usuarioSolicitante, compromisoActual)
+            ) {
+
+                return respuestaSinPermiso(res);
+
+            }
+
+
+            const fechaAnterior =
+                fechaISOoNull(
+                    compromisoActual.FechaFinEstimada
+                );
+
+            const fechaInicio =
+                fechaISOoNull(
+                    compromisoActual.FechaInicioEstimada
+                );
+
+
+            const errorEstado =
+                Number(compromisoActual.Status) === 3
+                    ? "Este compromiso ya se reportó como completado: deshaz el completado para re-agendarlo."
+                    : fechaNueva === fechaAnterior
+                        ? "La nueva fecha límite es igual a la actual."
+                        : fechaInicio && fechaNueva < fechaInicio
+                            ? "La nueva fecha límite no puede ser anterior a la fecha de inicio."
+                            : null;
+
+            if (errorEstado) {
+
+                return res
+                    .status(400)
+                    .json({
+                        ok: false,
+                        mensaje: errorEstado
+                    });
+
+            }
+
+
+            connection =
+                await db.getConnection();
+
+            await connection.beginTransaction();
+
+
+            /* bloquea la fila para no perder una re-agenda simultánea */
+            const [filas] =
+                await connection.execute(
+                    `
+                    SELECT FechaFinEstimada, FechaFinOriginal, Reagendas
+                    FROM compromisos
+                    WHERE CompromisoId = ?
+                    FOR UPDATE
+                    `,
+                    [
+                        compromisoId
+                    ]
+                );
+
+            if (filas.length === 0) {
+
+                await connection.rollback();
+
+                return res
+                    .status(404)
+                    .json({
+                        ok: false,
+                        mensaje: "Compromiso no encontrado."
+                    });
+
+            }
+
+
+            const reagendas =
+                [
+                    ...parsearReagendas(
+                        filas[0].Reagendas
+                    ),
+                    {
+                        fechaAnterior:
+                            fechaISOoNull(filas[0].FechaFinEstimada),
+                        fechaNueva,
+                        motivo,
+                        usuarioId:
+                            usuarioSolicitante.id,
+                        usuarioNombre:
+                            usuarioSolicitante.nombre,
+                        fecha:
+                            new Date().toISOString()
+                    }
+                ];
+
+
+            await connection.execute(
+                `
+                UPDATE compromisos
+                SET
+                    FechaFinOriginal = COALESCE(FechaFinOriginal, FechaFinEstimada),
+                    FechaFinEstimada = ?,
+                    Reagendas = ?,
+                    FechaActualizacion = NOW()
+                WHERE CompromisoId = ?
+                `,
+                [
+                    fechaNueva,
+                    JSON.stringify(reagendas),
+                    compromisoId
+                ]
+            );
+
+
+            await connection.commit();
+
+
+            return res.json({
+                ok: true,
+                mensaje: "Compromiso re-agendado correctamente."
+            });
+
+        }
+        catch (error) {
+
+            if (connection) {
+
+                await connection.rollback().catch(() => {});
+
+            }
+
+            console.error(
+                "ERROR AL RE-AGENDAR EL COMPROMISO:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+                    ok: false,
+                    mensaje:
+                        mensajeFaltaMigracionCompromisos(error) ||
+                            "No fue posible re-agendar el compromiso.",
+                    error: error.message
+                });
+
+        }
+        finally {
+
+            if (connection) {
+
+                connection.release();
+
+            }
 
         }
 
@@ -5726,6 +6248,10 @@ async function obtenerCompromisoParaPermisos(
             SELECT
                 c.UsuarioAsignadoId,
                 c.Status,
+                c.FechaInicioEstimada,
+                c.FechaFinEstimada,
+                c.FechaFinOriginal,
+                c.Reagendas,
                 c.FechaFinReal,
                 c.Aprobado,
                 u.departamento
@@ -5839,9 +6365,170 @@ function mensajeFaltaMigracionCompromisos(
     error
 ) {
 
+    if (
+        error?.code === "ER_BAD_FIELD_ERROR" &&
+        /FechaFinOriginal|Reagendas|OrigenReunionId|OrigenObjetivoId|OrigenPuntoId/.test(error.message || "")
+    ) {
+
+        return "La base de datos aún no tiene los cambios para re-agendar compromisos. Ejecuta js/server/sql/compromisos_reagendar.sql.";
+
+    }
+
     return ["ER_NO_SUCH_TABLE", "ER_BAD_FIELD_ERROR"].includes(error?.code)
         ? "La base de datos aún no tiene los cambios de compromisos con varios responsables. Ejecuta js/server/sql/compromisos_varios_responsables.sql."
         : null;
+
+}
+
+
+/* =========================================================
+   RE-AGENDAS DE UN COMPROMISO
+   ---------------------------------------------------------
+   Historial de cambios de fecha límite que hace el líder (o
+   administrador), guardado como JSON en compromisos.Reagendas:
+   [{ fechaAnterior, fechaNueva, motivo, usuarioId,
+      usuarioNombre, fecha }]. La primera fecha límite queda en
+   FechaFinOriginal; FechaFinEstimada siempre es la vigente.
+   ========================================================= */
+
+const MAX_MOTIVO_REAGENDA = 1000;
+
+
+function parsearReagendas(
+    valor
+) {
+
+    if (Array.isArray(valor)) {
+
+        return valor;
+
+    }
+
+    if (!valor) {
+
+        return [];
+
+    }
+
+    try {
+
+        const lista =
+            JSON.parse(valor);
+
+        return Array.isArray(lista)
+            ? lista
+            : [];
+
+    }
+    catch {
+
+        return [];
+
+    }
+
+}
+
+
+/*
+ * Fecha (Date o "YYYY-MM-DD...") a "YYYY-MM-DD" en hora
+ * local, o null.
+ */
+function fechaISOoNull(
+    valor
+) {
+
+    if (!valor) {
+
+        return null;
+
+    }
+
+    if (
+        typeof valor === "string" &&
+        /^\d{4}-\d{2}-\d{2}/.test(valor) &&
+        valor.length <= 10
+    ) {
+
+        return valor.slice(0, 10);
+
+    }
+
+    const fecha =
+        new Date(valor);
+
+    if (Number.isNaN(fecha.getTime())) {
+
+        return null;
+
+    }
+
+    return [
+        fecha.getFullYear(),
+        String(fecha.getMonth() + 1).padStart(2, "0"),
+        String(fecha.getDate()).padStart(2, "0")
+    ].join("-");
+
+}
+
+
+/*
+ * Al reinsertar un compromiso de reunión (ver
+ * insertarCompromiso) puede haber dos historiales de re-agendas:
+ * el del JSON de la reunión (re-agendado dentro de la reunión) y
+ * el de la fila que ya existía en la tabla (re-agendado desde el
+ * módulo). Las re-agendas solo se agregan, nunca se quitan, así
+ * que gana el historial más largo; con él se decide la fecha
+ * límite vigente y la original.
+ */
+function combinarReagendas(
+    compromiso,
+    previo
+) {
+
+    const delJSON =
+        parsearReagendas(
+            compromiso.reagendas
+        );
+
+    const dePrevio =
+        parsearReagendas(
+            previo?.Reagendas
+        );
+
+    const reagendas =
+        delJSON.length > dePrevio.length
+            ? delJSON
+            : dePrevio;
+
+    if (reagendas.length === 0) {
+
+        return {
+            reagendas: null,
+            fechaFinOriginal: null,
+            fechaFinEstimada:
+                previo?.FechaFinEstimada ||
+                compromiso.fechaLimite ||
+                null
+        };
+
+    }
+
+    return {
+
+        reagendas:
+            JSON.stringify(reagendas),
+
+        fechaFinOriginal:
+            fechaISOoNull(previo?.FechaFinOriginal) ||
+            fechaISOoNull(compromiso.fechaLimiteOriginal) ||
+            fechaISOoNull(reagendas[0].fechaAnterior),
+
+        fechaFinEstimada:
+            fechaISOoNull(
+                reagendas[reagendas.length - 1].fechaNueva
+            )
+
+    };
 
 }
 
@@ -6017,6 +6704,17 @@ async function insertarCompromiso(
             !aprobadorId
         );
 
+
+    /*
+     * Fecha límite vigente, original e historial de re-agendas
+     * (ver combinarReagendas).
+     */
+    const reagenda =
+        combinarReagendas(
+            compromiso,
+            previo
+        );
+
     const [resultado] = await connection.execute(
         `
         INSERT INTO compromisos
@@ -6032,6 +6730,11 @@ async function insertarCompromiso(
             Prioridad,
             FechaInicioEstimada,
             FechaFinEstimada,
+            FechaFinOriginal,
+            Reagendas,
+            OrigenReunionId,
+            OrigenObjetivoId,
+            OrigenPuntoId,
             Status,
             FechaFinReal,
             Aprobado,
@@ -6040,7 +6743,7 @@ async function insertarCompromiso(
         )
         VALUES
         (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
         `,
         [
@@ -6056,9 +6759,18 @@ async function insertarCompromiso(
             deptoArea.areaId,
             compromiso.prioridad || "media",
             compromiso.fechaInicio || null,
-            previo?.FechaFinEstimada ||
-                compromiso.fechaLimite ||
+            reagenda.fechaFinEstimada,
+            reagenda.fechaFinOriginal,
+            reagenda.reagendas,
+            Number(compromiso.origenReunionId) ||
+                Number(previo?.OrigenReunionId) ||
                 null,
+            compromiso.origenObjetivoId
+                ? String(compromiso.origenObjetivoId).slice(0, 64)
+                : previo?.OrigenObjetivoId || null,
+            compromiso.origenPuntoId
+                ? String(compromiso.origenPuntoId).slice(0, 64)
+                : previo?.OrigenPuntoId || null,
             conservaCompletado
                 ? 3
                 : status,
@@ -6127,18 +6839,96 @@ async function insertarCompromisoDeReunion(
     previo = null
 ) {
 
+    const compromisoModuloId =
+        Number(
+            compromiso.compromisoModuloId
+        );
+
+
+    /*
+     * Lo que se haya re-agendado desde el módulo mientras la
+     * reunión estaba en curso, y la actividad de la que salió,
+     * vienen de la fila original (ver combinarReagendas).
+     */
+    let compromisoAInsertar =
+        compromiso;
+
+    if (compromisoModuloId) {
+
+        const [filasModulo] =
+            await connection.execute(
+                `
+                SELECT
+                    FechaFinEstimada,
+                    FechaFinOriginal,
+                    Reagendas,
+                    OrigenReunionId,
+                    OrigenObjetivoId,
+                    OrigenPuntoId
+                FROM compromisos
+                WHERE
+                    CompromisoId = ?
+                    AND ReunionId IS NULL
+                LIMIT 1
+                `,
+                [
+                    compromisoModuloId
+                ]
+            );
+
+        if (filasModulo.length > 0) {
+
+            const filaModulo =
+                filasModulo[0];
+
+            const reagendasModulo =
+                parsearReagendas(
+                    filaModulo.Reagendas
+                );
+
+            compromisoAInsertar = {
+
+                ...compromiso,
+
+                origenReunionId:
+                    compromiso.origenReunionId ||
+                    filaModulo.OrigenReunionId,
+
+                origenObjetivoId:
+                    compromiso.origenObjetivoId ||
+                    filaModulo.OrigenObjetivoId,
+
+                origenPuntoId:
+                    compromiso.origenPuntoId ||
+                    filaModulo.OrigenPuntoId,
+
+                ...(
+                    reagendasModulo.length >
+                        parsearReagendas(compromiso.reagendas).length
+                        ? {
+                            reagendas:
+                                reagendasModulo,
+                            fechaLimiteOriginal:
+                                fechaISOoNull(filaModulo.FechaFinOriginal),
+                            fechaLimite:
+                                fechaISOoNull(filaModulo.FechaFinEstimada)
+                        }
+                        : {}
+                )
+
+            };
+
+        }
+
+    }
+
+
     const insertado =
         await insertarCompromiso(
             connection,
             reunionId,
-            compromiso,
+            compromisoAInsertar,
             previo
-        );
-
-
-    const compromisoModuloId =
-        Number(
-            compromiso.compromisoModuloId
         );
 
 
@@ -6205,6 +6995,11 @@ async function resincronizarCompromisos(
                 SELECT
                     CompromisoId,
                     FechaFinEstimada,
+                    FechaFinOriginal,
+                    Reagendas,
+                    OrigenReunionId,
+                    OrigenObjetivoId,
+                    OrigenPuntoId,
                     Status,
                     FechaFinReal,
                     Aprobado,
@@ -6847,6 +7642,31 @@ async function filasACompromisosHeredados(
                 fechaLimite:
                     row.FechaLimite,
 
+                /* re-agendas y actividad de origen (ver combinarReagendas) */
+                ...(
+                    parsearReagendas(row.Reagendas).length > 0
+                        ? {
+                            fechaLimiteOriginal:
+                                row.FechaLimiteOriginal,
+                            reagendas:
+                                parsearReagendas(row.Reagendas)
+                        }
+                        : {}
+                ),
+
+                ...(
+                    row.OrigenReunionId
+                        ? {
+                            origenReunionId:
+                                row.OrigenReunionId,
+                            origenObjetivoId:
+                                row.OrigenObjetivoId,
+                            origenPuntoId:
+                                row.OrigenPuntoId
+                        }
+                        : {}
+                ),
+
                 estado:
                     STATUS_A_ESTADO[row.Status] ||
                     "pendiente",
@@ -6918,6 +7738,11 @@ async function obtenerCompromisosReunionPendientes(
                 c.Status,
                 DATE_FORMAT(c.FechaInicioEstimada, '%Y-%m-%d') AS FechaInicio,
                 DATE_FORMAT(c.FechaFinEstimada, '%Y-%m-%d') AS FechaLimite,
+                DATE_FORMAT(c.FechaFinOriginal, '%Y-%m-%d') AS FechaLimiteOriginal,
+                c.Reagendas,
+                c.OrigenReunionId,
+                c.OrigenObjetivoId,
+                c.OrigenPuntoId,
                 u.id AS UsuarioAsignadoId,
                 u.nombre AS ResponsableNombre
             FROM compromisos c
@@ -6972,6 +7797,11 @@ async function obtenerCompromisosModuloPendientes(
                 c.Status,
                 DATE_FORMAT(c.FechaInicioEstimada, '%Y-%m-%d') AS FechaInicio,
                 DATE_FORMAT(c.FechaFinEstimada, '%Y-%m-%d') AS FechaLimite,
+                DATE_FORMAT(c.FechaFinOriginal, '%Y-%m-%d') AS FechaLimiteOriginal,
+                c.Reagendas,
+                c.OrigenReunionId,
+                c.OrigenObjetivoId,
+                c.OrigenPuntoId,
                 u.id AS UsuarioAsignadoId,
                 u.nombre AS ResponsableNombre
             FROM compromisos c
@@ -7794,6 +8624,9 @@ function calcularAvanceObjetivo(
             puntos.map(
                 (punto) => ({
 
+                    id:
+                        punto.id || null,
+
                     texto:
                         punto.texto || "",
 
@@ -7801,7 +8634,14 @@ function calcularAvanceObjetivo(
                         Number(punto.avance) || 0,
 
                     prioridad:
-                        Boolean(punto.prioridad)
+                        Boolean(punto.prioridad),
+
+                    /* fecha de la reunión en que se creó el punto */
+                    fechaCreacion:
+                        punto.fechaCreacion || null,
+
+                    compromisoCreado:
+                        Boolean(punto.compromisoCreado)
 
                 })
             ),
@@ -8033,6 +8873,10 @@ app.get(
                                     texto:
                                         objetivo.texto,
 
+                                    /* para precargar el compromiso al convertirla */
+                                    responsables:
+                                        obtenerResponsablesObjetivo(objetivo),
+
                                     ...calcularAvanceObjetivo(
                                         desarrollo?.[objetivo.id]
                                     )
@@ -8044,6 +8888,90 @@ app.get(
 
                 }
             );
+
+
+            /*
+             * Puntos ya convertidos en compromiso desde este
+             * módulo (en el JSON de la reunión solo quedan marcados
+             * los convertidos dentro de la reunión). Se busca por
+             * objetivo + punto, sin importar la reunión: al heredarse
+             * a la siguiente reunión conservan sus ids. Si la base
+             * de datos aún no tiene las columnas de origen,
+             * simplemente no se marcan.
+             */
+            const objetivoIds =
+                [
+                    ...new Set(
+                        actividades
+                            .map(
+                                (actividad) => actividad.objetivoId
+                            )
+                            .filter(Boolean)
+                            .map(String)
+                    )
+                ];
+
+            if (objetivoIds.length > 0) {
+
+                try {
+
+                    const [convertidos] =
+                        await db.query(
+                            `
+                            SELECT OrigenObjetivoId, OrigenPuntoId
+                            FROM compromisos
+                            WHERE
+                                OrigenObjetivoId IN (?)
+                                AND OrigenPuntoId IS NOT NULL
+                            `,
+                            [
+                                objetivoIds
+                            ]
+                        );
+
+                    const llaves =
+                        new Set(
+                            convertidos.map(
+                                (fila) =>
+                                    `${fila.OrigenObjetivoId}|${fila.OrigenPuntoId}`
+                            )
+                        );
+
+                    actividades.forEach(
+                        (actividad) => {
+
+                            actividad.puntos.forEach(
+                                (punto) => {
+
+                                    if (
+                                        llaves.has(
+                                            `${actividad.objetivoId}|${punto.id}`
+                                        )
+                                    ) {
+
+                                        punto.compromisoCreado =
+                                            true;
+
+                                    }
+
+                                }
+                            );
+
+                        }
+                    );
+
+                }
+                catch (error) {
+
+                    if (error.code !== "ER_BAD_FIELD_ERROR") {
+
+                        throw error;
+
+                    }
+
+                }
+
+            }
 
 
             return res.json({
