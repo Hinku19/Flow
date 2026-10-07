@@ -44,8 +44,9 @@ import {
 
 
 /*
- * "Activos" (filtro por defecto): los que todavía requieren
- * algo, del responsable o del líder.
+ * "En curso" (vista por defecto): los que todavía requieren
+ * algo, del responsable o del líder. El resto va en la vista
+ * "Completados".
  */
 const ESTADOS_ACTIVOS = [
     "pendiente",
@@ -73,6 +74,42 @@ const ESTADOS_SIN_COMPLETAR = [
     "pendiente",
     "vencido"
 ];
+
+
+/*
+ * La lista se divide en grupos por urgencia, en este orden
+ * (ver grupoDe). Un grupo sin compromisos no se muestra.
+ */
+const GRUPOS = [
+    {
+        clave: "vencidos",
+        titulo: "Vencidos"
+    },
+    {
+        clave: "semana",
+        titulo: "Vencen en los próximos 7 días"
+    },
+    {
+        clave: "proximos",
+        titulo: "Próximos"
+    },
+    {
+        clave: "sin-fecha",
+        titulo: "Sin fecha límite"
+    },
+    {
+        clave: "en-revision",
+        titulo: "En espera de visto bueno"
+    },
+    {
+        clave: "completados",
+        titulo: "Completados"
+    }
+];
+
+
+const DIA_MS =
+    24 * 60 * 60 * 1000;
 
 
 /*
@@ -150,10 +187,14 @@ export function initCommitmentsView() {
 
     }
 
-    const filtroEstado =
-        document.querySelector(
-            "#compromisos-filtro-estado"
+    /* botones "En curso" / "Completados" */
+    const botonesVista =
+        document.querySelectorAll(
+            ".commitments-vista__btn"
         );
+
+    let vista =
+        "en-curso";
 
     const botonNuevo =
         document.querySelector(
@@ -204,6 +245,25 @@ export function initCommitmentsView() {
      */
     const idsRecientes =
         new Set();
+
+
+    /*
+     * Estado de UI (no se guarda): qué tarjetas están abiertas
+     * mostrando su detalle y qué grupos están colapsados. Vive
+     * aparte de "compromisos" para sobrevivir a las recargas
+     * tras una acción.
+     */
+    const idsExpandidos =
+        new Set();
+
+    const gruposColapsados =
+        new Set();
+
+
+    const buscador =
+        document.querySelector(
+            "#compromisos-buscar"
+        );
 
 
     const selectorResponsables =
@@ -379,6 +439,229 @@ export function initCommitmentsView() {
         return (
             `${d.getFullYear()}-${mes}-${dia}`
         );
+
+    }
+
+
+    /* =====================================================
+       DÍAS QUE FALTAN PARA LA FECHA LÍMITE
+       ===================================================== */
+
+    /*
+     * Negativo si ya pasó, 0 si es hoy, null si no hay fecha.
+     * Se compara por día (sin hora), igual que el servidor
+     * calcula "vencido" con DATE() y CURDATE().
+     */
+    function diasParaLimite(
+        data
+    ) {
+
+        const valor =
+            aValorInputFecha(
+                data.fechaLimite
+            );
+
+        if (!valor) {
+
+            return null;
+
+        }
+
+
+        const [anio, mes, dia] =
+            valor
+                .split("-")
+                .map(Number);
+
+        const limite =
+            new Date(
+                anio,
+                mes - 1,
+                dia
+            );
+
+        const hoy =
+            new Date();
+
+        hoy.setHours(
+            0,
+            0,
+            0,
+            0
+        );
+
+
+        return Math.round(
+            (limite - hoy) / DIA_MS
+        );
+
+    }
+
+
+    /*
+     * Texto corto para la tarjeta cerrada: "Vence mañana",
+     * "Venció hace 3 días", "Completado: 02/Oct/2026"...
+     */
+    function textoVencimiento(
+        data
+    ) {
+
+        if (
+            ESTADOS_MARCADOS.includes(
+                data.estado
+            ) &&
+            data.fechaCompletado
+        ) {
+
+            return `Completado: ${formatearFecha(data.fechaCompletado)}`;
+
+        }
+
+
+        const dias =
+            diasParaLimite(
+                data
+            );
+
+        if (dias === null) {
+
+            return "Sin fecha límite";
+
+        }
+
+        if (dias < 0) {
+
+            return `Venció hace ${-dias} ${-dias === 1 ? "día" : "días"}`;
+
+        }
+
+        if (dias === 0) {
+
+            return "Vence hoy";
+
+        }
+
+        if (dias === 1) {
+
+            return "Vence mañana";
+
+        }
+
+        if (dias < 7) {
+
+            return `Vence en ${dias} días`;
+
+        }
+
+        return `Vence el ${formatearFecha(data.fechaLimite)}`;
+
+    }
+
+
+    /* =====================================================
+       GRUPO DE CADA COMPROMISO (VER GRUPOS)
+       ===================================================== */
+
+    function grupoDe(
+        data
+    ) {
+
+        if (
+            data.estado === "completado" ||
+            data.estado === "completado-destiempo"
+        ) {
+
+            return "completados";
+
+        }
+
+        if (data.estado === "en-revision") {
+
+            return "en-revision";
+
+        }
+
+        if (data.estado === "vencido") {
+
+            return "vencidos";
+
+        }
+
+
+        const dias =
+            diasParaLimite(
+                data
+            );
+
+        if (dias === null) {
+
+            return "sin-fecha";
+
+        }
+
+        /* por si el estatus del servidor quedó desfasado */
+        if (dias < 0) {
+
+            return "vencidos";
+
+        }
+
+        return dias < 7
+            ? "semana"
+            : "proximos";
+
+    }
+
+
+    /*
+     * Dentro de un grupo: lo más urgente arriba (fecha límite más
+     * cercana); los completados, el más recientemente completado
+     * arriba. Sin fecha, al final; empatados, se respeta el orden base
+     * (compararMasRecientePrimero).
+     */
+    function compararEnGrupo(
+        clave
+    ) {
+
+        if (clave === "completados") {
+
+            return (a, b) =>
+                (Date.parse(b.fechaCompletado) || 0) -
+                (Date.parse(a.fechaCompletado) || 0);
+
+        }
+
+
+        return (a, b) => {
+
+            const diasA =
+                diasParaLimite(a);
+
+            const diasB =
+                diasParaLimite(b);
+
+            if (diasA === diasB) {
+
+                return 0;
+
+            }
+
+            /* sin fecha, al final */
+            if (diasA === null) {
+
+                return 1;
+
+            }
+
+            if (diasB === null) {
+
+                return -1;
+
+            }
+
+            return diasA - diasB;
+
+        };
 
     }
 
@@ -1384,6 +1667,20 @@ export function initCommitmentsView() {
             `commitment-card--${data.prioridad}`
         );
 
+        card.dataset.id =
+            data.id;
+
+
+        const expandido =
+            idsExpandidos.has(
+                String(data.id)
+            );
+
+        card.classList.toggle(
+            "commitment-card--expandido",
+            expandido
+        );
+
 
         const header =
             document.createElement(
@@ -1392,6 +1689,35 @@ export function initCommitmentsView() {
 
         header.classList.add(
             "commitment-card__header"
+        );
+
+
+        /*
+         * Cerrada, la tarjeta solo muestra lo esencial; el
+         * resto (fechas, involucrados, origen, re-agendas) se
+         * ve al abrirla con este botón o con clic en la tarjeta.
+         */
+        const toggle =
+            document.createElement("button");
+
+        toggle.type =
+            "button";
+
+        toggle.classList.add(
+            "commitment-card__toggle"
+        );
+
+        toggle.textContent =
+            "▸";
+
+        toggle.setAttribute(
+            "aria-expanded",
+            String(expandido)
+        );
+
+        toggle.setAttribute(
+            "aria-label",
+            "Ver detalles del compromiso"
         );
 
 
@@ -1465,11 +1791,17 @@ export function initCommitmentsView() {
 
 
         header.append(
+            toggle,
             title,
             actions
         );
 
 
+        /*
+         * Resumen de una línea: responsables · cuándo vence ·
+         * prioridad. El "cuándo vence" se resalta según la
+         * urgencia (ver grupoDe).
+         */
         const meta =
             document.createElement("div");
 
@@ -1477,8 +1809,38 @@ export function initCommitmentsView() {
             "commitment-card__meta"
         );
 
-        meta.textContent =
-            `${nombresResponsables(data) || "?"} · ${formatearFecha(data.fechaInicio)} → ${formatearFecha(data.fechaLimite)} · ${PRIORIDAD_LABEL[data.prioridad] || data.prioridad}`;
+
+        const vencimiento =
+            document.createElement("span");
+
+        vencimiento.classList.add(
+            "commitment-card__vencimiento",
+            `commitment-card__vencimiento--${grupoDe(data)}`
+        );
+
+        vencimiento.textContent =
+            textoVencimiento(
+                data
+            );
+
+
+        meta.append(
+            `${nombresResponsables(data) || "?"} · `,
+            vencimiento,
+            ` · ${PRIORIDAD_LABEL[data.prioridad] || data.prioridad}`
+        );
+
+
+        /* fechas completas, solo en el detalle */
+        const fechas =
+            document.createElement("div");
+
+        fechas.classList.add(
+            "commitment-card__fechas"
+        );
+
+        fechas.textContent =
+            `Inicio: ${formatearFecha(data.fechaInicio)} · Fecha límite: ${formatearFecha(data.fechaLimite)}`;
 
 
         const origen =
@@ -1566,6 +1928,39 @@ export function initCommitmentsView() {
         );
 
 
+        /*
+         * Una vez establecida, la fecha límite ya no se puede
+         * cambiar (solo re-agendar): el campo solo aparece, a la
+         * vista, mientras el compromiso no tiene fecha.
+         */
+        if (!inputFecha.disabled) {
+
+            card.append(
+                edicion
+            );
+
+        }
+
+
+        const detalle =
+            document.createElement("div");
+
+        detalle.classList.add(
+            "commitment-card__detalle"
+        );
+
+        detalle.hidden =
+            !expandido;
+
+        detalle.append(
+            fechas
+        );
+
+        card.append(
+            detalle
+        );
+
+
         if (
             textoInvolucrados(
                 data
@@ -1582,7 +1977,7 @@ export function initCommitmentsView() {
             involucrados.textContent =
                 `Involucrados: ${textoInvolucrados(data)}`;
 
-            card.append(
+            detalle.append(
                 involucrados
             );
 
@@ -1594,19 +1989,24 @@ export function initCommitmentsView() {
                 data
             );
 
+        detalle.append(
+            origen
+        );
+
+
+        /*
+         * El aviso de re-agenda va a la vista aunque la tarjeta
+         * esté cerrada: un cambio de fecha límite es algo que
+         * hay que notar.
+         */
         if (avisoReagenda) {
 
-            card.append(
-                avisoReagenda
+            card.insertBefore(
+                avisoReagenda,
+                detalle
             );
 
         }
-
-
-        card.append(
-            origen,
-            edicion
-        );
 
 
         /* botones de acción, en una sola fila */
@@ -1670,7 +2070,7 @@ export function initCommitmentsView() {
             completado.textContent =
                 `Completado: ${formatearFecha(data.fechaCompletado)}`;
 
-            card.append(
+            detalle.append(
                 completado
             );
 
@@ -1692,7 +2092,7 @@ export function initCommitmentsView() {
             vistoBueno.textContent =
                 `Visto bueno: ${formatearFecha(data.fechaAprobacion)}`;
 
-            card.append(
+            detalle.append(
                 vistoBueno
             );
 
@@ -1818,6 +2218,191 @@ export function initCommitmentsView() {
 
 
     /* =====================================================
+       BÚSQUEDA POR TEXTO
+       ===================================================== */
+
+    /* sin mayúsculas ni acentos: "reunion" encuentra "Reunión" */
+    function normalizarBusqueda(
+        texto
+    ) {
+
+        return String(texto || "")
+            .normalize("NFD")
+            .replace(/[̀-ͯ]/g, "")
+            .toLowerCase()
+            .trim();
+
+    }
+
+
+    function textoBuscable(
+        data
+    ) {
+
+        return normalizarBusqueda(
+            [
+                data.descripcion,
+                nombresResponsables(data),
+                textoInvolucrados(data),
+                data.reunionTitulo,
+                data.origenReunionTitulo
+            ].join(" ")
+        );
+
+    }
+
+
+    /* =====================================================
+       CREAR GRUPO (ENCABEZADO COLAPSABLE + TARJETAS)
+       ===================================================== */
+
+    function crearGrupo(
+        grupo,
+        items
+    ) {
+
+        if (items.length === 0) {
+
+            return null;
+
+        }
+
+
+        const colapsado =
+            gruposColapsados.has(
+                grupo.clave
+            );
+
+
+        const seccion =
+            document.createElement("section");
+
+        seccion.classList.add(
+            "commitments-group",
+            `commitments-group--${grupo.clave}`
+        );
+
+
+        const encabezado =
+            document.createElement("button");
+
+        encabezado.type =
+            "button";
+
+        encabezado.classList.add(
+            "commitments-group__toggle"
+        );
+
+        encabezado.dataset.grupo =
+            grupo.clave;
+
+        encabezado.setAttribute(
+            "aria-expanded",
+            String(!colapsado)
+        );
+
+
+        const titulo =
+            document.createElement("span");
+
+        titulo.classList.add(
+            "commitments-group__title"
+        );
+
+        titulo.textContent =
+            grupo.titulo;
+
+
+        const contador =
+            document.createElement("span");
+
+        contador.classList.add(
+            "commitments-group__count"
+        );
+
+        contador.textContent =
+            items.length;
+
+
+        encabezado.append(
+            titulo,
+            contador
+        );
+
+
+        const lista =
+            document.createElement("ul");
+
+        lista.classList.add(
+            "commitments-group__list"
+        );
+
+        lista.hidden =
+            colapsado;
+
+        lista.append(
+            ...items.map(
+                crearTarjeta
+            )
+        );
+
+
+        seccion.append(
+            encabezado,
+            lista
+        );
+
+        return seccion;
+
+    }
+
+
+    /* =====================================================
+       BOTONES "EN CURSO" / "COMPLETADOS"
+       ===================================================== */
+
+    /*
+     * Marca la vista activa y pone cuántos hay en cada una (ya
+     * con el filtro de usuario y la búsqueda aplicados).
+     */
+    function actualizarBotonesVista(
+        totalEnCurso,
+        totalCompletados
+    ) {
+
+        const totales = {
+
+            "en-curso":
+                totalEnCurso,
+
+            "completados":
+                totalCompletados
+
+        };
+
+
+        botonesVista.forEach(
+            (boton) => {
+
+                boton.setAttribute(
+                    "aria-pressed",
+                    String(
+                        boton.dataset.vista === vista
+                    )
+                );
+
+                boton.querySelector(
+                    ".commitments-vista__count"
+                ).textContent =
+                    totales[boton.dataset.vista];
+
+            }
+        );
+
+    }
+
+
+    /* =====================================================
        APLICAR FILTROS Y RENDERIZAR
        ===================================================== */
 
@@ -1828,15 +2413,30 @@ export function initCommitmentsView() {
                 filtroUsuario.value :
                 "";
 
-        const estado =
-            filtroEstado ?
-                filtroEstado.value :
-                "activos";
+        const busqueda =
+            normalizarBusqueda(
+                buscador ?
+                    buscador.value :
+                    ""
+            );
 
 
-        const filtrados =
+        /* usuario y búsqueda: aplican a las dos vistas */
+        const base =
             compromisos.filter(
                 (item) => {
+
+                    if (
+                        busqueda &&
+                        !textoBuscable(item).includes(
+                            busqueda
+                        )
+                    ) {
+
+                        return false;
+
+                    }
+
 
                     if (
                         usuario &&
@@ -1849,50 +2449,59 @@ export function initCommitmentsView() {
 
                     }
 
-
-                    if (
-                        idsRecientes.has(
-                            String(item.id)
-                        )
-                    ) {
-
-                        return true;
-
-                    }
-
-
-                    if (
-                        estado === "activos"
-                    ) {
-
-                        return ESTADOS_ACTIVOS.includes(
-                            item.estado
-                        );
-
-                    }
-
-
-                    if (
-                        estado === "todos"
-                    ) {
-
-                        return true;
-
-                    }
-
-
-                    return (
-                        item.estado === estado
-                    );
+                    return true;
 
                 }
             );
 
 
+        const enCurso =
+            (item) =>
+                ESTADOS_ACTIVOS.includes(
+                    item.estado
+                );
+
+
+        const totalEnCurso =
+            base.filter(
+                enCurso
+            ).length;
+
+        actualizarBotonesVista(
+            totalEnCurso,
+            base.length - totalEnCurso
+        );
+
+
+        const filtrados =
+            base.filter(
+                (item) =>
+                    idsRecientes.has(
+                        String(item.id)
+                    ) ||
+                    enCurso(item) === (vista === "en-curso")
+            );
+
+
         list.replaceChildren(
-            ...filtrados.map(
-                crearTarjeta
-            )
+            ...GRUPOS
+                .map(
+                    (grupo) =>
+                        crearGrupo(
+                            grupo,
+                            filtrados
+                                .filter(
+                                    (item) =>
+                                        grupoDe(item) === grupo.clave
+                                )
+                                .sort(
+                                    compararEnGrupo(
+                                        grupo.clave
+                                    )
+                                )
+                        )
+                )
+                .filter(Boolean)
         );
 
 
@@ -1924,6 +2533,18 @@ export function initCommitmentsView() {
         if (!conservarRecientes) {
 
             idsRecientes.clear();
+
+            idsExpandidos.clear();
+
+            vista =
+                "en-curso";
+
+            if (buscador) {
+
+                buscador.value =
+                    "";
+
+            }
 
         }
 
@@ -2150,8 +2771,165 @@ export function initCommitmentsView() {
 
 
     /* =====================================================
+       COLAPSAR / EXPANDIR GRUPO (CLIC)
+       ===================================================== */
+
+    list.addEventListener(
+        "click",
+        (event) => {
+
+            const encabezado =
+                event.target.closest(
+                    ".commitments-group__toggle"
+                );
+
+            if (!encabezado) {
+
+                return;
+
+            }
+
+
+            const clave =
+                encabezado.dataset.grupo;
+
+            const colapsar =
+                !gruposColapsados.has(
+                    clave
+                );
+
+            if (colapsar) {
+
+                gruposColapsados.add(
+                    clave
+                );
+
+            } else {
+
+                gruposColapsados.delete(
+                    clave
+                );
+
+            }
+
+
+            encabezado.setAttribute(
+                "aria-expanded",
+                String(!colapsar)
+            );
+
+            encabezado.nextElementSibling.hidden =
+                colapsar;
+
+        }
+    );
+
+
+    /* =====================================================
+       ABRIR / CERRAR DETALLE DE UNA TARJETA (CLIC)
+       ===================================================== */
+
+    /*
+     * Con el botón ▸ o con clic en cualquier parte de la
+     * tarjeta que no sea un control (botones, fecha, el aviso
+     * de re-agenda). No se abre si el usuario estaba
+     * seleccionando texto.
+     */
+    list.addEventListener(
+        "click",
+        (event) => {
+
+            const card =
+                event.target.closest(
+                    ".commitment-card"
+                );
+
+            if (!card) {
+
+                return;
+
+            }
+
+
+            const enToggle =
+                event.target.closest(
+                    ".commitment-card__toggle"
+                );
+
+            if (
+                !enToggle &&
+                (
+                    event.target.closest(
+                        "button, input, select, label, a, details"
+                    ) ||
+                    String(
+                        window.getSelection()
+                    ).length > 0
+                )
+            ) {
+
+                return;
+
+            }
+
+
+            const id =
+                card.dataset.id;
+
+            const expandir =
+                !idsExpandidos.has(
+                    id
+                );
+
+            if (expandir) {
+
+                idsExpandidos.add(
+                    id
+                );
+
+            } else {
+
+                idsExpandidos.delete(
+                    id
+                );
+
+            }
+
+
+            card.classList.toggle(
+                "commitment-card--expandido",
+                expandir
+            );
+
+            card.querySelector(
+                ".commitment-card__detalle"
+            ).hidden =
+                !expandir;
+
+            card.querySelector(
+                ".commitment-card__toggle"
+            ).setAttribute(
+                "aria-expanded",
+                String(expandir)
+            );
+
+        }
+    );
+
+
+    /* =====================================================
        EVENTOS DE FILTROS
        ===================================================== */
+
+    if (buscador) {
+
+        buscador.addEventListener(
+            "input",
+            aplicarFiltros
+        );
+
+    }
+
 
     if (filtroUsuario) {
 
@@ -2163,14 +2941,23 @@ export function initCommitmentsView() {
     }
 
 
-    if (filtroEstado) {
+    botonesVista.forEach(
+        (boton) => {
 
-        filtroEstado.addEventListener(
-            "change",
-            aplicarFiltros
-        );
+            boton.addEventListener(
+                "click",
+                () => {
 
-    }
+                    vista =
+                        boton.dataset.vista;
+
+                    aplicarFiltros();
+
+                }
+            );
+
+        }
+    );
 
 
     return {

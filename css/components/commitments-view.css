@@ -67,6 +67,103 @@
     display: none;
 }
 
+.commitments-filter__label {
+    font-size: 13px;
+    font-weight: var(--weight-bold);
+
+    color: var(--color-text);
+}
+
+
+/* "En curso" / "Completados": dos botones pegados */
+.commitments-vista {
+    display: flex;
+
+    height: 40px;
+
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+
+    overflow: hidden;
+}
+
+.commitments-vista__btn {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xs);
+
+    padding: 0 14px;
+
+    border: none;
+
+    background-color: var(--color-surface);
+
+    color: var(--color-text-muted);
+
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: var(--weight-medium);
+    white-space: nowrap;
+
+    cursor: pointer;
+
+    transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast);
+}
+
+.commitments-vista__btn + .commitments-vista__btn {
+    border-left: 1px solid var(--color-border-strong);
+}
+
+.commitments-vista__btn:hover {
+    color: var(--color-text);
+}
+
+.commitments-vista__btn[aria-pressed="true"] {
+    background-color: var(--color-compromisos);
+
+    color: var(--color-on-accent);
+}
+
+.commitments-vista__btn:focus-visible {
+    outline: none;
+
+    box-shadow:
+        inset 0 0 0 3px rgba(201, 134, 15, 0.35);
+}
+
+.commitments-vista__count {
+    min-width: 20px;
+    padding: 0 6px;
+
+    border-radius: var(--radius-lg);
+
+    background-color: var(--color-surface-alt);
+
+    color: var(--color-text-muted);
+
+    font-size: var(--text-xs);
+}
+
+.commitments-vista__count:empty {
+    display: none;
+}
+
+.commitments-vista__btn[aria-pressed="true"] .commitments-vista__count {
+    background-color: rgba(255, 255, 255, 0.25);
+
+    color: var(--color-on-accent);
+}
+
+
+/* la búsqueda ocupa el espacio que sobra en la barra */
+.commitments-filter--buscar {
+    flex: 1;
+}
+
 
 .commitments-filter label {
     font-size: 13px;
@@ -112,12 +209,184 @@
 .commitments-view__list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm);
+    gap: var(--space-lg);
 
     margin: 0 0 var(--space-md);
+}
+
+
+/* =========================================================
+   GRUPOS POR URGENCIA
+   ========================================================= */
+
+.commitments-group__toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+
+    width: 100%;
+    margin-bottom: var(--space-sm);
+    padding: var(--space-2xs) 0;
+
+    border: none;
+    border-bottom: 2px solid var(--color-border);
+
+    background: none;
+
+    color: var(--color-text);
+
+    font-family: inherit;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-bold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+
+    text-align: left;
+
+    cursor: pointer;
+}
+
+.commitments-group__toggle::before {
+    content: "▾";
+
+    display: inline-block;
+    width: 1em;
+
+    transition: transform var(--transition-fast);
+}
+
+.commitments-group__toggle[aria-expanded="false"] {
+    margin-bottom: 0;
+}
+
+.commitments-group__toggle[aria-expanded="false"]::before {
+    transform: rotate(-90deg);
+}
+
+.commitments-group__count {
+    min-width: 22px;
+    padding: 1px var(--space-xs);
+
+    border-radius: var(--radius-lg);
+
+    background-color: var(--color-surface-alt);
+
+    color: var(--color-text-muted);
+
+    font-size: var(--text-xs);
+    letter-spacing: 0;
+    text-align: center;
+}
+
+/* el color del encabezado avisa la urgencia del grupo */
+.commitments-group--vencidos .commitments-group__toggle {
+    border-bottom-color: var(--color-danger);
+    color: var(--color-danger);
+}
+
+.commitments-group--semana .commitments-group__toggle {
+    border-bottom-color: var(--color-compromisos);
+}
+
+.commitments-group--en-revision .commitments-group__toggle {
+    border-bottom-color: var(--color-evaluaciones);
+}
+
+.commitments-group--completados .commitments-group__toggle {
+    border-bottom-color: var(--color-success);
+}
+
+.commitments-group__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+
+    margin: 0;
     padding: 0;
 
     list-style: none;
+}
+
+/* display: flex le ganaba al atributo hidden (grupo colapsado) */
+.commitments-group__list[hidden] {
+    display: none;
+}
+
+
+/* =========================================================
+   TARJETA COMPACTA (DETALLE AL ABRIRLA)
+   ========================================================= */
+
+.commitments-view__list .commitment-card__header {
+    align-items: center;
+}
+
+.commitments-view__list .commitment-card__title {
+    flex: 1;
+    min-width: 0;
+}
+
+.commitment-card__toggle {
+    flex-shrink: 0;
+
+    width: 22px;
+    height: 22px;
+    padding: 0;
+
+    border: none;
+    border-radius: var(--radius-sm);
+
+    background: none;
+
+    color: var(--color-text-subtle);
+
+    font-size: var(--text-sm);
+    line-height: 1;
+
+    cursor: pointer;
+
+    transition:
+        transform var(--transition-fast),
+        color var(--transition-fast);
+}
+
+.commitment-card__toggle:hover {
+    color: var(--color-text);
+}
+
+.commitment-card__toggle[aria-expanded="true"] {
+    transform: rotate(90deg);
+}
+
+/* el resumen se alinea con el título, no con la flecha */
+.commitments-view__list .commitment-card__meta,
+.commitments-view__list .commitment-card__botones,
+.commitments-view__list .commitments-view__edit,
+.commitments-view__list .reagenda-aviso,
+.commitment-card__detalle {
+    margin-left: calc(22px + var(--space-sm));
+}
+
+.commitment-card__vencimiento--vencidos {
+    color: var(--color-danger);
+    font-weight: var(--weight-medium);
+}
+
+.commitment-card__vencimiento--semana {
+    color: var(--color-text);
+    font-weight: var(--weight-medium);
+}
+
+.commitment-card__detalle {
+    margin-top: var(--space-xs);
+    padding-top: var(--space-xs);
+
+    border-top: 1px dashed var(--color-border);
+}
+
+.commitment-card__fechas {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
 }
 
 
@@ -177,13 +446,12 @@
 }
 
 /*
- * La tarjeta en sí no hace nada al hacer clic (a diferencia de
- * la lista dentro de la reunión), así que la manita solo se
- * muestra sobre los controles editables.
+ * Clic en la tarjeta abre o cierra su detalle (ver
+ * commitmentsView.js), por eso la manita en toda la tarjeta.
  */
 
 .commitments-view__list .commitment-card {
-    cursor: default;
+    cursor: pointer;
 }
 
 .commitments-view__estado-edit,

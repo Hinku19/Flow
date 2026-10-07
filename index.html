@@ -2459,51 +2459,62 @@
 
                         <div class="commitments-filter">
 
-                            <label for="compromisos-filtro-estado">
-                                Estado
-                            </label>
+                            <span class="commitments-filter__label">
+                                Mostrar
+                            </span>
 
-                            <select
-                                id="compromisos-filtro-estado"
-                                class="commitments-filter__select"
+                            <div
+                                class="commitments-vista"
+                                role="group"
+                                aria-label="Mostrar compromisos"
                             >
 
-                                <option value="activos" selected>
-                                    Activos
-                                </option>
+                                <button
+                                    type="button"
+                                    class="commitments-vista__btn"
+                                    data-vista="en-curso"
+                                    aria-pressed="true"
+                                >
+                                    En curso
+                                    <span class="commitments-vista__count"></span>
+                                </button>
 
-                                <option value="pendiente">
-                                    Pendiente
-                                </option>
+                                <button
+                                    type="button"
+                                    class="commitments-vista__btn"
+                                    data-vista="completados"
+                                    aria-pressed="false"
+                                >
+                                    Completados
+                                    <span class="commitments-vista__count"></span>
+                                </button>
 
-                                <option value="vencido">
-                                    Vencido
-                                </option>
+                            </div>
 
-                                <option value="en-revision">
-                                    En espera de visto bueno
-                                </option>
+                        </div>
 
-                                <option value="completado">
-                                    Completado
-                                </option>
 
-                                <option value="completado-destiempo">
-                                    Completado a destiempo
-                                </option>
+                        <div class="commitments-filter commitments-filter--buscar">
 
-                                <option value="todos">
-                                    Todos
-                                </option>
+                            <label for="compromisos-buscar">
+                                Buscar
+                            </label>
 
-                            </select>
+                            <input
+                                type="search"
+                                id="compromisos-buscar"
+                                class="commitments-filter__select"
+                                placeholder="Compromiso, responsable o reunión..."
+                                autocomplete="off"
+                            >
 
                         </div>
 
                     </div>
 
 
-                    <ul class="commitments-view__list"></ul>
+                    <!-- grupos por urgencia (los arma commitmentsView.js) -->
+                    <div class="commitments-view__list"></div>
 
                     <p class="commitments-view__empty" hidden>
                         No hay compromisos con estos filtros.
