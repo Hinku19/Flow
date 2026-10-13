@@ -94,7 +94,8 @@
                     type="button"
                     id="btn-configuracion"
                     class="app-header__btn app-header__settings"
-                    aria-label="Configuración"
+                    aria-label="Administración"
+                    title="Administración"
                     aria-haspopup="true"
                     aria-expanded="false"
                 >
@@ -124,12 +125,22 @@
                     hidden
                 >
 
+                    <!--
+                         Reportes y Archivos: administrador y líder.
+                         Control de Usuarios: solo administrador.
+                         (main.js oculta lo que no le toca a cada rol)
+                    -->
+
+                    <span class="settings-menu__heading">
+                        Administración
+                    </span>
+
                     <button
                         type="button"
                         class="settings-menu__item"
-                        data-view="usuarios"
+                        data-view="reportes"
                     >
-                        Control de Usuarios
+                        Reportes
                     </button>
 
                     <button
@@ -138,6 +149,14 @@
                         data-view="archivos"
                     >
                         Archivos
+                    </button>
+
+                    <button
+                        type="button"
+                        class="settings-menu__item"
+                        data-view="usuarios"
+                    >
+                        Control de Usuarios
                     </button>
 
                 </div>
@@ -218,25 +237,318 @@
 
             <div class="dashboard">
 
+                <!--
+                     El contenido dinámico (fecha, próxima reunión y
+                     pendientes) lo llena js/components/homeMenu.js
+                     cada vez que se muestra esta vista.
+                -->
+
                 <header class="dashboard__header">
 
-                    <h1 class="dashboard__title">
-                        Bienvenido a Flow
-                        <span id="usuario-actual-nombre"></span>
-                    </h1>
+                    <div class="dashboard__identity">
 
-                    <p class="dashboard__subtitle">
-                        Gestión de reuniones y seguimiento de compromisos
-                    </p>
+                        <!-- Foto de perfil o iniciales (homeMenu.js) -->
+                        <span
+                            class="dashboard__avatar-slot"
+                            id="dashboard-avatar"
+                            aria-hidden="true"
+                        ></span>
+
+                        <div class="dashboard__heading">
+
+                            <p
+                                class="dashboard__date"
+                                id="dashboard-fecha"
+                            ></p>
+
+                            <h1 class="dashboard__title">
+                                Hola,<span id="usuario-actual-nombre"></span>
+                            </h1>
+
+                        </div>
+
+                    </div>
+
+
+                    <button
+                        type="button"
+                        class="dashboard__schedule"
+                        id="dashboard-btn-programar"
+                    >
+
+                        <svg
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                        >
+
+                            <line
+                                x1="12"
+                                y1="5"
+                                x2="12"
+                                y2="19"
+                            ></line>
+
+                            <line
+                                x1="5"
+                                y1="12"
+                                x2="19"
+                                y2="12"
+                            ></line>
+
+                        </svg>
+
+                        Programar reunión
+
+                    </button>
 
                 </header>
+
+
+                <div class="dashboard__summary">
+
+
+                    <!-- =========================================
+                         PRÓXIMA REUNIÓN
+                         ---------------------------------------------
+                         Tres estados (data-estado):
+                         programada → faltan días: "Preparar reunión"
+                         hoy        → es hoy:      "Iniciar reunión"
+                         en-curso   →              "Continuar reunión"
+                         vacio      → sin reuniones
+                         ========================================= -->
+
+                    <article
+                        class="home-meeting"
+                        id="dashboard-proxima-reunion"
+                        data-estado="cargando"
+                        aria-live="polite"
+                    >
+
+                        <div class="home-card__header">
+
+                            <h2
+                                class="home-card__label"
+                                id="dashboard-reunion-etiqueta"
+                            >
+                                Próxima reunión
+                            </h2>
+
+                            <span
+                                class="home-meeting__badge"
+                                id="dashboard-reunion-insignia"
+                                hidden
+                            ></span>
+
+                        </div>
+
+
+                        <div
+                            class="home-meeting__body"
+                            id="dashboard-reunion-detalle"
+                            hidden
+                        >
+
+                            <div
+                                class="home-meeting__date"
+                                id="dashboard-reunion-fecha"
+                            >
+
+                                <span
+                                    class="home-meeting__month"
+                                    id="dashboard-reunion-mes"
+                                ></span>
+
+                                <span
+                                    class="home-meeting__day"
+                                    id="dashboard-reunion-dia"
+                                ></span>
+
+                                <svg
+                                    class="home-meeting__clock"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                >
+
+                                    <circle
+                                        cx="12"
+                                        cy="12"
+                                        r="9"
+                                    ></circle>
+
+                                    <polyline
+                                        points="12,7 12,12 15,14"
+                                    ></polyline>
+
+                                </svg>
+
+                            </div>
+
+
+                            <div class="home-meeting__info">
+
+                                <h3
+                                    class="home-meeting__title"
+                                    id="dashboard-reunion-titulo"
+                                ></h3>
+
+                                <p
+                                    class="home-meeting__meta"
+                                    id="dashboard-reunion-meta"
+                                ></p>
+
+                            </div>
+
+                        </div>
+
+
+                        <p
+                            class="home-meeting__empty"
+                            id="dashboard-reunion-vacio"
+                            hidden
+                        >
+                            No tienes reuniones programadas.
+                        </p>
+
+
+                        <!--
+                             Última junta finalizada del departamento.
+                             Al darle clic se abre igual que desde el
+                             historial.
+                        -->
+
+                        <button
+                            type="button"
+                            class="home-meeting__last"
+                            id="dashboard-ultima-junta"
+                            hidden
+                        >
+
+                            <span class="home-meeting__last-label">
+                                Última junta
+                                <span id="dashboard-ultima-hace"></span>
+                            </span>
+
+                            <span
+                                class="home-meeting__last-title"
+                                id="dashboard-ultima-titulo"
+                            ></span>
+
+                            <span
+                                class="home-meeting__last-meta"
+                                id="dashboard-ultima-meta"
+                            ></span>
+
+                            <span
+                                class="home-meeting__last-open"
+                                aria-hidden="true"
+                            >
+                                Ver junta →
+                            </span>
+
+                        </button>
+
+
+                        <div class="home-meeting__actions">
+
+                            <button
+                                type="button"
+                                class="home-meeting__primary"
+                                id="dashboard-reunion-accion"
+                                hidden
+                            >
+
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                >
+
+                                    <path
+                                        id="dashboard-reunion-accion-icono"
+                                        d=""
+                                    ></path>
+
+                                </svg>
+
+                                <span id="dashboard-reunion-accion-texto"></span>
+
+                            </button>
+
+
+                            <button
+                                type="button"
+                                class="home-meeting__primary"
+                                id="dashboard-reunion-programar"
+                                hidden
+                            >
+                                Programar reunión
+                            </button>
+
+
+                            <button
+                                type="button"
+                                class="home-meeting__secondary"
+                                id="dashboard-reunion-historial"
+                                data-view="historial"
+                            >
+                                Historial
+                            </button>
+
+                        </div>
+
+                    </article>
+
+
+                    <!-- =========================================
+                         TUS PENDIENTES
+                         ---------------------------------------------
+                         Compromisos sin terminar asignados al
+                         usuario (vencidos, pendientes y en espera
+                         de visto bueno), los 3 más urgentes.
+                         ========================================= -->
+
+                    <article class="home-pending">
+
+                        <div class="home-card__header">
+
+                            <h2
+                                class="home-card__label"
+                                id="dashboard-pendientes-etiqueta"
+                            >
+                                Tus pendientes
+                            </h2>
+
+                            <button
+                                type="button"
+                                class="home-pending__all"
+                                data-view="compromisos"
+                            >
+                                Ver todos
+                            </button>
+
+                        </div>
+
+
+                        <ul
+                            class="home-pending__list"
+                            id="dashboard-pendientes"
+                            aria-live="polite"
+                        ></ul>
+
+                    </article>
+
+                </div>
+
+
+                <h2 class="dashboard__section-title">
+                    Módulos
+                </h2>
 
 
                 <div class="dashboard__grid">
 
 
                     <!-- =========================================
-                         HISTORIAL
+                         REUNIONES (HISTORIAL + PROGRAMAR)
                          ========================================= -->
 
                     <button
@@ -276,23 +588,9 @@
 
                                 <line
                                     x1="3"
-                                    y1="9"
+                                    y1="10"
                                     x2="21"
-                                    y2="9"
-                                ></line>
-
-                                <line
-                                    x1="8"
-                                    y1="13"
-                                    x2="16"
-                                    y2="13"
-                                ></line>
-
-                                <line
-                                    x1="8"
-                                    y1="17"
-                                    x2="13"
-                                    y2="17"
+                                    y2="10"
                                 ></line>
 
                             </svg>
@@ -301,63 +599,19 @@
 
 
                         <span class="dashboard-card__title">
-                            Historial de Reuniones
+                            Reuniones
                         </span>
 
 
                         <span class="dashboard-card__description">
-                            Consulta reuniones anteriores y sus resultados.
+                            Programar · Historial
                         </span>
 
                     </button>
 
 
                     <!-- =========================================
-                         PROGRAMAR REUNIÓN
-                         ========================================= -->
-
-                    <button
-                        type="button"
-                        class="dashboard-card dashboard-card--primary"
-                        id="dashboard-iniciar-reunion"
-                    >
-
-                        <span class="dashboard-card__icon">
-
-                            <svg
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                            >
-
-                                <circle
-                                    cx="12"
-                                    cy="12"
-                                    r="9"
-                                ></circle>
-
-                                <polygon
-                                    points="10,8 16,12 10,16"
-                                ></polygon>
-
-                            </svg>
-
-                        </span>
-
-
-                        <span class="dashboard-card__title">
-                            Programar Reunión
-                        </span>
-
-
-                        <span class="dashboard-card__description">
-                            Programa una nueva reunión semanal.
-                        </span>
-
-                    </button>
-
-
-                    <!-- =========================================
-                         COMPROMISOS
+                         COMPROMISOS Y ACTIVIDADES
                          ========================================= -->
 
                     <button
@@ -374,30 +628,24 @@
                             >
 
                                 <rect
-                                    x="4"
-                                    y="3"
-                                    width="16"
-                                    height="18"
+                                    x="5"
+                                    y="4"
+                                    width="14"
+                                    height="17"
                                     rx="2"
                                 ></rect>
 
-                                <line
-                                    x1="8"
-                                    y1="7"
-                                    x2="16"
-                                    y2="7"
-                                ></line>
+                                <rect
+                                    x="9"
+                                    y="2"
+                                    width="6"
+                                    height="4"
+                                    rx="1"
+                                ></rect>
 
                                 <polyline
-                                    points="8,12 10,14 14,10"
+                                    points="9,13 11,15 15,11"
                                 ></polyline>
-
-                                <line
-                                    x1="8"
-                                    y1="17"
-                                    x2="16"
-                                    y2="17"
-                                ></line>
 
                             </svg>
 
@@ -410,66 +658,10 @@
 
 
                         <span class="dashboard-card__description">
-                            Consulta y da seguimiento a los compromisos.
+                            Mis actividades · Equipo
                         </span>
 
                     </button>
-
-                    <!-- =========================================
-                         MIS ACTIVIDADES
-                         ========================================= -->
-
-                    <button
-                        type="button"
-                        class="dashboard-card dashboard-card--activities"
-                        data-view="actividades"
-                    >
-
-                        <span class="dashboard-card__icon">
-
-                            <svg
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                            >
-
-                                <circle
-                                    cx="8"
-                                    cy="7"
-                                    r="3"
-                                ></circle>
-
-                                <path
-                                    d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6"
-                                ></path>
-
-                                <polyline
-                                    points="15,9 17,11 21,7"
-                                ></polyline>
-
-                                <line
-                                    x1="16"
-                                    y1="15"
-                                    x2="22"
-                                    y2="15"
-                                ></line>
-
-                            </svg>
-
-                        </span>
-
-
-                        <span class="dashboard-card__title">
-                            Mis actividades
-                        </span>
-
-
-                        <span class="dashboard-card__description">
-                            Consulta los objetivos que te asignaron en las reuniones.
-                        </span>
-
-                    </button>
-
-
 
                     <!-- =========================================
                          INNOVACIONES
@@ -511,13 +703,17 @@
 
 
                         <span class="dashboard-card__description">
-                            Acciones, ideas o mejoras implementadas para optimizar procesos.
+                            Propuestas · Planes de trabajo
                         </span>
 
                     </button>
 
                     <!-- =========================================
-                         EVALUACIONES
+                         EVALUACIONES Y SERVICIOS
+                         ---------------------------------------------
+                         Servicios es solo para administrador: para
+                         los demás roles main.js deja el título y la
+                         descripción solo con "Evaluaciones".
                          ========================================= -->
 
                     <button
@@ -533,93 +729,38 @@
                                 aria-hidden="true"
                             >
 
-                                <path
-                                    d="M9 11l3 3L22 4"
-                                ></path>
+                                <rect
+                                    x="4"
+                                    y="4"
+                                    width="16"
+                                    height="16"
+                                    rx="2"
+                                ></rect>
 
-                                <path
-                                    d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
-                                ></path>
+                                <polyline
+                                    points="9,12 11,14 15,10"
+                                ></polyline>
 
                             </svg>
 
                         </span>
 
 
-                        <span class="dashboard-card__title">
-                            Evaluaciones
+                        <span
+                            class="dashboard-card__title"
+                            id="dashboard-evaluaciones-titulo"
+                        >
+                            Evaluaciones y servicios
                         </span>
 
 
-                        <span class="dashboard-card__description">
-                            Responde las evaluaciones activas y consulta sus resultados.
+                        <span
+                            class="dashboard-card__description"
+                            id="dashboard-evaluaciones-descripcion"
+                        >
+                            Evaluaciones · Servicios
                         </span>
 
-                    </button>
-
-                     <!-- =========================================
-                         REPORTES
-                        ========================================= -->
-
-                    <button
-                        type="button"
-                        class="dashboard-card dashboard-card--reports"
-                        data-view="reportes"
-                    >
-
-                        <span class="dashboard-card__icon">
-
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M4 19V5"></path>
-                                <path d="M4 19h17"></path>
-                                <rect x="7" y="11" width="3" height="5" rx="1"></rect>
-                                <rect x="13" y="8" width="3" height="8" rx="1"></rect>
-                                <rect x="19" y="4" width="3" height="12" rx="1"></rect>
-                            </svg>
-
-                        </span>
-
-                        <span class="dashboard-card__title">
-                            Reportes
-                        </span>
-
-                        <span class="dashboard-card__description">
-                            Genera reportes de compromisos, innovaciones y evaluaciones.
-                        </span>
-
-                    </button>
-
-
-                    <!-- =========================================
-                         SERVICIOS
-                         ========================================= -->
-
-                    <button
-                        type="button"
-                        class="dashboard-card dashboard-card--services"
-                        data-view="servicios"
-                    >
-
-                        <span class="dashboard-card__icon">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M14.7 6.3a5 5 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a5 5 0 0 0 6.4-6.4l-3.1 3.1-3-3z"></path>
-                            </svg>
-                        </span>
-
-                        <span class="dashboard-card__title">Servicios</span>
-                        <span class="dashboard-card__description">Accede al módulo de servicios.</span>
-
-                    </button>
-
-                    <button type="button" class="dashboard-card dashboard-card--minutes" data-view="minutas">
-                        <span class="dashboard-card__icon">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M6 2h9l5 5v15H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"></path>
-                                <path d="M14 2v6h6M8 13h8M8 17h8"></path>
-                            </svg>
-                        </span>
-                        <span class="dashboard-card__title">Minutas</span>
-                        <span class="dashboard-card__description">Consulta e imprime minutas de reuniones finalizadas.</span>
                     </button>
 
                 </div>
@@ -634,8 +775,35 @@
              ===================================================== -->
         <section id="vista-minutas" class="view view--hidden">
             <div class="minutes-view">
-                <header class="minutes-view__header">
+                <div class="view__navigation">
                     <button type="button" class="minutes-view__back" data-view="dashboard">← Volver al inicio</button>
+                </div>
+
+                <nav
+                    class="module-tabs"
+                    aria-label="Reportes"
+                >
+
+                    <button
+                        type="button"
+                        class="module-tabs__btn"
+                        data-view="reportes"
+                    >
+                        Reportes generales
+                    </button>
+
+                    <button
+                        type="button"
+                        class="module-tabs__btn module-tabs__btn--activo"
+                        data-view="minutas"
+                        aria-current="page"
+                    >
+                        Minutas
+                    </button>
+
+                </nav>
+
+                <header class="minutes-view__header">
                     <h1 class="minutes-view__title">Minutas de reuniones</h1>
                     <p class="minutes-view__subtitle">Consulta, previsualiza e imprime los reportes enviados al terminar cada reunión.</p>
                 </header>
@@ -666,10 +834,38 @@
             class="view view--hidden"
         >
             <div class="services-view">
-                <header class="services-view__header">
+                <div class="view__navigation">
                     <button type="button" class="services-view__back" data-view="dashboard">
                         ← Volver al inicio
                     </button>
+                </div>
+
+                <nav
+                    class="module-tabs"
+                    aria-label="Evaluaciones y servicios"
+                >
+
+                    <button
+                        type="button"
+                        class="module-tabs__btn"
+                        data-view="evaluaciones"
+                    >
+                        Evaluaciones
+                    </button>
+
+                    <button
+                        type="button"
+                        class="module-tabs__btn module-tabs__btn--activo"
+                        data-view="servicios"
+                        aria-current="page"
+                        data-solo-admin
+                    >
+                        Servicios
+                    </button>
+
+                </nav>
+
+                <header class="services-view__header">
                     <h1 class="services-view__title">Servicios</h1>
                     <p class="services-view__subtitle">Administra los servicios disponibles por departamento y área.</p>
                 </header>
@@ -700,10 +896,37 @@
             class="view view--hidden"
         >
             <div class="reports-view">
-                <header class="reports-view__header">
+                <div class="view__navigation">
                     <button type="button" class="reports-view__back" data-view="dashboard">
                         ← Volver al inicio
                     </button>
+                </div>
+
+                <nav
+                    class="module-tabs"
+                    aria-label="Reportes"
+                >
+
+                    <button
+                        type="button"
+                        class="module-tabs__btn module-tabs__btn--activo"
+                        data-view="reportes"
+                        aria-current="page"
+                    >
+                        Reportes generales
+                    </button>
+
+                    <button
+                        type="button"
+                        class="module-tabs__btn"
+                        data-view="minutas"
+                    >
+                        Minutas
+                    </button>
+
+                </nav>
+
+                <header class="reports-view__header">
                     <h1 class="reports-view__title">Reportes Generales</h1>
                     <p class="reports-view__subtitle">Selecciona el tipo de reporte y define los filtros.</p>
                 </header>
@@ -936,6 +1159,32 @@
         </button>
 
     </div>
+
+
+    <nav
+        class="module-tabs"
+        aria-label="Evaluaciones y servicios"
+    >
+
+        <button
+            type="button"
+            class="module-tabs__btn module-tabs__btn--activo"
+            data-view="evaluaciones"
+            aria-current="page"
+        >
+            Evaluaciones
+        </button>
+
+        <button
+            type="button"
+            class="module-tabs__btn"
+            data-view="servicios"
+            data-solo-admin
+        >
+            Servicios
+        </button>
+
+    </nav>
 
 
     <div class="evaluations-view">
@@ -1979,6 +2228,21 @@
                 </div>
 
 
+                <!--
+                     Barras de objetivos (modo horizontal, solo en
+                     Desarrollo): una por objetivo, la activa más
+                     larga; clic = saltar a ese objetivo
+                     (meetingViewMode.js).
+                -->
+
+                <nav
+                    class="meeting-objective-bars"
+                    id="meeting-objective-bars"
+                    aria-label="Objetivos del desarrollo"
+                    hidden
+                ></nav>
+
+
                 <!-- =============================================
                      OBJETIVOS
                      ============================================= -->
@@ -2405,6 +2669,31 @@
             </div>
 
 
+            <nav
+                class="module-tabs"
+                aria-label="Compromisos y actividades"
+            >
+
+                <button
+                    type="button"
+                    class="module-tabs__btn module-tabs__btn--activo"
+                    data-view="compromisos"
+                    aria-current="page"
+                >
+                    Compromisos
+                </button>
+
+                <button
+                    type="button"
+                    class="module-tabs__btn"
+                    data-view="actividades"
+                >
+                    Mis actividades
+                </button>
+
+            </nav>
+
+
             <div class="commitments-view">
 
                 <header class="commitments-view__header">
@@ -2490,6 +2779,49 @@
                                 </button>
 
                             </div>
+
+                        </div>
+
+
+                        <!--
+                             Estado: con "Todos" mandan los botones
+                             En curso / Completados; con cualquier
+                             otro estado, el combo manda y los
+                             botones se apagan (commitmentsView.js).
+                        -->
+
+                        <div class="commitments-filter">
+
+                            <label for="compromisos-filtro-estado">
+                                Estado
+                            </label>
+
+                            <select
+                                id="compromisos-filtro-estado"
+                                class="commitments-filter__select"
+                            >
+
+                                <option value="" selected>
+                                    Todos
+                                </option>
+
+                                <option value="pendiente">
+                                    Pendientes
+                                </option>
+
+                                <option value="vencido">
+                                    Vencidos
+                                </option>
+
+                                <option value="en-revision">
+                                    En espera de visto bueno
+                                </option>
+
+                                <option value="completados">
+                                    Completados
+                                </option>
+
+                            </select>
 
                         </div>
 
@@ -2698,6 +3030,31 @@
                 </button>
 
             </div>
+
+
+            <nav
+                class="module-tabs"
+                aria-label="Compromisos y actividades"
+            >
+
+                <button
+                    type="button"
+                    class="module-tabs__btn"
+                    data-view="compromisos"
+                >
+                    Compromisos
+                </button>
+
+                <button
+                    type="button"
+                    class="module-tabs__btn module-tabs__btn--activo"
+                    data-view="actividades"
+                    aria-current="page"
+                >
+                    Mis actividades
+                </button>
+
+            </nav>
 
 
             <div class="activities-view">
@@ -3903,6 +4260,21 @@
     <span class="archive__readonly-label" id="archive-readonly-label">
         Reunión archivada · solo lectura
     </span>
+
+    <!--
+         Minuta oficial (el PDF guardado al terminar la
+         reunión). Es la vía de consulta de minutas para
+         todos los roles, incluido el operador, que no tiene
+         acceso a Reportes > Minutas.
+    -->
+    <button
+        type="button"
+        id="archive-ver-minuta"
+        class="archive__export-button"
+        hidden
+    >
+        Ver minuta
+    </button>
 
     <button
         type="button"

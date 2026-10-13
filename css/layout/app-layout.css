@@ -151,6 +151,149 @@
     display: none;
 }
 
+
+/* =========================================================
+   DESARROLLO EN MODO HORIZONTAL: UN OBJETIVO A LA VEZ
+   ---------------------------------------------------------
+   meetingViewMode.js oculta los demás objetivos. El que se
+   ve se muestra abierto (si no, la tarjeta quedaría solo con
+   el título), así que su flecha de abrir/cerrar sobra.
+   (Con el prefijo .meeting__body--horizontal para ganarle al
+   display: grid de development-table.css, que carga después.)
+   ========================================================= */
+
+.meeting__body--horizontal .development__row--oculta-horizontal {
+    display: none;
+}
+
+.meeting__body--horizontal .development__row--colapsado .development__blocks {
+    display: flex;
+}
+
+.meeting__body--horizontal .development__row-toggle {
+    display: none;
+}
+
+.meeting__body--horizontal .development__row:not(.development__row--oculta-horizontal) {
+    animation: meeting-section-enter var(--transition-base) ease;
+}
+
+
+/* =========================================================
+   BARRAS DE OBJETIVOS
+   ---------------------------------------------------------
+   Una barrita por objetivo debajo de la barra de navegación.
+   La activa es más larga y de color; al pasar el mouse una
+   barra se alarga y muestra el nombre del objetivo.
+   ========================================================= */
+
+.meeting-objective-bars {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: calc(-1 * var(--space-sm)) 0 var(--space-lg);
+    padding: var(--space-xs) 0;
+}
+
+.meeting-objective-bars[hidden] {
+    display: none;
+}
+
+.meeting-objective-bars__bar {
+    position: relative;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    transition: width var(--transition-base);
+}
+
+/* la barra visible (el botón es más alto para que sea fácil atinarle) */
+.meeting-objective-bars__bar::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 4px;
+    border-radius: 999px;
+    background-color: var(--color-border-strong);
+    transform: translateY(-50%);
+    transition: background-color var(--transition-base), height var(--transition-base);
+}
+
+.meeting-objective-bars__bar:hover,
+.meeting-objective-bars__bar:focus-visible {
+    width: 28px;
+}
+
+.meeting-objective-bars__bar:hover::before,
+.meeting-objective-bars__bar:focus-visible::before {
+    height: 6px;
+    background-color: var(--color-text-subtle);
+}
+
+.meeting-objective-bars__bar--activa,
+.meeting-objective-bars__bar--activa:hover {
+    width: 40px;
+}
+
+.meeting-objective-bars__bar--activa::before,
+.meeting-objective-bars__bar--activa:hover::before {
+    height: 6px;
+    background-color: var(--color-accent);
+}
+
+.meeting-objective-bars__bar:focus-visible {
+    outline: none;
+}
+
+/* nombre del objetivo al pasar el mouse */
+.meeting-objective-bars__bar::after {
+    content: attr(data-titulo);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    z-index: 20;
+    max-width: 280px;
+    width: max-content;
+    padding: var(--space-2xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-accent);
+    color: var(--color-on-accent);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    line-height: 1.4;
+    white-space: normal;
+    text-align: left;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translate(-50%, -4px);
+    transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+}
+
+.meeting-objective-bars__bar:hover::after,
+.meeting-objective-bars__bar:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .meeting-objective-bars__bar,
+    .meeting-objective-bars__bar::before,
+    .meeting-objective-bars__bar::after {
+        transition: none;
+    }
+
+}
+
 /*
  * En modo horizontal, cada sección se ve de a una: se le da
  * trato de tarjeta (fondo, esquinas, sombra) para que se sienta

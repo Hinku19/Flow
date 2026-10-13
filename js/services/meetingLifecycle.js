@@ -170,11 +170,6 @@ export function initMeetingLifecycle({
         "#btn-programar-reunion-historial"
     );
 
-    const btnDashboardIniciar =
-        document.querySelector(
-            "#dashboard-iniciar-reunion"
-        );
-
 
     const dialog =
         document.querySelector(
@@ -3710,22 +3705,6 @@ async function terminar() {
             pausar();
 
         }
-
-    }
-
-
-    /* =========================================================
-       EVENTOS - DASHBOARD
-       ========================================================= */
-
-    if (
-        btnDashboardIniciar
-    ) {
-
-        btnDashboardIniciar.addEventListener(
-            "click",
-            openDialog
-        );
 
     }
 

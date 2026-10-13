@@ -24,6 +24,9 @@
    COMPONENTES
    ========================================================= */
 
+/* Pestañas que agrupan vistas de un mismo módulo */
+@import "components/module-tabs.css";
+
 /* Ficha de avatar (foto o iniciales) */
 @import "components/avatar-ficha.css";
 

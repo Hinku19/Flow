@@ -1,9 +1,17 @@
-import { esAdmin } from "../services/auth.service.js";
+import { getUsuarioActual } from "../services/auth.service.js";
 import { avisoDialog } from "../services/confirmDialog.js";
 
 /* =========================================================
-   MENÚ DE CONFIGURACIÓN (TUERCA)
+   MENÚ DE ADMINISTRACIÓN (TUERCA)
+   ---------------------------------------------------------
+   Se abre para administrador y líder; main.js oculta las
+   opciones que no le tocan a cada rol.
    ========================================================= */
+
+const ROLES_ADMINISTRACION = [
+    "administrador",
+    "lider"
+];
 
 export function initSettingsMenu() {
 
@@ -65,7 +73,11 @@ export function initSettingsMenu() {
 
             event.stopPropagation();
 
-            if (!esAdmin()) {
+            if (
+                !ROLES_ADMINISTRACION.includes(
+                    getUsuarioActual()?.rol
+                )
+            ) {
                 cerrar();
                 avisoDialog(
                     "Su usuario no cuenta con el tipo de Rol necesario para acceder a esta opción."
@@ -83,12 +95,18 @@ export function initSettingsMenu() {
     );
 
 
+    /*
+     * En captura: las opciones son botones con data-view, que
+     * detienen la propagación en burbuja y el panel nunca se
+     * enteraría del clic.
+     */
+
     panel.addEventListener(
         "click",
         (event) => {
 
             if (
-                event.target.matches(
+                event.target.closest(
                     ".settings-menu__item"
                 )
             ) {
@@ -97,7 +115,8 @@ export function initSettingsMenu() {
 
             }
 
-        }
+        },
+        true
     );
 
 

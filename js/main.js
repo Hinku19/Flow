@@ -73,6 +73,10 @@ import {
 } from "./components/historyView.js";
 
 import {
+    createHomeMenu
+} from "./components/homeMenu.js";
+
+import {
     capitalizar
 } from "./utils/capitalize.js";
 
@@ -228,6 +232,17 @@ const timer =
    NAVEGACIÓN
    ========================================================= */
 
+/*
+ * Vistas del menú de Administración (tuerca) abiertas a
+ * administrador y líder. Control de Usuarios queda aparte:
+ * es solo de administrador.
+ */
+const VISTAS_ADMINISTRACION = [
+    "reportes",
+    "minutas",
+    "archivos"
+];
+
 function inicializarNavegacion() {
 
     /*
@@ -259,13 +274,22 @@ function inicializarNavegacion() {
 
         }
 
+        /*
+         * Reportes (con Minutas) y Archivos viven en el menú
+         * de Administración (tuerca): solo administrador y
+         * líder. El operador consulta sus minutas desde
+         * Historial (botón "Ver minuta" de cada reunión).
+         */
+
         if (
-            vista === "reportes" &&
+            VISTAS_ADMINISTRACION.includes(
+                vista
+            ) &&
             getUsuarioActual()?.rol === "operador"
         ) {
 
              avisoDialog(
-                "No tienes permiso para acceder a Reportes. Esta opción está disponible para administradores y líderes."
+                "No tienes permiso para acceder a esta opción. Está disponible para administradores y líderes."
             );
 
             return;
@@ -491,51 +515,6 @@ function inicializarNavegacion() {
         }
     );
 
-
-    /*
-     * =====================================================
-     * PROGRAMAR REUNIÓN DESDE DASHBOARD
-     * =====================================================
-     */
-
-    const btnDashboard =
-        document.querySelector(
-            "#dashboard-iniciar-reunion"
-        );
-
-
-    const btnIniciar =
-        document.querySelector(
-            "#btn-iniciar"
-        );
-
-
-    if (
-        btnDashboard &&
-        btnIniciar
-    ) {
-
-        btnDashboard.addEventListener(
-            "click",
-            (event) => {
-
-                event.preventDefault();
-
-                event.stopPropagation();
-
-
-                console.log(
-                    "Abriendo diálogo de nueva reunión..."
-                );
-
-
-                btnIniciar.click();
-
-            }
-        );
-
-    }
-
 }
 
 
@@ -753,7 +732,8 @@ function montarReunion() {
             (id) => {
 
                 meetingViewMode.irASeccion(
-                    "desarrollo"
+                    "desarrollo",
+                    id
                 );
 
                 developmentTable.irAObjetivo(
@@ -1791,8 +1771,18 @@ if (usuarioNombre) {
                 JSON.parse(usuario);
 
 
+            /*
+             * El menú saluda solo con el primer nombre
+             * ("Hola, Marcos").
+             */
             usuarioNombre.textContent =
-                " " + datosUsuario.nombre;
+                " " +
+                String(
+                    datosUsuario.nombre ||
+                    ""
+                )
+                    .trim()
+                    .split(/\s+/)[0];
 
         }
         catch (error) {
@@ -1814,6 +1804,31 @@ if (usuarioNombre) {
 
 
 inicializarNavegacion();
+
+
+/* =========================================================
+   MENÚ PRINCIPAL
+   ---------------------------------------------------------
+   Próxima reunión, última junta y pendientes; se refresca
+   solo cada vez que se vuelve a mostrar el menú. La última
+   junta se abre igual que desde el historial.
+   ========================================================= */
+
+const homeMenu =
+    createHomeMenu({
+
+        onAbrirReunion:
+            (reunionId) => {
+
+                archiveView.render(
+                    reunionId
+                );
+
+            }
+
+    });
+
+homeMenu.render();
 
 
 /* =========================================================
@@ -2068,18 +2083,23 @@ initProfileMenu();
 
 
 /*
- * "Control de Usuarios" y "Archivos" (con el rol de cada
- * quien incluido / el contenido subido por todos) son solo
- * para administrador. El backend también rechaza estas
- * acciones si alguien las alcanza sin serlo (ver server.js),
- * esto solo evita mostrarlas de entrada.
+ * MENÚ DE ADMINISTRACIÓN (TUERCA) POR ROL
+ *
+ * "Control de Usuarios" (con el rol de cada quien incluido)
+ * es solo para administrador. "Reportes" y "Archivos" son
+ * para administrador y líder. El backend también rechaza
+ * estas acciones si alguien las alcanza sin permiso (ver
+ * server.js), esto solo evita mostrarlas de entrada.
+ *
+ * El engrane queda visible para que el operador reciba el
+ * aviso al intentarlo (ver settingsMenu.js).
  */
 
 if (!esAdmin()) {
 
     document
         .querySelectorAll(
-            '.settings-menu__item[data-view="usuarios"], .settings-menu__item[data-view="archivos"]'
+            '.settings-menu__item[data-view="usuarios"]'
         )
         .forEach(
             (boton) => {
@@ -2090,28 +2110,80 @@ if (!esAdmin()) {
             }
         );
 
-}
 
+    /*
+     * Pestañas solo de administrador (Servicios dentro de
+     * "Evaluaciones y servicios").
+     */
 
-/*
- * El engrane queda visible para que los roles sin permiso
- * reciban el aviso al intentarlo. El menú solo se abre para
- * administradores desde settingsMenu.js.
- */
+    document
+        .querySelectorAll(
+            ".module-tabs__btn[data-solo-admin]"
+        )
+        .forEach(
+            (boton) => {
 
-if (
-    getUsuarioActual()?.rol === "operador"
-) {
+                boton.hidden =
+                    true;
 
-    const tarjetaReportes =
-        document.querySelector(
-            '.dashboard-card[data-view="reportes"]'
+            }
         );
 
-    if (tarjetaReportes) {
 
-        tarjetaReportes.hidden =
-            true;
+    /*
+     * Una barra con una sola pestaña visible no aporta nada:
+     * se oculta completa.
+     */
+
+    document
+        .querySelectorAll(
+            ".module-tabs"
+        )
+        .forEach(
+            (barra) => {
+
+                const visibles =
+                    barra.querySelectorAll(
+                        ".module-tabs__btn:not([hidden])"
+                    );
+
+                if (visibles.length < 2) {
+
+                    barra.hidden =
+                        true;
+
+                }
+
+            }
+        );
+
+
+    /*
+     * Sin Servicios, la tarjeta del dashboard solo lleva a
+     * Evaluaciones: se nombra solo así.
+     */
+
+    const tituloEvaluaciones =
+        document.querySelector(
+            "#dashboard-evaluaciones-titulo"
+        );
+
+    const descripcionEvaluaciones =
+        document.querySelector(
+            "#dashboard-evaluaciones-descripcion"
+        );
+
+    if (tituloEvaluaciones) {
+
+        tituloEvaluaciones.textContent =
+            "Evaluaciones";
+
+    }
+
+    if (descripcionEvaluaciones) {
+
+        descripcionEvaluaciones.textContent =
+            "Responder · Resultados";
 
     }
 

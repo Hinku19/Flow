@@ -196,6 +196,16 @@ export function initCommitmentsView() {
     let vista =
         "en-curso";
 
+    /*
+     * Combo de estado. Vacío ("Todos") = mandan los botones
+     * En curso / Completados; con un estado elegido, el combo
+     * manda y los botones se apagan.
+     */
+    const filtroEstado =
+        document.querySelector(
+            "#compromisos-filtro-estado"
+        );
+
     const botonNuevo =
         document.querySelector(
             "#compromisos-nuevo"
@@ -2387,6 +2397,7 @@ export function initCommitmentsView() {
                 boton.setAttribute(
                     "aria-pressed",
                     String(
+                        !estadoElegido() &&
                         boton.dataset.vista === vista
                     )
                 );
@@ -2398,6 +2409,37 @@ export function initCommitmentsView() {
 
             }
         );
+
+    }
+
+
+    function estadoElegido() {
+
+        return filtroEstado ?
+            filtroEstado.value :
+            "";
+
+    }
+
+
+    /*
+     * "completados" agrupa completado a tiempo y a destiempo.
+     */
+    function coincideEstado(
+        item,
+        estado
+    ) {
+
+        if (estado === "completados") {
+
+            return (
+                item.estado === "completado" ||
+                item.estado === "completado-destiempo"
+            );
+
+        }
+
+        return item.estado === estado;
 
     }
 
@@ -2473,13 +2515,23 @@ export function initCommitmentsView() {
         );
 
 
+        const estado =
+            estadoElegido();
+
         const filtrados =
             base.filter(
                 (item) =>
                     idsRecientes.has(
                         String(item.id)
                     ) ||
-                    enCurso(item) === (vista === "en-curso")
+                    (
+                        estado
+                            ? coincideEstado(
+                                item,
+                                estado
+                            )
+                            : enCurso(item) === (vista === "en-curso")
+                    )
             );
 
 
@@ -2941,6 +2993,16 @@ export function initCommitmentsView() {
     }
 
 
+    if (filtroEstado) {
+
+        filtroEstado.addEventListener(
+            "change",
+            aplicarFiltros
+        );
+
+    }
+
+
     botonesVista.forEach(
         (boton) => {
 
@@ -2950,6 +3012,14 @@ export function initCommitmentsView() {
 
                     vista =
                         boton.dataset.vista;
+
+                    /* al elegir un botón, vuelven a mandar ellos */
+                    if (filtroEstado) {
+
+                        filtroEstado.value =
+                            "";
+
+                    }
 
                     aplicarFiltros();
 

@@ -169,6 +169,25 @@ export function initProfileMenu() {
 
         });
 
+        /*
+         * El menú principal (homeMenu.js) también muestra la
+         * foto; se le avisa para que se actualice al subirla o
+         * quitarla.
+         */
+        document.dispatchEvent(
+            new CustomEvent(
+                "flow:foto-perfil-actualizada",
+                {
+                    detail: {
+                        url:
+                            tieneFoto
+                                ? urlFoto()
+                                : null
+                    }
+                }
+            )
+        );
+
     }
 
     pintarAvatar();

@@ -110,6 +110,11 @@ export function createArchiveView() {
         "#archive-resend-minutes"
     );
 
+    const verMinutaBtn =
+        document.querySelector(
+            "#archive-ver-minuta"
+        );
+
 
     /* =====================================================
        VALIDAR ELEMENTOS
@@ -895,6 +900,18 @@ seccionesActuales =
     s;
 
 
+/*
+ * La minuta solo existe una vez finalizada la reunión.
+ */
+
+if (verMinutaBtn) {
+
+    verMinutaBtn.hidden =
+        reunion.Estado !== "Finalizada";
+
+}
+
+
             console.log(
                 "REUNIÓN:",
                 reunion
@@ -1368,6 +1385,120 @@ seccionesActuales =
                 avisoDialog(
                     error.message ||
                     "No fue posible generar el PDF."
+                );
+
+            }
+
+        }
+    );
+
+}
+
+if (
+    verMinutaBtn
+) {
+
+    verMinutaBtn.addEventListener(
+        "click",
+        async function () {
+
+            if (
+                !reunionActual
+            ) {
+
+                avisoDialog(
+                    "No hay una reunión cargada."
+                );
+
+                return;
+
+            }
+
+
+            /*
+             * La pestaña se abre antes del fetch (aún dentro
+             * del clic) para que el navegador no la bloquee
+             * como ventana emergente.
+             */
+
+            const ventana =
+                window.open(
+                    "",
+                    "_blank"
+                );
+
+            try {
+
+                const response =
+                    await fetch(
+                        `${API_URL}/minutas/${encodeURIComponent(
+                            reunionActual.ReunionId
+                        )}/pdf`,
+                        {
+                            headers:
+                                headerUsuario()
+                        }
+                    );
+
+
+                if (!response.ok) {
+
+                    let data = {};
+
+                    try {
+                        data =
+                            await response.json();
+                    } catch {}
+
+                    throw new Error(
+                        data.mensaje ||
+                        "No fue posible abrir la minuta."
+                    );
+
+                }
+
+
+                const url =
+                    URL.createObjectURL(
+                        await response.blob()
+                    );
+
+                if (ventana) {
+
+                    ventana.location.href =
+                        url;
+
+                }
+                else {
+
+                    window.open(
+                        url,
+                        "_blank"
+                    );
+
+                }
+
+
+                setTimeout(
+                    () => URL.revokeObjectURL(url),
+                    60000
+                );
+
+            }
+            catch (error) {
+
+                if (ventana) {
+                    ventana.close();
+                }
+
+                console.error(
+                    "ERROR ABRIENDO MINUTA:",
+                    error
+                );
+
+                avisoDialog(
+                    error.message ||
+                    "No fue posible abrir la minuta."
                 );
 
             }

@@ -46,12 +46,14 @@ export function createDevelopmentTable({ container, storageKey }) {
   let isEditing = false;
 
   /*
-   * Qué objetivos están colapsados (solo se ve el título, sin
-   * su contenido). Es un estado de UI, no se guarda: vive
-   * aparte de "contenidos" para que sobreviva a un render()
-   * completo (por ejemplo al agregar un bloque en otro objetivo).
+   * Qué objetivos están abiertos (con su contenido visible).
+   * Todos empiezan cerrados (solo se ve el título) y se abren
+   * uno a uno con su flecha. Es un estado de UI, no se guarda:
+   * vive aparte de "contenidos" para que sobreviva a un
+   * render() completo (por ejemplo al agregar un bloque en otro
+   * objetivo).
    */
-  const objetivosColapsados = new Set();
+  const objetivosAbiertos = new Set();
 
   function normalize(data) {//*Blindaje en caso de que alguien pegue contenido de otra fuente
     const result = {};
@@ -362,7 +364,7 @@ export function createDevelopmentTable({ container, storageKey }) {
     row.classList.add("development__row");
     row.dataset.id = objetivo.id;
 
-    const colapsado = objetivosColapsados.has(objetivo.id);
+    const colapsado = !objetivosAbiertos.has(objetivo.id);
     row.classList.toggle("development__row--colapsado", colapsado);
 
     const left = document.createElement("div");
@@ -440,16 +442,43 @@ function createInsertButton(tipo, label, index) {
   return btn;
 }
 
+  /*
+   * Un campo oculto (objetivo cerrado, otro objetivo en modo
+   * horizontal, vista todavía oculta) mide scrollHeight = 0:
+   * si se le pone ese alto, el texto queda "en blanco" al
+   * mostrarse. En ese caso no se toca y se marca como
+   * pendiente; el ResizeObserver de abajo lo recalcula en
+   * cuanto el campo se vuelve visible (su ancho deja de ser 0).
+   */
   function autoGrow(field) {
+    if (field.getClientRects().length === 0) {
+      field.dataset.altoPendiente = "1";
+      return;
+    }
+
+    delete field.dataset.altoPendiente;
     field.style.height = "auto";
     field.style.height = `${field.scrollHeight}px`;
   }
+
+  const observadorAlto = new ResizeObserver((entradas) => {
+    entradas.forEach(({ target, contentRect }) => {
+      if (contentRect.width > 0 && target.dataset.altoPendiente) {
+        autoGrow(target);
+      }
+    });
+  });
 
   function render() {
     const rows = objetivos.map(createRow);
     table.replaceChildren(...rows);
 
-    table.querySelectorAll(".development-block__field").forEach(autoGrow);
+    observadorAlto.disconnect();
+
+    table.querySelectorAll(".development-block__field").forEach((field) => {
+      observadorAlto.observe(field);
+      autoGrow(field);
+    });
 
     if (focusBlockId !== null) {
       const field = table.querySelector(
@@ -517,8 +546,8 @@ function createInsertButton(tipo, label, index) {
   }
 
   function irAObjetivo(objetivoId) {
-    if (objetivosColapsados.has(objetivoId)) {
-      objetivosColapsados.delete(objetivoId);
+    if (!objetivosAbiertos.has(objetivoId)) {
+      objetivosAbiertos.add(objetivoId);
       render();
     }
 
@@ -540,10 +569,10 @@ function createInsertButton(tipo, label, index) {
     const objetivoId = row.dataset.id;
 
     if (event.target.matches(".development__row-toggle")) {
-      if (objetivosColapsados.has(objetivoId)) {
-        objetivosColapsados.delete(objetivoId);
+      if (objetivosAbiertos.has(objetivoId)) {
+        objetivosAbiertos.delete(objetivoId);
       } else {
-        objetivosColapsados.add(objetivoId);
+        objetivosAbiertos.add(objetivoId);
       }
       render();
       return;

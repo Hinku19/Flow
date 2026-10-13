@@ -12783,7 +12783,7 @@ app.delete(
 
 
 /* =========================================================
-   VISOR DE ARCHIVOS (SOLO ADMINISTRADOR)
+   VISOR DE ARCHIVOS (ADMINISTRADOR Y LÍDER)
    ---------------------------------------------------------
    Metadatos (sin el BLOB) de los adjuntos subidos durante las
    reuniones (reunion_enlace_archivos), para listarlos y
@@ -12819,7 +12819,16 @@ app.get(
             }
 
 
-            if (!esAdmin(usuarioSolicitante)) {
+            /*
+             * El líder ve todos los archivos (igual que el
+             * administrador), pero solo el administrador
+             * puede borrar desde esta vista.
+             */
+            if (
+                !["administrador", "lider"].includes(
+                    usuarioSolicitante.rol
+                )
+            ) {
 
                 return respuestaSinPermiso(res);
 
