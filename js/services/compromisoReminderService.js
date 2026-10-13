@@ -1027,6 +1027,9 @@ async function enviarRecordatoriosCompromisos() {
 
             try {
 
+                const textoCorreo = generarTextoCorreo(destinatario)
+                      .replace(/\r?\n/g, "\r\n");
+
                 await transporter.sendMail({
 
                     from,
@@ -1040,9 +1043,7 @@ async function enviarRecordatoriosCompromisos() {
                         )}`,
 
                     text:
-                        generarTextoCorreo(
-                            destinatario
-                        )
+                        textoCorreo
 
                 });
 
