@@ -4275,11 +4275,50 @@ app.patch(
              * La fecha límite solo se puede establecer una vez:
              * si el compromiso ya tiene una, se conserva (ver el
              * COALESCE del UPDATE) aunque llegue otra distinta.
+             * Excepción: el líder del compromiso (o
+             * administrador) puede ampliarla directamente. Ese
+             * ajuste no es una re-agenda: no toca
+             * FechaFinOriginal ni el historial de Reagendas.
              */
 
             const fechaLimite =
                 req.body.fechaLimite ||
                 null;
+
+            const puedeCambiarFecha =
+                usuarioSolicitante.rol === "administrador" ||
+                esLiderDeCompromiso(usuarioSolicitante, compromisoActual);
+
+
+            const fechaInicioActual =
+                fechaISOoNull(
+                    compromisoActual.FechaInicioEstimada
+                );
+
+            const errorFecha =
+                fechaLimite &&
+                !fechaISOValida(fechaLimite)
+                    ? "La fecha límite no es válida."
+                    : fechaLimite &&
+                        fechaInicioActual &&
+                        fechaLimite < fechaInicioActual
+                        ? "La fecha límite no puede ser anterior a la fecha de inicio."
+                        : null;
+
+            if (errorFecha) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        ok: false,
+
+                        mensaje:
+                            errorFecha
+
+                    });
+
+            }
 
 
             if (
@@ -4433,7 +4472,7 @@ app.patch(
                     UPDATE compromisos
                     SET
                         Status = ?,
-                        FechaFinEstimada = COALESCE(FechaFinEstimada, ?),
+                        FechaFinEstimada = IF(?, COALESCE(?, FechaFinEstimada), COALESCE(FechaFinEstimada, ?)),
                         FechaFinReal = CASE WHEN ? THEN FechaFinReal WHEN ? THEN NOW() ELSE NULL END,
                         Aprobado = CASE WHEN ? THEN Aprobado WHEN ? THEN 1 ELSE 0 END,
                         FechaAprobacion = CASE WHEN ? THEN FechaAprobacion WHEN ? THEN NOW() ELSE NULL END,
@@ -4443,6 +4482,8 @@ app.patch(
                     `,
                     [
                         nuevoStatus,
+                        puedeCambiarFecha,
+                        fechaLimite,
                         fechaLimite,
                         seMantieneCompletado,
                         seCompleta,
@@ -6523,7 +6564,18 @@ function combinarReagendas(
             fechaISOoNull(compromiso.fechaLimiteOriginal) ||
             fechaISOoNull(reagendas[0].fechaAnterior),
 
+        /*
+         * La fecha vigente sale de donde vino el historial que
+         * ganó, no de la última re-agenda: después de re-agendar,
+         * el líder pudo haber ampliado la fecha directamente (eso
+         * no se registra en el historial).
+         */
         fechaFinEstimada:
+            fechaISOoNull(
+                reagendas === delJSON
+                    ? compromiso.fechaLimite
+                    : previo?.FechaFinEstimada
+            ) ||
             fechaISOoNull(
                 reagendas[reagendas.length - 1].fechaNueva
             )

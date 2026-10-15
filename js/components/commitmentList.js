@@ -458,8 +458,13 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     form.elements.descripcion.value = data.descripcion;
     form.elements.fechaInicio.value = data.fechaInicio || "";
     form.elements.fechaLimite.value = data.fechaLimite || "";
-    // Una vez establecida, la fecha límite ya no se puede cambiar.
-    form.elements.fechaLimite.readOnly = Boolean(data.fechaLimite);
+    /*
+     * Una vez establecida, la fecha límite solo la puede ampliar el
+     * líder (o administrador). Es un ajuste directo: no es una
+     * re-agenda y no se agrega al historial.
+     */
+    form.elements.fechaLimite.readOnly =
+      Boolean(data.fechaLimite) && !esLiderOAdmin(getUsuarioActual());
     form.elements.prioridad.value = data.prioridad;
   }
 

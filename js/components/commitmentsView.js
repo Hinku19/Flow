@@ -737,6 +737,8 @@ export function initCommitmentsView() {
                     true
             });
 
+            return true;
+
         }
         catch (error) {
 
@@ -749,6 +751,8 @@ export function initCommitmentsView() {
                 error.message ||
                 "No fue posible actualizar el compromiso."
             );
+
+            return false;
 
         }
 
@@ -1912,14 +1916,28 @@ export function initCommitmentsView() {
             );
 
 
+        inputFecha.min =
+            aValorInputFecha(
+                data.fechaInicio
+            );
+
+
         /*
-         * Una vez establecida, la fecha límite ya no se
-         * puede cambiar.
+         * Una vez establecida, la fecha límite solo la puede
+         * ampliar el líder (o administrador), y solo mientras
+         * el compromiso no esté completado. Es un ajuste
+         * directo: no es una re-agenda y no va al historial.
          */
 
         inputFecha.disabled =
             Boolean(
                 inputFecha.value
+            ) &&
+            !(
+                esLiderOAdmin() &&
+                ESTADOS_SIN_COMPLETAR.includes(
+                    data.estado
+                )
             );
 
         campoFecha.appendChild(
@@ -1934,22 +1952,9 @@ export function initCommitmentsView() {
 
         card.append(
             header,
-            meta
+            meta,
+            edicion
         );
-
-
-        /*
-         * Una vez establecida, la fecha límite ya no se puede
-         * cambiar (solo re-agendar): el campo solo aparece, a la
-         * vista, mientras el compromiso no tiene fecha.
-         */
-        if (!inputFecha.disabled) {
-
-            card.append(
-                edicion
-            );
-
-        }
 
 
         const detalle =
@@ -2639,36 +2644,110 @@ export function initCommitmentsView() {
             const id =
                 event.target.dataset.id;
 
-            const item =
-                compromisos.find(
-                    (c) =>
-                        String(c.id) === String(id)
-                );
+            const input =
+                event.target;
 
-            if (!item) {
-
-                return;
-
-            }
+            clearTimeout(
+                temporizadoresFecha.get(id)
+            );
 
 
             /*
-             * Sin `estado`, el backend conserva el estatus
-             * actual y solo fija la fecha límite.
+             * Al escribir la fecha con el teclado, el navegador
+             * dispara `change` en cada dígito del año (0002,
+             * 0020...): se espera a que el usuario termine y solo
+             * se guarda una fecha completa y válida; guardar
+             * redibuja la tarjeta y reemplazaría el campo a medio
+             * escribir.
              */
-
-            guardarEdicion(
+            temporizadoresFecha.set(
                 id,
-                {
-
-                    fechaLimite:
-                        event.target.value || null
-
-                }
+                setTimeout(
+                    () =>
+                        guardarFechaLimite(
+                            id,
+                            input.value
+                        ),
+                    700
+                )
             );
 
         }
     );
+
+
+    const temporizadoresFecha =
+        new Map();
+
+
+    async function guardarFechaLimite(
+        id,
+        valor
+    ) {
+
+        temporizadoresFecha.delete(
+            id
+        );
+
+        const item =
+            compromisos.find(
+                (c) =>
+                    String(c.id) === String(id)
+            );
+
+        if (
+            !item ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(valor) ||
+            valor < "2000-01-01" ||
+            valor === aValorInputFecha(item.fechaLimite)
+        ) {
+
+            return;
+
+        }
+
+
+        /*
+         * Sin `estado`, el backend conserva el estatus
+         * actual y solo fija la fecha límite.
+         */
+
+        const guardado =
+            await guardarEdicion(
+                id,
+                {
+
+                    fechaLimite:
+                        valor
+
+                }
+            );
+
+        if (!guardado) {
+
+            return;
+
+        }
+
+
+        const actualizado =
+            compromisos.find(
+                (c) =>
+                    String(c.id) === String(id)
+            );
+
+        if (
+            actualizado &&
+            aValorInputFecha(actualizado.fechaLimite) !== valor
+        ) {
+
+            avisoDialog(
+                "La fecha límite no se actualizó. Solo el líder del compromiso (o un administrador) puede cambiarla."
+            );
+
+        }
+
+    }
 
 
     /* =====================================================
