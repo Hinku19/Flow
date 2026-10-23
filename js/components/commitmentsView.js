@@ -970,7 +970,7 @@ export function initCommitmentsView() {
 
 
     /* =====================================================
-       RE-AGENDAR (SOLO LÍDER / ADMINISTRADOR)
+       RE-AGENDAR (SOLO LÍDER / ADMINISTRADOR, SOLO VENCIDOS)
        ===================================================== */
 
     async function reagendarCompromiso(
@@ -983,7 +983,10 @@ export function initCommitmentsView() {
                     String(c.id) === String(id)
             );
 
-        if (!item) {
+        if (
+            !item ||
+            item.estado !== "vencido"
+        ) {
 
             return;
 
@@ -2193,11 +2196,10 @@ export function initCommitmentsView() {
         }
 
 
+        /* re-agendar: solo compromisos vencidos */
         if (
             esLiderOAdmin() &&
-            ESTADOS_SIN_COMPLETAR.includes(
-                data.estado
-            )
+            data.estado === "vencido"
         ) {
 
             const reagendarBtn =

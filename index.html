@@ -304,6 +304,228 @@
                 </header>
 
 
+                <div class="dashboard__grid">
+
+
+                    <!-- =========================================
+                         REUNIONES (HISTORIAL + PROGRAMAR)
+                         ========================================= -->
+
+                    <button
+                        type="button"
+                        class="dashboard-card dashboard-card--history"
+                        data-view="historial"
+                    >
+
+                        <span class="dashboard-card__icon">
+
+                            <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+
+                                <rect
+                                    x="3"
+                                    y="4"
+                                    width="18"
+                                    height="17"
+                                    rx="2"
+                                ></rect>
+
+                                <line
+                                    x1="8"
+                                    y1="2"
+                                    x2="8"
+                                    y2="6"
+                                ></line>
+
+                                <line
+                                    x1="16"
+                                    y1="2"
+                                    x2="16"
+                                    y2="6"
+                                ></line>
+
+                                <line
+                                    x1="3"
+                                    y1="10"
+                                    x2="21"
+                                    y2="10"
+                                ></line>
+
+                            </svg>
+
+                        </span>
+
+
+                        <span class="dashboard-card__title">
+                            Reuniones
+                        </span>
+
+
+                        <span class="dashboard-card__description">
+                            Programar · Historial
+                        </span>
+
+                    </button>
+
+
+                    <!-- =========================================
+                         COMPROMISOS Y ACTIVIDADES
+                         ========================================= -->
+
+                    <button
+                        type="button"
+                        class="dashboard-card dashboard-card--commitments"
+                        data-view="compromisos"
+                    >
+
+                        <span class="dashboard-card__icon">
+
+                            <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+
+                                <rect
+                                    x="5"
+                                    y="4"
+                                    width="14"
+                                    height="17"
+                                    rx="2"
+                                ></rect>
+
+                                <rect
+                                    x="9"
+                                    y="2"
+                                    width="6"
+                                    height="4"
+                                    rx="1"
+                                ></rect>
+
+                                <polyline
+                                    points="9,13 11,15 15,11"
+                                ></polyline>
+
+                            </svg>
+
+                        </span>
+
+
+                        <span class="dashboard-card__title">
+                            Compromisos
+                        </span>
+
+
+                        <span class="dashboard-card__description">
+                            Mis actividades · Equipo
+                        </span>
+
+                    </button>
+
+                    <!-- =========================================
+                         INNOVACIONES
+                         ========================================= -->
+
+                    <button
+                        type="button"
+                        class="dashboard-card dashboard-card--innovations"
+                        data-view="innovaciones"
+                    >
+
+                        <span class="dashboard-card__icon">
+
+                            <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+
+                                <path
+                                    d="M9 18h6"
+                                ></path>
+
+                                <path
+                                    d="M10 21h4"
+                                ></path>
+
+                                <path
+                                    d="M12 3a6 6 0 0 0-4 10.5c.6.55 1 1.32 1 2.15V16h6v-.35c0-.83.4-1.6 1-2.15A6 6 0 0 0 12 3z"
+                                ></path>
+
+                            </svg>
+
+                        </span>
+
+
+                        <span class="dashboard-card__title">
+                            Innovaciones
+                        </span>
+
+
+                        <span class="dashboard-card__description">
+                            Propuestas · Planes de trabajo
+                        </span>
+
+                    </button>
+
+                    <!-- =========================================
+                         EVALUACIONES Y SERVICIOS
+                         ---------------------------------------------
+                         Servicios es solo para administrador: para
+                         los demás roles main.js deja el título y la
+                         descripción solo con "Evaluaciones".
+                         ========================================= -->
+
+                    <button
+                        type="button"
+                        class="dashboard-card dashboard-card--evaluations"
+                        data-view="evaluaciones"
+                    >
+
+                        <span class="dashboard-card__icon">
+
+                            <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+
+                                <rect
+                                    x="4"
+                                    y="4"
+                                    width="16"
+                                    height="16"
+                                    rx="2"
+                                ></rect>
+
+                                <polyline
+                                    points="9,12 11,14 15,10"
+                                ></polyline>
+
+                            </svg>
+
+                        </span>
+
+
+                        <span
+                            class="dashboard-card__title"
+                            id="dashboard-evaluaciones-titulo"
+                        >
+                            Evaluaciones y servicios
+                        </span>
+
+
+                        <span
+                            class="dashboard-card__description"
+                            id="dashboard-evaluaciones-descripcion"
+                        >
+                            Evaluaciones · Servicios
+                        </span>
+
+                    </button>
+
+                </div>
+
+
                 <div class="dashboard__summary">
 
 
@@ -535,233 +757,6 @@
                         ></ul>
 
                     </article>
-
-                </div>
-
-
-                <h2 class="dashboard__section-title">
-                    Módulos
-                </h2>
-
-
-                <div class="dashboard__grid">
-
-
-                    <!-- =========================================
-                         REUNIONES (HISTORIAL + PROGRAMAR)
-                         ========================================= -->
-
-                    <button
-                        type="button"
-                        class="dashboard-card dashboard-card--history"
-                        data-view="historial"
-                    >
-
-                        <span class="dashboard-card__icon">
-
-                            <svg
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                            >
-
-                                <rect
-                                    x="3"
-                                    y="4"
-                                    width="18"
-                                    height="17"
-                                    rx="2"
-                                ></rect>
-
-                                <line
-                                    x1="8"
-                                    y1="2"
-                                    x2="8"
-                                    y2="6"
-                                ></line>
-
-                                <line
-                                    x1="16"
-                                    y1="2"
-                                    x2="16"
-                                    y2="6"
-                                ></line>
-
-                                <line
-                                    x1="3"
-                                    y1="10"
-                                    x2="21"
-                                    y2="10"
-                                ></line>
-
-                            </svg>
-
-                        </span>
-
-
-                        <span class="dashboard-card__title">
-                            Reuniones
-                        </span>
-
-
-                        <span class="dashboard-card__description">
-                            Programar · Historial
-                        </span>
-
-                    </button>
-
-
-                    <!-- =========================================
-                         COMPROMISOS Y ACTIVIDADES
-                         ========================================= -->
-
-                    <button
-                        type="button"
-                        class="dashboard-card dashboard-card--commitments"
-                        data-view="compromisos"
-                    >
-
-                        <span class="dashboard-card__icon">
-
-                            <svg
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                            >
-
-                                <rect
-                                    x="5"
-                                    y="4"
-                                    width="14"
-                                    height="17"
-                                    rx="2"
-                                ></rect>
-
-                                <rect
-                                    x="9"
-                                    y="2"
-                                    width="6"
-                                    height="4"
-                                    rx="1"
-                                ></rect>
-
-                                <polyline
-                                    points="9,13 11,15 15,11"
-                                ></polyline>
-
-                            </svg>
-
-                        </span>
-
-
-                        <span class="dashboard-card__title">
-                            Compromisos
-                        </span>
-
-
-                        <span class="dashboard-card__description">
-                            Mis actividades · Equipo
-                        </span>
-
-                    </button>
-
-                    <!-- =========================================
-                         INNOVACIONES
-                         ========================================= -->
-
-                    <button
-                        type="button"
-                        class="dashboard-card dashboard-card--innovations"
-                        data-view="innovaciones"
-                    >
-
-                        <span class="dashboard-card__icon">
-
-                            <svg
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                            >
-
-                                <path
-                                    d="M9 18h6"
-                                ></path>
-
-                                <path
-                                    d="M10 21h4"
-                                ></path>
-
-                                <path
-                                    d="M12 3a6 6 0 0 0-4 10.5c.6.55 1 1.32 1 2.15V16h6v-.35c0-.83.4-1.6 1-2.15A6 6 0 0 0 12 3z"
-                                ></path>
-
-                            </svg>
-
-                        </span>
-
-
-                        <span class="dashboard-card__title">
-                            Innovaciones
-                        </span>
-
-
-                        <span class="dashboard-card__description">
-                            Propuestas · Planes de trabajo
-                        </span>
-
-                    </button>
-
-                    <!-- =========================================
-                         EVALUACIONES Y SERVICIOS
-                         ---------------------------------------------
-                         Servicios es solo para administrador: para
-                         los demás roles main.js deja el título y la
-                         descripción solo con "Evaluaciones".
-                         ========================================= -->
-
-                    <button
-                        type="button"
-                        class="dashboard-card dashboard-card--evaluations"
-                        data-view="evaluaciones"
-                    >
-
-                        <span class="dashboard-card__icon">
-
-                            <svg
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                            >
-
-                                <rect
-                                    x="4"
-                                    y="4"
-                                    width="16"
-                                    height="16"
-                                    rx="2"
-                                ></rect>
-
-                                <polyline
-                                    points="9,12 11,14 15,10"
-                                ></polyline>
-
-                            </svg>
-
-                        </span>
-
-
-                        <span
-                            class="dashboard-card__title"
-                            id="dashboard-evaluaciones-titulo"
-                        >
-                            Evaluaciones y servicios
-                        </span>
-
-
-                        <span
-                            class="dashboard-card__description"
-                            id="dashboard-evaluaciones-descripcion"
-                        >
-                            Evaluaciones · Servicios
-                        </span>
-
-                    </button>
 
                 </div>
 

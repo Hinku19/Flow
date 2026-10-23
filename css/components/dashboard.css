@@ -179,8 +179,6 @@
         repeat(2, minmax(0, 1fr));
 
     gap: var(--space-md);
-
-    margin-bottom: var(--space-xl);
 }
 
 
@@ -796,16 +794,6 @@
    MÓDULOS
    ========================================================= */
 
-.dashboard__section-title {
-    margin: 0 0 var(--space-sm);
-
-    font-size: var(--text-sm);
-    font-weight: var(--weight-medium);
-
-    color: var(--color-text-second);
-}
-
-
 .dashboard__grid {
     display: grid;
 
@@ -815,6 +803,9 @@
     gap: var(--space-md);
 
     width: 100%;
+
+    /* los módulos van antes del resumen (próxima reunión + pendientes) */
+    margin-bottom: var(--space-xl);
 }
 
 

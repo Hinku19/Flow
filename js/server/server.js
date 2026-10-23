@@ -4882,8 +4882,10 @@ app.post(
    agrega al historial (Reagendas). El estatus (vencido, a
    tiempo / a destiempo) se calcula contra la fecha nueva.
 
-   No aplica a compromisos ya reportados como completados:
-   primero hay que deshacer el completado.
+   Solo aplica a compromisos vencidos (no completados y con la
+   fecha límite ya pasada). No aplica a compromisos ya
+   reportados como completados: primero hay que deshacer el
+   completado.
    ========================================================= */
 
 app.post(
@@ -4986,6 +4988,8 @@ app.post(
             const errorEstado =
                 Number(compromisoActual.Status) === 3
                     ? "Este compromiso ya se reportó como completado: deshaz el completado para re-agendarlo."
+                    : !fechaAnterior || fechaAnterior >= hoyLocalISO()
+                        ? "Solo se pueden re-agendar compromisos vencidos."
                     : fechaNueva === fechaAnterior
                         ? "La nueva fecha límite es igual a la actual."
                         : fechaInicio && fechaNueva < fechaInicio

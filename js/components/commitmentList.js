@@ -235,7 +235,8 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
       botones.append(crearBotonSecundario("deshacer-visto-bueno", "↶ Deshacer visto bueno"));
     }
 
-    if (data.estado !== "completado" && liderOAdmin) {
+    // Re-agendar: solo compromisos vencidos.
+    if (estado === "vencido" && liderOAdmin) {
       const reagendarBtn = crearBotonSecundario("reagendar", "Re-agendar");
       reagendarBtn.classList.add("commitment-card__reagendar");
       botones.append(reagendarBtn);
@@ -398,7 +399,8 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
   }
 
   /*
-   * Re-agendar dentro de la reunión (solo líder / administrador):
+   * Re-agendar dentro de la reunión (solo líder / administrador y
+   * solo compromisos vencidos):
    * conserva la primera fecha límite en fechaLimiteOriginal y
    * agrega la re-agenda al historial; al finalizar la reunión el
    * servidor lo pasa a la tabla (ver combinarReagendas en
@@ -407,7 +409,7 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
   async function reagendarCompromiso(id) {
     const usuario = getUsuarioActual();
     const data = items.find((item) => item.id === id);
-    if (!data || !esLiderOAdmin(usuario)) return;
+    if (!data || !esLiderOAdmin(usuario) || estadoCompromiso(data) !== "vencido") return;
 
     const resultado = await reagendarDialog(data);
     if (!resultado) return;
@@ -468,6 +470,31 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     form.elements.prioridad.value = data.prioridad;
   }
 
+  /*
+   * En la vista horizontal de la reunión la sección Compromisos
+   * queda con display: none mientras se está en Desarrollo, y un
+   * <dialog> dentro de un ancestro oculto no se pinta (aunque
+   * showModal() sí deja la página bloqueada). Por eso, si el
+   * contenedor no está visible, el diálogo se abre desde <body>
+   * y regresa a su lugar al cerrarse (reiniciarContenedor()
+   * clona la sección y necesita encontrarlo ahí).
+   */
+  const padreDialog = dialog.parentNode;
+
+  function mostrarDialog() {
+    if (!container.checkVisibility()) {
+      document.body.append(dialog);
+    }
+
+    dialog.showModal();
+  }
+
+  dialog.addEventListener("close", () => {
+    if (dialog.parentNode !== padreDialog) {
+      padreDialog.append(dialog);
+    }
+  });
+
   function openDialogForNew(descripcionInicial, origen) {
     editingId = null;
     origenPunto = origen || null;
@@ -475,7 +502,7 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     formTitle.textContent = "Nuevo compromiso";
         saveBtn.textContent = "Guardar"
 
-    dialog.showModal();
+    mostrarDialog();
 
     if (descripcionInicial) {
       form.elements.descripcion.value = descripcionInicial;
@@ -489,7 +516,7 @@ export function createCommitmentList({ container, storageKey, sincronizarTabla }
     fillForm(data);
     formTitle.textContent = "Editar compromiso";
     saveBtn.textContent = "Actualizar"
-    dialog.showModal();
+    mostrarDialog();
   }
 
   function closeDialog() {
