@@ -209,11 +209,20 @@
 
 .login-card__logo img {
 
-    width: 105px;
+    /*
+     * flowtext.png (1454x1082) trae mucho margen vacío
+     * arriba y abajo del logotipo. Con "cover" en una caja
+     * apaisada se recorta ese aire y solo queda el logo,
+     * centrado con el resto de la tarjeta.
+     */
 
-    height: 105px;
+    width: 220px;
 
-    object-fit: contain;
+    height: 78px;
+
+    object-fit: cover;
+
+    object-position: center;
 
     display: block;
 
@@ -574,9 +583,9 @@
 
     .login-card__logo img {
 
-        width: 90px;
+        width: 190px;
 
-        height: 90px;
+        height: 68px;
 
     }
 

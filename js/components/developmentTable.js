@@ -189,8 +189,106 @@ export function createDevelopmentTable({ container, storageKey }) {
      */
     contenidos[objetivoId] = agruparPorPrioridad(blocks);
 
+    const posicionesPrevias = medirBloques(objetivoId);
+
     persist();
     render();
+
+    animarReacomodo(
+      objetivoId,
+      posicionesPrevias,
+      blockId,
+      valor
+    );
+  }
+
+  const SIN_MOVIMIENTO = window.matchMedia(
+    "(prefers-reduced-motion: reduce)"
+  );
+
+  function getRowElement(objetivoId) {
+    return table.querySelector(
+      `.development__row[data-id="${CSS.escape(objetivoId)}"]`
+    );
+  }
+
+  /*
+   * Guarda la posición vertical de cada bloque del objetivo
+   * antes del render(), para poder animar desde ahí (FLIP).
+   */
+  function medirBloques(objetivoId) {
+    const posiciones = new Map();
+    const row = getRowElement(objetivoId);
+    if (!row) return posiciones;
+
+    row.querySelectorAll(".development-block").forEach((el) => {
+      posiciones.set(
+        el.dataset.blockId,
+        el.getBoundingClientRect().top
+      );
+    });
+
+    return posiciones;
+  }
+
+  /*
+   * FLIP: cada bloque arranca visualmente en su posición
+   * anterior y se desliza a la nueva. El punto que cambió de
+   * prioridad además recibe un destello y, si quedó fuera de
+   * la pantalla, se desplaza la vista hasta él.
+   */
+  function animarReacomodo(objetivoId, posicionesPrevias, blockId, esPrioridad) {
+    const row = getRowElement(objetivoId);
+    if (!row) return;
+
+    const movido = row.querySelector(
+      `.development-block[data-block-id="${CSS.escape(blockId)}"]`
+    );
+
+    if (!SIN_MOVIMIENTO.matches) {
+      row.querySelectorAll(".development-block").forEach((el) => {
+        const antes = posicionesPrevias.get(el.dataset.blockId);
+        if (antes === undefined) return;
+
+        const delta = antes - el.getBoundingClientRect().top;
+        if (Math.abs(delta) < 1) return;
+
+        el.animate(
+          [
+            { transform: `translateY(${delta}px)` },
+            { transform: "translateY(0)" },
+          ],
+          {
+            duration: el === movido ? 520 : 380,
+            easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+          }
+        );
+      });
+    }
+
+    if (!movido) return;
+
+    if (esPrioridad) {
+      movido.classList.remove("development-block--recien-priorizado");
+      void movido.offsetWidth;
+      movido.classList.add("development-block--recien-priorizado");
+      setTimeout(
+        () => movido.classList.remove("development-block--recien-priorizado"),
+        1800
+      );
+    }
+
+    const rect = movido.getBoundingClientRect();
+    const fueraDeVista =
+      rect.top < 64 ||
+      rect.bottom > window.innerHeight;
+
+    if (fueraDeVista) {
+      movido.scrollIntoView({
+        behavior: SIN_MOVIMIENTO.matches ? "auto" : "smooth",
+        block: "center",
+      });
+    }
   }
 
   
@@ -385,10 +483,30 @@ export function createDevelopmentTable({ container, storageKey }) {
 
     left.append(toggleBtn, textoObjetivo);
 
+    const blocks = getBlocks(objetivo.id);
+
+    /*
+     * Contador de prioridades en la cabecera del objetivo:
+     * visible aunque el objetivo esté cerrado, para que las
+     * actividades marcadas no se "pierdan" entre las demás.
+     */
+    const totalPrioridades = blocks.filter(
+      (b) => b.tipo === "punto" && b.prioridad
+    ).length;
+
+    if (totalPrioridades > 0) {
+      const contador = document.createElement("span");
+      contador.classList.add("development__prioridad-count");
+      contador.textContent = `🚩 ${totalPrioridades}`;
+      contador.title =
+        totalPrioridades === 1
+          ? "1 actividad de alta prioridad"
+          : `${totalPrioridades} actividades de alta prioridad`;
+      left.appendChild(contador);
+    }
+
     const right = document.createElement("div");
     right.classList.add("development__blocks");
-
-    const blocks = getBlocks(objetivo.id);
 
     blocks.forEach((block, i) => {
       right.appendChild(createInsertZone(i))

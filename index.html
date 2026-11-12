@@ -19,7 +19,7 @@
 
     <link
         rel="icon"
-        href="assets/flowlogo.PNG"
+        href="assets/flowtext.png"
         type="image/x-icon"
     >
 
@@ -47,7 +47,7 @@
 
                 <img
                     class="app-header__logo"
-                    src="assets/flowtext.PNG"
+                    src="assets/flowtext1.PNG"
                     alt="Logo de Flow"
                 >
 
@@ -2142,18 +2142,56 @@
     id="meeting-members"
 >
 
-    <div class="meeting-members__header">
+    <!-- =================================================
+         BARRA COMPACTA (AVATARES + RESUMEN)
+         ================================================= -->
 
-        <h2>
-            Miembros de la reunión
-        </h2>
+    <div class="meeting-members__bar">
+
+        <span class="meeting-members__title">
+            Miembros
+        </span>
+
+
+        <div
+            class="meeting-members__avatars"
+            id="meetingMembersAvatars"
+        ></div>
+
+
+        <span
+            class="meeting-members__summary"
+            id="meetingMembersSummary"
+        ></span>
+
+
+        <button
+            type="button"
+            class="meeting-members__toggle"
+            id="btn-gestionar-miembros"
+            aria-expanded="false"
+            aria-controls="meetingMembersList"
+        >
+            Gestionar
+            <span
+                class="meeting-members__toggle-icon"
+                aria-hidden="true"
+            >
+                ▾
+            </span>
+        </button>
 
     </div>
 
 
+    <!-- =================================================
+         PANEL DESPLEGABLE (ASISTENCIA Y ROL)
+         ================================================= -->
+
     <div
         class="meeting-members__list"
         id="meetingMembersList"
+        hidden
     >
 
         <div class="meeting-members__empty">

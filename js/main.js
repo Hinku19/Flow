@@ -1025,25 +1025,155 @@ if (miembrosElemento) {
             );
 
 
-    if (
-        participantesInfo.length === 0
-    ) {
+    renderMiembrosReunion(
+        participantesInfo
+    );
 
-        miembrosElemento.innerHTML =
-            `
-            <div class="meeting-members__empty">
-                No hay miembros registrados.
-            </div>
-            `;
+}
 
-    }
-    else {
+/*
+ * =====================================================
+ * BARRA COMPACTA DE MIEMBROS
+ * -----------------------------------------------------
+ * Pinta los avatares superpuestos y el contador de
+ * asistencia. Se vuelve a llamar cada vez que cambia
+ * la asistencia de alguien en el panel desplegable.
+ * =====================================================
+ */
 
-        renderMiembrosReunion(
-            participantesInfo
+function renderBarraMiembros(
+    participantes
+) {
+
+    const avatares =
+        document.getElementById(
+            "meetingMembersAvatars"
+        );
+
+
+    const resumen =
+        document.getElementById(
+            "meetingMembersSummary"
+        );
+
+
+    if (avatares) {
+
+        avatares.innerHTML =
+            "";
+
+
+        const grupo =
+            crearGrupoAvatares(
+                participantes,
+                8
+            );
+
+
+        /*
+         * Los que aún no tienen asistencia
+         * marcada se ven atenuados.
+         */
+
+        participantes
+            .slice(
+                0,
+                8
+            )
+            .forEach(
+                (
+                    participante,
+                    indice
+                ) => {
+
+                    grupo.children[indice]?.classList.toggle(
+                        "avatar-ficha--ausente",
+                        !participante.asistio
+                    );
+
+                }
+            );
+
+
+        avatares.appendChild(
+            grupo
         );
 
     }
+
+
+    if (resumen) {
+
+        const asistentes =
+            participantes.filter(
+                participante =>
+                    participante.asistio
+            ).length;
+
+
+        resumen.textContent =
+            participantes.length === 0
+                ? "Sin miembros registrados"
+                : `${asistentes}/${participantes.length} asistieron`;
+
+    }
+
+}
+
+/*
+ * =====================================================
+ * BOTÓN "GESTIONAR" (ABRIR / CERRAR PANEL)
+ * =====================================================
+ */
+
+function inicializarToggleMiembros() {
+
+    const boton =
+        document.getElementById(
+            "btn-gestionar-miembros"
+        );
+
+
+    const panel =
+        document.getElementById(
+            "meetingMembersList"
+        );
+
+
+    if (
+        !boton ||
+        !panel ||
+        boton.dataset.inicializado
+    ) {
+        return;
+    }
+
+
+    boton.dataset.inicializado =
+        "true";
+
+
+    boton.addEventListener(
+        "click",
+        () => {
+
+            const abierto =
+                panel.hidden;
+
+
+            panel.hidden =
+                !abierto;
+
+
+            boton.setAttribute(
+                "aria-expanded",
+                String(
+                    abierto
+                )
+            );
+
+        }
+    );
 
 }
 
@@ -1062,6 +1192,9 @@ function renderMiembrosReunion(
     }
 
 
+    inicializarToggleMiembros();
+
+
     contenedor.innerHTML =
         "";
 
@@ -1070,6 +1203,11 @@ function renderMiembrosReunion(
         !Array.isArray(participantes) ||
         participantes.length === 0
     ) {
+
+        renderBarraMiembros(
+            []
+        );
+
 
         contenedor.innerHTML =
             `
@@ -1080,6 +1218,11 @@ function renderMiembrosReunion(
 
         return;
     }
+
+
+    renderBarraMiembros(
+        participantes
+    );
 
 
     participantes.forEach(
@@ -1278,6 +1421,15 @@ function renderMiembrosReunion(
                             : "Ausente";
 
 
+                    participante.asistio =
+                        checkbox.checked;
+
+
+                    renderBarraMiembros(
+                        participantes
+                    );
+
+
                     await actualizarParticipanteReunion(
                         participante.id,
                         checkbox.checked,
@@ -1297,6 +1449,10 @@ function renderMiembrosReunion(
             selectRol.addEventListener(
                 "change",
                 async () => {
+
+                    participante.rol =
+                        selectRol.value;
+
 
                     await actualizarParticipanteReunion(
                         participante.id,
